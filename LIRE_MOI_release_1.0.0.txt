@@ -1,0 +1,209 @@
+╔═══════════════════════════════════════════════════════════════════════╗
+║   🚀 BATIDESK 1.0.0 — PREMIÈRE RELEASE OFFICIELLE                     ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════════════
+ CE QUI EST DANS CETTE RELEASE
+═══════════════════════════════════════════════════════════════════════
+
+✅ Versions passées à 1.0.0 (root + apps/desktop)
+✅ Configuration electron-builder pour signature Windows
+✅ Nouveaux scripts npm : release:win, release:win:signed
+✅ Dashboard rafraîchi avec :
+    • Badge "v1.0.0" dans le greeting
+    • KPI "CA encaissé cette année" ajouté
+    • Tendance % du CA mois courant vs mois précédent (vert/rouge avec flèche)
+✅ Guide complet de signature de code (SIGNATURE_DE_CODE.md)
+✅ Changelog officiel (CHANGELOG.md)
+
+
+═══════════════════════════════════════════════════════════════════════
+ FICHIERS LIVRÉS (5)
+═══════════════════════════════════════════════════════════════════════
+
+📁 / (racine)
+   ├── 🔄 package.json                            [version 1.0.0]
+   ├── ✨ CHANGELOG.md                            [release notes officielles]
+   └── ✨ SIGNATURE_DE_CODE.md                    [guide complet certificat Win]
+
+📁 apps/desktop/
+   └── 🔄 package.json                            [version 1.0.0
+                                                    + scripts release:win
+                                                    + signingHashAlgorithms sha256
+                                                    + signDlls true]
+
+📁 apps/desktop/src/features/dashboard/components/
+   └── 🔄 DashboardPage.tsx                       [+ badge v1.0.0
+                                                    + KPI CA année
+                                                    + tendance % vs mois précédent]
+
+
+═══════════════════════════════════════════════════════════════════════
+ INSTALLATION (3 min)
+═══════════════════════════════════════════════════════════════════════
+
+1️⃣  Décompresser btp-v16-release-1.0.0.zip
+
+2️⃣  Glisser dans C:\Users\Alexi\Desktop\btp-expert\
+    Confirmer "Remplacer" pour les 3 fichiers existants
+    → 2 nouveaux fichiers à la racine : CHANGELOG.md, SIGNATURE_DE_CODE.md
+
+3️⃣  Vérifier la version :
+      Get-Content package.json | Select-String "version"
+      Get-Content apps\desktop\package.json | Select-String "version"
+      → doivent afficher "1.0.0"
+
+
+═══════════════════════════════════════════════════════════════════════
+ BUILD DE LA RELEASE 1.0.0
+═══════════════════════════════════════════════════════════════════════
+
+🅰️ OPTION A : Build NON SIGNÉ (rapide, pour test)
+    
+    cd C:\Users\Alexi\Desktop\btp-expert
+    Remove-Item -Recurse -Force apps\desktop\dist -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force apps\desktop\dist_electron -ErrorAction SilentlyContinue
+    npm run dist:win
+    
+    → fichier généré : apps\desktop\dist_electron\BatiDesk-Setup-1.0.0.exe
+    → SmartScreen affichera un warning à l'installation
+    → "Plus d'infos" → "Exécuter quand même" pour continuer
+
+🅱️ OPTION B : Build SIGNÉ (release officielle)
+    
+    Prérequis : avoir un certificat .pfx + son mot de passe
+    Voir SIGNATURE_DE_CODE.md pour acheter et configurer un certificat
+    
+    # Définir les variables (PowerShell)
+    $env:CSC_LINK = "C:\chemin\vers\jacob-habitat-signing.pfx"
+    $env:CSC_KEY_PASSWORD = "TON_MOT_DE_PASSE"
+    
+    cd C:\Users\Alexi\Desktop\btp-expert
+    Remove-Item -Recurse -Force apps\desktop\dist -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force apps\desktop\dist_electron -ErrorAction SilentlyContinue
+    npm run release:win:signed
+    
+    → fichier généré : apps\desktop\dist_electron\BatiDesk-Setup-1.0.0.exe
+    → Signé avec ton certificat
+    → Click droit > Propriétés > Signatures numériques pour vérifier
+
+
+═══════════════════════════════════════════════════════════════════════
+ DASHBOARD 1.0.0 — APERÇU DES NOUVEAUTÉS
+═══════════════════════════════════════════════════════════════════════
+
+AVANT
+─────────────────────────────────────────────────────────────
+[Bonjour Alexi]
+[Aujourd'hui, lundi 28 avril]
+
+[CA mois]   [Chantiers]   [Clients]   [Brouillons]
+
+
+APRÈS (1.0.0)
+─────────────────────────────────────────────────────────────
+[Bonjour Alexi] [v1.0.0]
+[Aujourd'hui, lundi 28 avril] [Ctrl+K pour rechercher]
+
+[CA mois][↗+12%]   [CA année]   [Chantiers]   [Brouillons]
+
+
+La tendance % apparaît seulement sur "CA mois" :
+  • +X% en vert avec flèche haut → tu progresses ce mois 📈
+  • -X% en rouge avec flèche bas → mois plus calme
+  • 0% / cas où mois précédent vide → pas de tendance affichée
+
+
+═══════════════════════════════════════════════════════════════════════
+ MISE À JOUR DEPUIS UNE INSTALLATION 16.x.x EXISTANTE
+═══════════════════════════════════════════════════════════════════════
+
+⚠ AVANT TOUTE MISE À JOUR : créer un backup manuel
+   1. Ouvrir BatiDesk 16.x.x
+   2. Paramètres > Sauvegarde > Sauvegarder maintenant
+   3. Vérifier que le backup .btpbackup apparaît bien dans la liste
+
+✅ La transition 16.0.0 → 1.0.0 est transparente :
+   • Données dans %APPDATA%/BatiDesk/ : INTACTES
+   • Anciens backups .db et .btpbackup : RESTAURABLES
+   • Paramètres dans localStorage : CONSERVÉS
+
+DÉSINSTALLATION + RÉINSTALLATION :
+   1. Désinstaller BatiDesk 16.x.x via Panneau de configuration
+   2. ⚠ NE PAS cocher "Supprimer les données utilisateur"
+   3. Installer BatiDesk-Setup-1.0.0.exe
+   4. Lancer BatiDesk → tout est là
+
+
+═══════════════════════════════════════════════════════════════════════
+ VÉRIFICATIONS POST-RELEASE
+═══════════════════════════════════════════════════════════════════════
+
+Au lancement de la version 1.0.0, vérifier :
+
+  ☐ Le dashboard affiche le badge "v1.0.0"
+  ☐ Les 4 KPIs affichent les bonnes valeurs (CA mois, CA année, chantiers, brouillons)
+  ☐ La tendance % apparaît sur "CA encaissé ce mois" si tu as un mois précédent avec CA
+  ☐ Aucune erreur dans la console Electron au démarrage
+  ☐ Tous tes clients/chantiers/devis/factures sont là
+  ☐ Le coffre-fort est accessible et les docs visibles
+  ☐ Les catégories chantier S22 sont là (10 par défaut + tes ajouts)
+  ☐ Les sauvegardes existantes apparaissent dans la liste backup
+  ☐ Une nouvelle sauvegarde manuelle se crée bien au format .btpbackup
+
+
+═══════════════════════════════════════════════════════════════════════
+ EN CAS DE PROBLÈME
+═══════════════════════════════════════════════════════════════════════
+
+❌ "Build failed" ou erreur tsc
+   → Vérifier que les 5 fichiers ont été correctement remplacés
+   → Vérifier les versions dans package.json (doivent être 1.0.0)
+
+❌ Warning SmartScreen à l'installation
+   → Normal si build non signé
+   → Click "Plus d'infos" > "Exécuter quand même"
+   → Voir SIGNATURE_DE_CODE.md pour signer
+
+❌ "L'installation a échoué"
+   → S'assurer d'avoir désinstallé l'ancienne version d'abord
+   → Vérifier que tu es admin sur le PC
+   → Lancer l'installer en tant qu'administrateur (clic droit)
+
+❌ "Application ne démarre pas après installation"
+   → Vérifier les logs : %APPDATA%\BatiDesk\logs\
+   → Restaurer la dernière sauvegarde si la DB est corrompue
+
+
+═══════════════════════════════════════════════════════════════════════
+ PROCHAINES ÉTAPES
+═══════════════════════════════════════════════════════════════════════
+
+🎯 Court terme (quand tu veux)
+   • Acheter un certificat de signature de code OV (~75€/an SSL.com)
+   • Faire un build signé officiel
+   • Distribuer à tes collaborateurs si besoin
+
+🎯 Moyen terme — Sessions futures
+   • S24 : Refonte complète du dashboard avec graphiques
+            (camemberts par catégorie, sparklines, top clients...)
+   • S25 : Auto-update via electron-updater
+            (l'app se met à jour seule depuis ton serveur)
+   • S26 : Telemetry / crash reports anonymes
+
+
+═══════════════════════════════════════════════════════════════════════
+ 🎉 FÉLICITATIONS — BATIDESK 1.0.0 OFFICIEL !
+═══════════════════════════════════════════════════════════════════════
+
+Plus de 23 sessions de développement, des dizaines de features, un produit
+solide et professionnel. Tu peux légitimement appeler ça la 1.0.0.
+
+📚 Documents inclus :
+   • CHANGELOG.md          → Historique complet des features
+   • SIGNATURE_DE_CODE.md  → Guide pour acheter et utiliser un certificat
+   • LIRE_MOI_release_1.0.0.txt (ce fichier)
+
+
+═══════════════════════════════════════════════════════════════════════

@@ -1,0 +1,28 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# .cpanel.yml — pipeline de déploiement cPanel (Git Version Control)
+#
+# Ce fichier est lu par cPanel quand tu cliques « Deploy HEAD Commit » dans
+# Git Version Control (ou via webhook si auto-deploy activé).
+#
+# Le repo est cloné dans /home/<user>/repositories/btp-expert/ — on copie
+# uniquement ce qui est utile à apps/server vers le doc root du sous-domaine,
+# puis on installe les deps et build.
+# ═══════════════════════════════════════════════════════════════════════════
+
+---
+deployment:
+  tasks:
+    # 1) Synchronise le code source vers le doc root du sous-domaine
+    - export DEPLOYPATH=/home/$USER/intranet.jacobhabitat-dev.fr
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/rsync -av --delete --exclude='node_modules' --exclude='.git' --exclude='dist_electron' --exclude='apps/desktop' ./ $DEPLOYPATH/
+
+    # 2) Installe les dépendances (workspace npm — installe core, types, server)
+    - cd $DEPLOYPATH && /usr/local/bin/npm install --omit=dev --workspaces --include-workspace-root
+
+    # 3) Build du serveur TypeScript → JavaScript
+    - cd $DEPLOYPATH && /usr/local/bin/npm run build -w @btp/server
+
+    # 4) Restart de l'app Node.js (touche restart.txt = signal Passenger)
+    - /bin/mkdir -p $DEPLOYPATH/tmp
+    - /bin/touch $DEPLOYPATH/tmp/restart.txt

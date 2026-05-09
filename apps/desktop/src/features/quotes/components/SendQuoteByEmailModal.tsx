@@ -1,0 +1,179 @@
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Mail, Send, FileText, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SendQuoteByEmailModal — Envoi par email via Outlook Graph
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface Props {
+  open: boolean;
+  quoteId: string;
+  quoteReference: string;
+  defaultTo: string;
+  defaultSubject: string;
+  defaultBody: string;
+  onClose: () => void;
+  onSent: () => void;
+}
+
+export function SendQuoteByEmailModal({
+  open, quoteId, quoteReference, defaultTo, defaultSubject, defaultBody, onClose, onSent,
+}: Props) {
+  const [to, setTo] = useState(defaultTo);
+  const [cc, setCc] = useState("");
+  const [subject, setSubject] = useState(defaultSubject);
+  const [body, setBody] = useState(defaultBody);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setTo(defaultTo);
+      setSubject(defaultSubject);
+      setBody(defaultBody);
+      setCc("");
+    }
+  }, [open, defaultTo, defaultSubject, defaultBody]);
+
+  const handleSend = async () => {
+    if (!to.trim()) {
+      toast.error("Veuillez renseigner un destinataire");
+      return;
+    }
+    if (!window.btpAPI?.quotesSendViaOutlook) return;
+
+    setSending(true);
+    const r = await window.btpAPI.quotesSendViaOutlook({
+      quoteId,
+      to: to.trim(),
+      cc: cc.trim(),
+      subject: subject.trim() || `Votre devis ${quoteReference}`,
+      body: body.trim(),
+    });
+    setSending(false);
+
+    if (r.success) {
+      toast.success("Email envoyé avec succès");
+      onSent();
+      onClose();
+    } else if (r.needsLogin) {
+      toast.error("Connectez-vous d'abord à Microsoft dans Paramètres > Sauvegarde");
+    } else {
+      toast.error(r.error || "Échec de l'envoi");
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Envoyer par email</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Via votre compte Outlook · Le devis sera marqué "Envoyé"
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              <div>
+                <Label>Destinataire *</Label>
+                <Input
+                  type="email"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  placeholder="client@exemple.fr"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Séparer plusieurs adresses par une virgule
+                </p>
+              </div>
+
+              <div>
+                <Label>Copie (CC)</Label>
+                <Input
+                  type="email"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  placeholder="Optionnel"
+                />
+              </div>
+
+              <div>
+                <Label>Objet</Label>
+                <Input
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Message</Label>
+                <Textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={8}
+                />
+              </div>
+
+              {/* Pièce jointe */}
+              <div className="flex items-center gap-2 p-2.5 rounded-md bg-muted text-sm">
+                <FileText className="w-4 h-4 text-primary shrink-0" />
+                <span className="font-mono text-xs">{quoteReference}.pdf</span>
+                <span className="text-xs text-muted-foreground ml-auto">généré automatiquement</span>
+              </div>
+
+              {/* Alerte OAuth */}
+              <div className="flex items-start gap-2 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  L'email sera envoyé depuis votre compte Microsoft et apparaîtra dans vos "Éléments envoyés".
+                  Si c'est votre premier envoi, Microsoft pourrait demander d'autoriser l'accès <strong>Mail.Send</strong>.
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
+              <Button variant="outline" onClick={onClose}>Annuler</Button>
+              <Button onClick={handleSend} loading={sending}>
+                <Send className="w-4 h-4" />
+                Envoyer
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

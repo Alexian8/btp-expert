@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+*/node_modules/
+.npm
+
+# Build outputs
+dist/
+dist_electron/
+build/
+*/dist/
+*/dist_electron/
+*/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Electron
+release/
+
+# Tests / coverage
+coverage/
+
+# Backups DB locaux (créés par scripts/diagnose ou repair)
+_backup_*/
+_pre_repair_*/
+_corrupt_*/
+_clean_caches_*/
+
+# Server data (SQLite local de dev)
+apps/server/data/
+apps/server/*.db
+apps/server/*.db-journal
+apps/server/*.db-wal
+apps/server/*.db-shm
+
+# cPanel
+.cpanel.yml.bak
+
+# Claude Code local config (session, transcripts)
+.claude/
+
+# Puppeteer cache local (Chromium binaries — > 100MB, ne JAMAIS commit)
+.puppeteer-cache/
+*/.puppeteer-cache/
+puppeteer-cache/

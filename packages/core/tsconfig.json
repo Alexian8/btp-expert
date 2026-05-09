@@ -1,0 +1,9 @@
+{
+  "extends": "../types/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@btp/types": ["../types/src"]
+    }
+  },
+  "include": ["src/**/*"]
+}
