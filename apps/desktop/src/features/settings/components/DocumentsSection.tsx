@@ -489,19 +489,24 @@ export function DocumentsSection() {
         )}
       </div>
 
-      <div className={cn("grid gap-5", previewOpen && tab === "pdf" ? "grid-cols-1 lg:grid-cols-[1fr_500px]" : "grid-cols-1")}>
+      <div className={cn("grid gap-5", previewOpen && tab === "pdf" ? "grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,560px)]" : "grid-cols-1")}>
         <motion.div
           key={tab}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
+          className="min-w-0"
         >
         {/* ─── Tab PDF ──────────────────────────────────────────────── */}
         {tab === "pdf" && (
           <div className="space-y-5">
             {/* Card 0 — Préréglages métier */}
-            <Card icon={Wrench} title="Préréglages métier" description="Un click pour configurer style + couleur + police selon ton corps de métier">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <Card
+              icon={Wrench}
+              title="Préréglages métier"
+              description="Un click pour configurer style, couleur et police"
+            >
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {PRESETS.map((p) => {
                   const matches =
                     pdfStyle === p.pdfStyle &&
@@ -512,31 +517,37 @@ export function DocumentsSection() {
                       key={p.id}
                       type="button"
                       onClick={() => applyPreset(p)}
+                      title={`${p.label} — ${p.description}`}
                       className={cn(
-                        "p-3 rounded-lg border-2 text-left transition-all",
+                        "relative flex items-center gap-2 p-2.5 rounded-lg border-2 text-left transition-all min-w-0",
                         matches
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-border/80 hover:bg-accent/50"
                       )}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl leading-none">{p.emoji}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium leading-tight">{p.label}</div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                            {p.description}
-                          </div>
+                      <span
+                        className="w-8 h-8 rounded-md border border-border/60 flex items-center justify-center text-base shrink-0"
+                        style={{ backgroundColor: `${p.pdfAccentColor}15` }}
+                      >
+                        {p.emoji}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium leading-tight truncate">
+                          {p.label}
                         </div>
-                      </div>
-                      {/* Aperçu mini : carré couleur + nom du style */}
-                      <div className="flex items-center gap-1 mt-2">
-                        <span
-                          className="w-3 h-3 rounded-sm border border-border/60"
-                          style={{ backgroundColor: p.pdfAccentColor }}
-                        />
-                        <span className="text-[10px] text-muted-foreground">
-                          {p.pdfStyle === "moderne" ? "Moderne" : p.pdfStyle === "sobre" ? "Sobre" : "Classique"} · {p.pdfFont}
-                        </span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: p.pdfAccentColor }}
+                          />
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {p.pdfStyle === "moderne"
+                              ? "Moderne"
+                              : p.pdfStyle === "sobre"
+                                ? "Sobre"
+                                : "Classique"}
+                          </span>
+                        </div>
                       </div>
                     </button>
                   );
@@ -545,27 +556,31 @@ export function DocumentsSection() {
             </Card>
 
             {/* Card 1 — Style global */}
-            <Card icon={Sparkles} title="Style général" description="Aspect visuel de tes devis et factures">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
+            <Card
+              icon={Sparkles}
+              title="Style général"
+              description="Aspect visuel de tes devis et factures"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
                 {STYLE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => setPdfStyle(opt.value)}
+                    title={opt.description}
                     className={cn(
-                      "relative p-3 rounded-lg border-2 text-left transition-all overflow-hidden",
+                      "relative px-3 py-2.5 rounded-lg border-2 text-left transition-all min-w-0",
                       pdfStyle === opt.value
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-border/80 hover:bg-accent/50"
                     )}
                   >
-                    <div className="font-medium text-sm">{opt.label}</div>
-                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    <div className="text-sm font-medium leading-tight truncate">
+                      {opt.label}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
                       {opt.description}
                     </div>
-                    <pre className="mt-2 text-[8px] text-muted-foreground/60 font-mono leading-tight whitespace-pre-wrap">
-                      {opt.preview}
-                    </pre>
                   </button>
                 ))}
               </div>
@@ -573,42 +588,45 @@ export function DocumentsSection() {
               {/* Couleur (visible si style avec accent couleur) */}
               {showAccent && (
                 <div>
-                  <Label className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Palette className="w-3.5 h-3.5" />
                     Couleur d'accent
                   </Label>
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    {PRESET_COLORS.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => setPdfAccentColor(c.value)}
-                        className={cn(
-                          "w-9 h-9 rounded-md border-2 transition-all",
-                          pdfAccentColor === c.value
-                            ? "border-foreground scale-110 shadow-sm"
-                            : "border-border hover:scale-105"
-                        )}
-                        style={{ backgroundColor: c.value }}
-                        title={c.name}
-                      />
-                    ))}
-                    <div className="ml-2 flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      {PRESET_COLORS.map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => setPdfAccentColor(c.value)}
+                          className={cn(
+                            "w-7 h-7 rounded-full border-2 transition-all shrink-0",
+                            pdfAccentColor.toLowerCase() === c.value.toLowerCase()
+                              ? "border-foreground scale-110 shadow-sm"
+                              : "border-border/40 hover:scale-105"
+                          )}
+                          style={{ backgroundColor: c.value }}
+                          title={c.name}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1.5 ml-1">
                       <input
                         type="color"
                         value={pdfAccentColor}
                         onChange={(e) => setPdfAccentColor(e.target.value)}
-                        className="w-9 h-9 rounded-md border border-border cursor-pointer p-0.5"
+                        className="w-7 h-7 rounded-full border border-border/40 cursor-pointer p-0.5"
+                        title="Couleur personnalisée"
                       />
                       <Input
                         value={pdfAccentColor}
                         onChange={(e) => setPdfAccentColor(e.target.value)}
                         placeholder="#2563eb"
-                        className="font-mono text-xs w-28 h-9"
+                        className="font-mono text-[11px] w-24 h-7"
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground mt-2">
                     Utilisée pour l'en-tête du tableau, le total TTC et les accents.
                   </p>
                 </div>
@@ -616,29 +634,37 @@ export function DocumentsSection() {
             </Card>
 
             {/* Card 2 — Police */}
-            <Card icon={Type} title="Police d'écriture" description="Famille de typographie pour le texte">
-              <div className="flex items-center gap-3">
-                <select
-                  value={pdfFont}
-                  onChange={(e) => setPdfFont(e.target.value)}
-                  className="flex-1 max-w-xs px-3 py-2 rounded-md border border-input bg-background text-sm"
-                >
-                  {PDF_FONTS.map((f) => (
-                    <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-                <span
-                  className="text-sm text-muted-foreground italic"
-                  style={{ fontFamily: pdfFont }}
-                >
-                  Aperçu : Devis · Facture · Total HT
-                </span>
+            <Card
+              icon={Type}
+              title="Police d'écriture"
+              description="Famille de typographie pour le texte"
+            >
+              <select
+                value={pdfFont}
+                onChange={(e) => setPdfFont(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+              >
+                {PDF_FONTS.map((f) => (
+                  <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <div
+                className="mt-3 p-3 rounded-md bg-muted/40 border border-border/50 text-sm leading-relaxed"
+                style={{ fontFamily: pdfFont }}
+              >
+                <div className="font-bold mb-1" style={{ fontFamily: pdfFont }}>
+                  Aperçu de la police
+                </div>
+                <div className="text-muted-foreground" style={{ fontFamily: pdfFont }}>
+                  Devis · Facture · Total HT · Acompte 30 % · 1 234,56 €
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Helvetica est recommandé (universel, intégré à @react-pdf). Les autres polices
-                seront utilisées si elles sont installées sur l'appareil qui ouvre le PDF.
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Helvetica est recommandé (intégré à @react-pdf, identique partout). Les
+                autres polices nécessitent qu'elles soient installées sur l'appareil
+                lecteur du PDF.
               </p>
             </Card>
 
