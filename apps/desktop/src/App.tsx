@@ -25,18 +25,33 @@ const queryClient = new QueryClient({
 export function App() {
   const applyTheme = useThemeStore((s) => s.applyTheme);
   const checkSetup = useAuthStore((s) => s.checkSetup);
+  const restoreSession = useAuthStore((s) => s.restoreSession);
   const user = useAuthStore((s) => s.user);
   const loadUsers = useUsersStore((s) => s.load);
 
   useEffect(() => {
     // Appliquer le thème au démarrage
     applyTheme();
+    // Restaure la session (mode web : JWT en localStorage → /api/auth/me).
+    // En parallèle de checkSetup (sont indépendants).
+    void restoreSession();
     // Vérifier si c'est la 1ère utilisation
     checkSetup();
     // Démarre la détection device (mobile / standalone PWA / iOS)
     const cleanup = initDeviceDetection();
-    return cleanup;
-  }, [applyTheme, checkSetup]);
+
+    // Si le serveur renvoie 401 (token expiré ou invalidé), le shim
+    // dispatche "btp:auth-required" — on logout proprement côté UI.
+    const onAuthRequired = (): void => {
+      void useAuthStore.getState().logout();
+    };
+    window.addEventListener("btp:auth-required", onAuthRequired);
+
+    return () => {
+      cleanup?.();
+      window.removeEventListener("btp:auth-required", onAuthRequired);
+    };
+  }, [applyTheme, checkSetup, restoreSession]);
 
   // Charge l'annuaire users dès qu'un user est connu (login OU rechargement de page)
   useEffect(() => {

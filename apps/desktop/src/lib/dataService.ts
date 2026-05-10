@@ -493,6 +493,60 @@ export class ElectronDataService implements IDataService {
 
   async logout(): Promise<void> {
     this.currentUser = null;
+    // Mode web : drop le JWT en localStorage pour vraiment se déconnecter
+    const api = this.api as unknown as {
+      isWeb?: boolean;
+      webLogout?: () => Promise<void>;
+    };
+    if (api.isWeb && api.webLogout) {
+      try {
+        await api.webLogout();
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
+  /**
+   * Restaure la session depuis le JWT stocké en localStorage (mode web).
+   * Appelé au démarrage de l'app : si le token est valide, on récupère le
+   * user via GET /api/auth/me ; sinon retourne null et l'UI redirige vers /login.
+   *
+   * En mode desktop (Electron) : pas de token JWT, on retourne null
+   * (l'utilisateur se reconnecte à chaque lancement).
+   */
+  async restoreSession(): Promise<User | null> {
+    const api = this.api as unknown as {
+      isWeb?: boolean;
+      webMe?: () => Promise<{
+        id: number;
+        username: string;
+        role: string;
+        email?: string;
+        firstName?: string;
+        lastName?: string;
+        mustChangePassword?: boolean;
+        companyId?: number;
+        isSetupComplete?: boolean;
+        companyName?: string;
+      } | null>;
+    };
+    if (!api.isWeb || !api.webMe) return null;
+    const me = await api.webMe();
+    if (!me) return null;
+    this.currentUser = {
+      id: me.id,
+      username: me.username,
+      role: (me.role as User["role"]) || "user",
+      email: me.email,
+      firstName: me.firstName,
+      lastName: me.lastName,
+      mustChangePassword: me.mustChangePassword,
+      companyId: me.companyId,
+      isSetupComplete: me.isSetupComplete,
+      companyName: me.companyName,
+    };
+    return this.currentUser;
   }
 
   async getCurrentUser(): Promise<User | null> {

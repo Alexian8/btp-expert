@@ -133,9 +133,48 @@ export function installBtpApiShim(): void {
     }
   };
 
+  // ─── Restauration de session (appelé au boot pour récupérer le user
+  //     depuis le JWT en localStorage et éviter un re-login forcé) ────────
+  const webMe = async (): Promise<
+    | {
+        id: number;
+        username: string;
+        role: string;
+        email?: string;
+        firstName?: string;
+        lastName?: string;
+        mustChangePassword?: boolean;
+        companyId?: number;
+        isSetupComplete?: boolean;
+        companyName?: string;
+      }
+    | null
+  > => {
+    if (!getToken()) return null;
+    try {
+      return await http("GET", "/api/auth/me");
+    } catch {
+      // 401 → http() a déjà nettoyé le token
+      return null;
+    }
+  };
+
+  // ─── Logout serveur : invalide la session côté UI (le JWT reste valide
+  //     jusqu'à expiration côté serveur — on se contente de drop le token). ─
+  const webLogout = async (): Promise<void> => {
+    try {
+      await http("POST", "/api/auth/logout");
+    } catch {
+      /* best-effort */
+    }
+    setToken(null);
+  };
+
   // Auth & users
   const auth = {
     webLogin, // exposé pour usage par dataService desktop en mode web
+    webMe, // exposé pour rehydratation au boot
+    webLogout, // exposé pour drop le token au logout
     countUsers: async (): Promise<number> => {
       // Côté web : on renvoie 1 (admin déjà bootstrappé via /api/auth/bootstrap)
       // pour que l'app ne tente jamais l'écran "Créez votre compte"

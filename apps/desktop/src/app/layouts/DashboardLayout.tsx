@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CommandPaletteProvider } from "@/features/command-palette/components/CommandPaletteProvider";
 import { useCommandPalette } from "@/features/command-palette/components/CommandPaletteProvider";
@@ -30,6 +30,7 @@ import {
   Activity,
   FileSignature,
   Menu,
+  RefreshCw,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -114,6 +115,31 @@ export function DashboardLayout() {
   const fetchQuotes = useQuotesStore((s) => s.fetch);
   const fetchInvoices = useInvoicesStore((s) => s.fetch);
   const fetchChantierCategories = useChantierCategoriesStore((s) => s.fetch);
+
+  // Refresh global : re-fetch toutes les listes principales en parallèle.
+  // Utilisé au login ET par le bouton 🔄 dans la topbar.
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAllData = useCallback(async (): Promise<void> => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([
+        fetchClients(),
+        fetchSuppliers(),
+        fetchChantiers(),
+        fetchQuotes(),
+        fetchInvoices(),
+        fetchChantierCategories(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, fetchClients, fetchSuppliers, fetchChantiers, fetchQuotes, fetchInvoices, fetchChantierCategories]);
+
+  const handleManualRefresh = useCallback(async (): Promise<void> => {
+    await refreshAllData();
+    toast.success("Données synchronisées", { duration: 1500 });
+  }, [refreshAllData]);
 
   useEffect(() => {
     if (user) {
@@ -334,6 +360,21 @@ export function DashboardLayout() {
                 className="w-64 h-8 pl-9 text-xs bg-background"
               />
             </div>
+
+            {/* Refresh manuel : re-fetch toutes les listes (clients,
+                fournisseurs, chantiers, devis, factures, catégories).
+                Évite d'avoir à F5 le navigateur. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              title="Synchroniser les données"
+              aria-label="Synchroniser les données"
+            >
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

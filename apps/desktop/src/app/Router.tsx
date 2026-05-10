@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 import { AuthLayout } from "@/app/layouts/AuthLayout";
 import { DashboardLayout } from "@/app/layouts/DashboardLayout";
@@ -35,9 +36,21 @@ import { useAuthStore } from "@/stores/authStore";
 // Router — Configuration des routes de l'app
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Petit splash affiché tant qu'on n'a pas tenté de restaurer la session
+// (évite le flash "/login" → "/" après refresh quand le JWT est valide).
+function BootSplash() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 // Guard : route protégée (nécessite un user)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
+  const isBooting = useAuthStore((s) => s.isBooting);
+  if (isBooting) return <BootSplash />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -45,6 +58,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Guard : si déjà loggé, rediriger vers dashboard
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
+  const isBooting = useAuthStore((s) => s.isBooting);
+  if (isBooting) return <BootSplash />;
   if (user) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
@@ -52,6 +67,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 // Guard : route réservée admin (sécurité côté serveur, ce guard est juste pour l'UX)
 function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  const isBooting = useAuthStore((s) => s.isBooting);
+  if (isBooting) return <BootSplash />;
   if (!user) return <Navigate to="/login" replace />;
   // super_admin n'est pas un admin de company, mais on lui laisse l'accès
   // (il peut tout voir cross-tenant si besoin)
@@ -64,6 +81,8 @@ function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
 // Guard : route réservée au super_admin (éditeur SaaS BatiDesk)
 function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  const isBooting = useAuthStore((s) => s.isBooting);
+  if (isBooting) return <BootSplash />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== "super_admin") return <Navigate to="/" replace />;
   return <>{children}</>;
