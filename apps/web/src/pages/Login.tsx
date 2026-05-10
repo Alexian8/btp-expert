@@ -27,16 +27,29 @@ export function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[Login] handleSubmit fired", { username, hasPassword: !!password });
     setError("");
 
     if (!username.trim() || !password) {
+      console.warn("[Login] champs vides");
       setError("Tous les champs sont requis");
       return;
     }
 
-    const res = await login(username.trim(), password);
-    if (res.ok) navigate("/", { replace: true });
-    else setError(res.error ?? "Identifiants incorrects");
+    try {
+      console.log("[Login] appel store login()…");
+      const res = await login(username.trim(), password);
+      console.log("[Login] résultat:", res);
+      if (res.ok) {
+        console.log("[Login] navigate /");
+        navigate("/", { replace: true });
+      } else {
+        setError(res.error ?? "Identifiants incorrects");
+      }
+    } catch (e) {
+      console.error("[Login] EXCEPTION:", e);
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    }
   };
 
   return (

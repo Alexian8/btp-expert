@@ -88,7 +88,11 @@ class HttpClient {
     this.onTokenReceived = config.onTokenReceived;
     this.onUnauthorized = config.onUnauthorized;
     this.timeoutMs = config.timeoutMs ?? 30_000;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    // IMPORTANT : bind fetch au global pour éviter "Illegal invocation"
+    // quand on appelle this.fetchImpl(url) — fetch a besoin de `this === window`.
+    this.fetchImpl =
+      config.fetchImpl ??
+      ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   }
 
   async authHeaders(): Promise<Record<string, string>> {
