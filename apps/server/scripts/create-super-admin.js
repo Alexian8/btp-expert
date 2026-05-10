@@ -87,6 +87,24 @@ async function main() {
   const conn = await mysql.createConnection(cfg);
 
   try {
+    // 0. Migration self-healing : s'assurer que users.companyId est nullable
+    // (au cas où l'app n'a pas encore été redémarrée depuis le dernier pull).
+    // Le super_admin a companyId = NULL.
+    try {
+      const [colRows] = await conn.query(
+        `SELECT IS_NULLABLE FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'companyId'`
+      );
+      const isNullable = colRows[0] && colRows[0].IS_NULLABLE === "YES";
+      if (!isNullable) {
+        console.log("ℹ️  Migration : passage de users.companyId en NULL...");
+        await conn.query("ALTER TABLE users MODIFY COLUMN companyId INT NULL DEFAULT 1");
+        console.log("   ✓ users.companyId est maintenant nullable");
+      }
+    } catch (e) {
+      console.warn("⚠️  Impossible de vérifier/modifier la colonne companyId :", e.message);
+    }
+
     // 1. Check si le username existe déjà
     const [existing] = await conn.query(
       "SELECT id, role FROM users WHERE username = ? LIMIT 1",
