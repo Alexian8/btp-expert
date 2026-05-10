@@ -329,7 +329,10 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
                         type="button"
                         onClick={() => setCategory(key as ExpenseCategory)}
                         className={cn(
-                          "py-1.5 px-2 rounded-md border text-xs font-medium transition-all",
+                          // min-h-11 garantit une hauteur uniforme même quand
+                          // le label wrappe sur 2 lignes (Téléphone/Internet,
+                          // Frais bancaires) — toutes les pastilles s'alignent.
+                          "flex items-center justify-center text-center min-h-11 py-1.5 px-2 rounded-md border text-xs font-medium transition-all leading-tight",
                           selected
                             ? meta.colorTw + " border-transparent"
                             : "border-border bg-card hover:bg-accent text-muted-foreground"

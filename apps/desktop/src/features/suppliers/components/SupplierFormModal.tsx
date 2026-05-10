@@ -105,13 +105,13 @@ export function SupplierFormModal({ open, supplier, onClose }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
         >
           <motion.div
             initial={{ scale: 0.95, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.95 }}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col"
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div>
@@ -122,26 +122,28 @@ export function SupplierFormModal({ open, supplier, onClose }: Props) {
               </Button>
             </div>
 
-            <div className="flex flex-1 overflow-hidden">
-              {/* Side nav */}
-              <div className="w-48 border-r border-border p-2 shrink-0 overflow-y-auto">
-                {sections.map((s) => (
-                  <button
-                    key={s.key}
-                    onClick={() => setActiveSection(s.key)}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm text-left transition-colors",
-                      activeSection === s.key ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 text-muted-foreground"
-                    )}
-                  >
-                    <s.icon className="w-4 h-4 shrink-0" />
-                    {s.label}
-                  </button>
-                ))}
+            <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+              {/* Side nav — vertical sur desktop, tabs horizontales scrollables sur mobile */}
+              <div className="md:w-48 md:border-r border-b md:border-b-0 border-border p-2 shrink-0 md:overflow-y-auto">
+                <div className="flex md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-x-visible -mx-2 px-2 md:mx-0 md:px-0">
+                  {sections.map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => setActiveSection(s.key)}
+                      className={cn(
+                        "shrink-0 md:w-full flex items-center gap-2 px-3 md:px-2 py-2 rounded-md text-sm text-left transition-colors whitespace-nowrap",
+                        activeSection === s.key ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 text-muted-foreground"
+                      )}
+                    >
+                      <s.icon className="w-4 h-4 shrink-0" />
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-5">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5">
                 {activeSection === "identity" && (
                   <div className="space-y-4">
                     <div className="p-3 rounded-md bg-primary/5 border border-primary/20">
@@ -250,7 +252,7 @@ export function SupplierFormModal({ open, supplier, onClose }: Props) {
                         onChange={(e) => update_("addressLine2", e.target.value)}
                       />
                     </div>
-                    <div className="grid grid-cols-[120px_1fr_1fr] gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr_1fr] gap-3">
                       <div>
                         <Label>Code postal</Label>
                         <Input
@@ -303,7 +305,7 @@ export function SupplierFormModal({ open, supplier, onClose }: Props) {
                         onChange={(e) => update_("legalForm", e.target.value)}
                       />
                     </div>
-                    <div className="grid grid-cols-[100px_1fr] gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-[100px_1fr] gap-3">
                       <div>
                         <Label>Code APE</Label>
                         <Input
