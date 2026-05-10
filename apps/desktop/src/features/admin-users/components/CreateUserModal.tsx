@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UserPlus, Copy, Check, AlertCircle } from "lucide-react";
+import { X, UserPlus, Copy, Check, AlertCircle, Mail, MailX } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -137,6 +137,43 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
             <div className="flex-1 overflow-y-auto p-5">
               {createdUser?.tempPassword ? (
                 <div className="space-y-4">
+                  {/* Statut de l'envoi email */}
+                  {createdUser.email ? (
+                    createdUser.emailSent ? (
+                      <div className="flex items-start gap-2 p-3 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
+                        <Mail className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <strong>Email envoyé automatiquement</strong>
+                          <p className="mt-0.5 opacity-90">
+                            Un email avec les identifiants a été envoyé à{" "}
+                            <strong>{createdUser.email}</strong>. Tu peux quand même
+                            copier le mot de passe ci-dessous au cas où.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
+                        <MailX className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <strong>Email non envoyé</strong>
+                          <p className="mt-0.5 opacity-90">
+                            {createdUser.emailError === "SMTP non configuré"
+                              ? "SMTP pas configuré côté serveur — transmets le mot de passe manuellement."
+                              : `Erreur : ${createdUser.emailError ?? "raison inconnue"}. Transmets le mot de passe manuellement.`}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex items-start gap-2 p-3 rounded-md bg-slate-500/10 border border-slate-500/30 text-slate-700 dark:text-slate-400">
+                      <MailX className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p className="text-xs">
+                        <strong>Aucun email saisi</strong> — transmets le mot de passe
+                        manuellement à l'utilisateur.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex items-start gap-2 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <p className="text-xs">

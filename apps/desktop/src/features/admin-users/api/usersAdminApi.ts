@@ -37,6 +37,11 @@ export interface CreatedUser extends AdminUser {
   /** Présent uniquement si le serveur a généré un temp password (à afficher
    *  une seule fois à l'admin pour qu'il le transmette à l'utilisateur). */
   tempPassword?: string;
+  /** True si le serveur a réussi à envoyer l'email de bienvenue.
+   *  False si SMTP non configuré, email vide, ou erreur d'envoi. */
+  emailSent?: boolean;
+  /** Raison si emailSent === false (ex: "SMTP non configuré", erreur réseau). */
+  emailError?: string;
 }
 
 const TOKEN_KEY = "btp.web.token";
