@@ -10,6 +10,8 @@ export interface AuthPayload {
   sub: number;
   username: string;
   role: string;
+  /** Multi-tenant : ID de l'entreprise du user. Sert à isoler les données. */
+  companyId: number;
 }
 
 export function signToken(payload: AuthPayload, cfg: Config): string {

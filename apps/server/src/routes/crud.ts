@@ -37,10 +37,18 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
 ): Router {
   const router = Router();
 
+  // Helper : construit le ScopeContext (auditUserId + tenantId) depuis le JWT.
+  const ctxFromReq = (req: Request) => ({
+    auditUserId: req.user?.sub,
+    tenantId: req.user?.companyId,
+  });
+
   router.get(
     "/count",
     wrap(async (req, res) => {
-      res.json({ count: await repo.count(req.query as Record<string, unknown>) });
+      res.json({
+        count: await repo.count(req.query as Record<string, unknown>, ctxFromReq(req)),
+      });
     })
   );
 
@@ -48,14 +56,16 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
     "/",
     wrap(async (req, res) => {
       const { offset, limit, orderBy, order, ...filter } = req.query as Record<string, unknown>;
-      res.json(await repo.findAll(filter, { offset, limit, orderBy, order }));
+      res.json(
+        await repo.findAll(filter, { offset, limit, orderBy, order }, ctxFromReq(req))
+      );
     })
   );
 
   router.get(
     "/:id",
     wrap(async (req, res) => {
-      const item = await repo.findById(String(req.params.id));
+      const item = await repo.findById(String(req.params.id), ctxFromReq(req));
       if (!item) {
         res.status(404).json({ message: "Not found" });
         return;
@@ -68,8 +78,7 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
     "/",
     wrap(async (req, res) => {
       try {
-        const auditUserId = req.user?.sub;
-        const created = await repo.create(req.body ?? {}, auditUserId);
+        const created = await repo.create(req.body ?? {}, ctxFromReq(req));
         res.status(201).json(created);
 
         // Audit (best-effort, après réponse client pour ne pas la retarder)
@@ -92,8 +101,7 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
   router.patch(
     "/:id",
     wrap(async (req, res) => {
-      const auditUserId = req.user?.sub;
-      const updated = await repo.update(String(req.params.id), req.body ?? {}, auditUserId);
+      const updated = await repo.update(String(req.params.id), req.body ?? {}, ctxFromReq(req));
       if (!updated) {
         res.status(404).json({ message: "Not found" });
         return;
@@ -101,10 +109,8 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
       res.json(updated);
 
       if (opts.db && opts.resourceName) {
-        // On log juste les noms de champs modifiés (pas les valeurs — RGPD-friendly
-        // et évite de stocker du PII dans les logs).
         const changedFields = Object.keys(req.body ?? {}).filter(
-          (k) => k !== "id" && k !== "createdBy" && k !== "updatedBy"
+          (k) => k !== "id" && k !== "createdBy" && k !== "updatedBy" && k !== "companyId"
         );
         void writeAudit(opts.db, {
           ...audited(req),
@@ -120,18 +126,18 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
   router.delete(
     "/:id",
     wrap(async (req, res) => {
-      // Capturer un snapshot avant delete pour avoir le contexte dans le log
+      const ctx = ctxFromReq(req);
       let snapshot: Record<string, unknown> | null = null;
       if (opts.db && opts.resourceName) {
         try {
-          const before = await repo.findById(String(req.params.id));
+          const before = await repo.findById(String(req.params.id), ctx);
           snapshot = before ? extractKeyFields(before, opts.resourceName) : null;
         } catch {
           /* best-effort */
         }
       }
 
-      const ok = await repo.delete(String(req.params.id));
+      const ok = await repo.delete(String(req.params.id), ctx);
       if (!ok) {
         res.status(404).json({ message: "Not found" });
         return;

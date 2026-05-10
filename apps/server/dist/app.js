@@ -22,6 +22,7 @@ const microsoft_1 = require("./routes/microsoft");
 const admin_users_1 = require("./routes/admin-users");
 const admin_logs_1 = require("./routes/admin-logs");
 const auth_2 = require("./auth");
+const rbac_1 = require("./rbac");
 const rate_limit_1 = require("./rate-limit");
 // ─── Listes de colonnes ──────────────────────────────────────────────────
 const CLIENT_COLS = [
@@ -202,6 +203,7 @@ async function createApp(cfg, db) {
         jsonColumns: ["tags"],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/clients", auth, (0, crud_1.buildCrudRouter)(clients, { db: pool, resourceName: "clients" }));
     // ─── Suppliers ─────────────────────────────────────────────────────────
@@ -213,6 +215,7 @@ async function createApp(cfg, db) {
         jsonColumns: ["tags"],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/suppliers", auth, (0, crud_1.buildCrudRouter)(suppliers, { db: pool, resourceName: "suppliers" }));
     // Alias rétro-compatible
@@ -226,6 +229,7 @@ async function createApp(cfg, db) {
         jsonColumns: ["photos", "tags"],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/chantiers", auth, (0, crud_1.buildCrudRouter)(chantiers, { db: pool, resourceName: "chantiers" }));
     // ─── Quotes ────────────────────────────────────────────────────────────
@@ -237,6 +241,7 @@ async function createApp(cfg, db) {
         jsonColumns: ["items", "companySnapshot"],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/quotes", auth, (0, crud_1.buildCrudRouter)(quotes, { db: pool, resourceName: "quotes" }));
     // ─── Invoices ──────────────────────────────────────────────────────────
@@ -248,6 +253,7 @@ async function createApp(cfg, db) {
         jsonColumns: ["items", "companySnapshot"],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices, { db: pool, resourceName: "invoices" }));
     // ─── Invoice payments ──────────────────────────────────────────────────
@@ -257,6 +263,7 @@ async function createApp(cfg, db) {
         sortableColumns: ["createdAt", "date", "amount"],
         writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments, { db: pool, resourceName: "invoice_payments" }));
     // ─── Expenses ──────────────────────────────────────────────────────────
@@ -279,6 +286,7 @@ async function createApp(cfg, db) {
         ],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses, { db: pool, resourceName: "expenses" }));
     // ─── Expense notes ─────────────────────────────────────────────────────
@@ -302,6 +310,7 @@ async function createApp(cfg, db) {
         ],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/expense-notes", auth, (0, crud_1.buildCrudRouter)(expenseNotes, { db: pool, resourceName: "expense_notes" }));
     // ─── Subcontractors ────────────────────────────────────────────────────
@@ -335,6 +344,7 @@ async function createApp(cfg, db) {
         ],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/subcontractors", auth, (0, crud_1.buildCrudRouter)(subcontractors, { db: pool, resourceName: "subcontractors" }));
     // ─── Agenda events ─────────────────────────────────────────────────────
@@ -358,14 +368,19 @@ async function createApp(cfg, db) {
         ],
         hasUpdatedAt: true,
         hasAuditColumns: true,
+        tenantColumn: "companyId",
     });
     app.use("/api/agenda-events", auth, (0, crud_1.buildCrudRouter)(agendaEvents, { db: pool, resourceName: "agenda_events" }));
     // ─── Public route : liste compacte des users (id+nom+role) ────────────
     // Pour afficher "Créé par X" dans les listes Devis/Factures sans donner
     // accès à toute la table users (réservée aux admins via /api/admin/users).
-    app.get("/api/users/public", auth, asyncHandler(async (_req, res) => {
+    app.get("/api/users/public", auth, asyncHandler(async (req, res) => {
+        // Multi-tenant : on ne montre que les users de la même company
+        const tenantId = req.user?.companyId ?? 1;
         const [rows] = await pool.query(`SELECT id, username, firstName, lastName, avatarUrl, role
-         FROM users WHERE disabled = 0 ORDER BY firstName, lastName, username`);
+         FROM users
+         WHERE disabled = 0 AND companyId = ?
+         ORDER BY firstName, lastName, username`, [tenantId]);
         res.json(rows);
     }));
     // ─── Settings ──────────────────────────────────────────────────────────
@@ -411,26 +426,54 @@ async function createApp(cfg, db) {
         }
         res.json(obj);
     }));
-    // ─── Company profile (singleton) ───────────────────────────────────────
-    app.get("/api/company", auth, asyncHandler(async (_req, res) => {
-        const [rows] = (await pool.query("SELECT data FROM company WHERE id = 1"));
+    // ─── Company profile (multi-tenant) ────────────────────────────────────
+    // GET : tous les users authentifiés peuvent lire leur propre company
+    // PATCH : admin only (les employés ne peuvent PAS modifier les infos d'entreprise)
+    // POST /complete-setup : marque l'onboarding comme terminé (admin only)
+    app.get("/api/company", auth, asyncHandler(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await pool.query("SELECT data, name, isSetupComplete FROM company WHERE id = ? LIMIT 1", [tenantId]);
         const r = rows[0];
         if (!r) {
             res.json({});
             return;
         }
-        const data = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
-        res.json(data);
+        const data = typeof r.data === "string" ? JSON.parse(r.data) : r.data ?? {};
+        // On expose name + isSetupComplete au top niveau (à côté du blob `data`)
+        res.json({
+            ...data,
+            _meta: {
+                companyId: tenantId,
+                name: r.name ?? "",
+                isSetupComplete: Boolean(r.isSetupComplete),
+            },
+        });
     }));
-    app.patch("/api/company", auth, asyncHandler(async (req, res) => {
-        const [rows] = (await pool.query("SELECT data FROM company WHERE id = 1"));
+    app.patch("/api/company", auth, (0, rbac_1.requireRole)("admin"), asyncHandler(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await pool.query("SELECT data FROM company WHERE id = ? LIMIT 1", [tenantId]);
         const existing = rows[0];
         const current = existing && typeof existing.data === "string"
             ? JSON.parse(existing.data)
             : existing?.data ?? {};
-        const merged = { ...current, ...(req.body ?? {}) };
-        await pool.execute("UPDATE company SET data = ? WHERE id = 1", [JSON.stringify(merged)]);
+        // Si companyName est modifié, on met aussi à jour la colonne name
+        // dénormalisée (pour les jointures et l'affichage rapide)
+        const incoming = req.body ?? {};
+        const merged = { ...current, ...incoming };
+        const newName = incoming.companyName;
+        if (typeof newName === "string") {
+            await pool.execute("UPDATE company SET data = ?, name = ? WHERE id = ?", [JSON.stringify(merged), newName, tenantId]);
+        }
+        else {
+            await pool.execute("UPDATE company SET data = ? WHERE id = ?", [JSON.stringify(merged), tenantId]);
+        }
         res.json(merged);
+    }));
+    // Marque le setup comme terminé (sortie du tutoriel d'onboarding)
+    app.post("/api/company/complete-setup", auth, (0, rbac_1.requireRole)("admin"), asyncHandler(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        await pool.execute("UPDATE company SET isSetupComplete = 1 WHERE id = ?", [tenantId]);
+        res.json({ ok: true, isSetupComplete: true });
     }));
     // ─── Microsoft + email ─────────────────────────────────────────────────
     app.use("/api/auth/microsoft", (0, microsoft_1.buildMicrosoftRouter)(pool, cfg));

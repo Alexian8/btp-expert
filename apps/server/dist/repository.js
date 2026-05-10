@@ -18,11 +18,20 @@ class MysqlRepository {
         this.table = table;
         this.opts = opts;
     }
-    async findAll(filter = {}, query = {}) {
+    async findAll(filter = {}, query = {}, ctx = {}) {
         const wheres = [];
         const params = [];
+        // Scope tenant en PREMIER (impossible à override par filter client)
+        if (this.opts.tenantColumn && ctx.tenantId != null) {
+            wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
+            params.push(ctx.tenantId);
+        }
         for (const [key, value] of Object.entries(filter)) {
             if (!this.opts.filterableColumns.includes(key))
+                continue;
+            // SÉCURITÉ : un client ne peut pas filtrer sur tenantColumn (sinon il
+            // pourrait voir d'autres tenants en passant un autre companyId)
+            if (this.opts.tenantColumn && key === this.opts.tenantColumn)
                 continue;
             wheres.push(`${ident(key)} = ?`);
             params.push(value);
@@ -48,11 +57,18 @@ class MysqlRepository {
         const [rows] = await this.db.query(sql, params);
         return rows;
     }
-    async findById(id) {
-        const [rows] = await this.db.query(`SELECT * FROM ${ident(this.table)} WHERE id = ? LIMIT 1`, [id]);
+    async findById(id, ctx = {}) {
+        const wheres = ["id = ?"];
+        const params = [id];
+        if (this.opts.tenantColumn && ctx.tenantId != null) {
+            wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
+            params.push(ctx.tenantId);
+        }
+        const [rows] = await this.db.query(`SELECT * FROM ${ident(this.table)} WHERE ${wheres.join(" AND ")} LIMIT 1`, params);
         return rows[0] ?? null;
     }
-    async create(data, auditUserId) {
+    async create(data, ctx = {}) {
+        const auditUserId = ctx.auditUserId;
         const useClientPk = this.opts.primaryKey === "client";
         const cols = [];
         const placeholders = [];
@@ -73,11 +89,21 @@ class MysqlRepository {
             // depuis le payload (sinon il pourrait usurper un autre user).
             if (key === "createdBy" || key === "updatedBy")
                 continue;
+            // SÉCURITÉ : un client ne peut JAMAIS écrire la colonne tenant
+            // (sinon il pourrait créer une row dans un autre tenant)
+            if (this.opts.tenantColumn && key === this.opts.tenantColumn)
+                continue;
             if (!this.opts.writableColumns.includes(key))
                 continue;
             cols.push(ident(key));
             placeholders.push("?");
             values.push(this.serializeValue(key, value));
+        }
+        // Injection auto du tenant depuis le JWT
+        if (this.opts.tenantColumn && ctx.tenantId != null) {
+            cols.push(ident(this.opts.tenantColumn));
+            placeholders.push("?");
+            values.push(ctx.tenantId);
         }
         // Injection auto de createdBy / updatedBy depuis le JWT serveur
         if (this.opts.hasAuditColumns && auditUserId != null) {
@@ -93,7 +119,7 @@ class MysqlRepository {
         const sql = `INSERT INTO ${ident(this.table)} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`;
         const [result] = await this.db.execute(sql, values);
         const insertedId = useClientPk ? data.id : result.insertId;
-        const created = await this.findById(insertedId);
+        const created = await this.findById(insertedId, ctx);
         if (!created)
             throw new Error("Insertion failed: row not found after insert");
         return created;
@@ -104,13 +130,16 @@ class MysqlRepository {
         }
         return value;
     }
-    async update(id, data, auditUserId) {
+    async update(id, data, ctx = {}) {
+        const auditUserId = ctx.auditUserId;
         const sets = [];
         const values = [];
         for (const [key, value] of Object.entries(data)) {
             if (key === "id")
                 continue; // PK ne s'update pas
             if (key === "createdBy" || key === "updatedBy")
+                continue; // SÉCURITÉ
+            if (this.opts.tenantColumn && key === this.opts.tenantColumn)
                 continue; // SÉCURITÉ
             if (!this.opts.writableColumns.includes(key))
                 continue;
@@ -123,23 +152,41 @@ class MysqlRepository {
             values.push(auditUserId);
         }
         if (!sets.length)
-            return this.findById(id);
+            return this.findById(id, ctx);
         if (this.opts.hasUpdatedAt)
             sets.push(`${ident("updatedAt")} = CURRENT_TIMESTAMP`);
+        // WHERE id = ? AND companyId = ?  (impossible de modifier les rows d'un autre tenant)
+        const wheres = ["id = ?"];
         values.push(id);
-        const sql = `UPDATE ${ident(this.table)} SET ${sets.join(", ")} WHERE id = ?`;
+        if (this.opts.tenantColumn && ctx.tenantId != null) {
+            wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
+            values.push(ctx.tenantId);
+        }
+        const sql = `UPDATE ${ident(this.table)} SET ${sets.join(", ")} WHERE ${wheres.join(" AND ")}`;
         await this.db.execute(sql, values);
-        return this.findById(id);
+        return this.findById(id, ctx);
     }
-    async delete(id) {
-        const [result] = await this.db.execute(`DELETE FROM ${ident(this.table)} WHERE id = ?`, [id]);
+    async delete(id, ctx = {}) {
+        const wheres = ["id = ?"];
+        const params = [id];
+        if (this.opts.tenantColumn && ctx.tenantId != null) {
+            wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
+            params.push(ctx.tenantId);
+        }
+        const [result] = await this.db.execute(`DELETE FROM ${ident(this.table)} WHERE ${wheres.join(" AND ")}`, params);
         return result.affectedRows > 0;
     }
-    async count(filter = {}) {
+    async count(filter = {}, ctx = {}) {
         const wheres = [];
         const params = [];
+        if (this.opts.tenantColumn && ctx.tenantId != null) {
+            wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
+            params.push(ctx.tenantId);
+        }
         for (const [key, value] of Object.entries(filter)) {
             if (!this.opts.filterableColumns.includes(key))
+                continue;
+            if (this.opts.tenantColumn && key === this.opts.tenantColumn)
                 continue;
             wheres.push(`${ident(key)} = ?`);
             params.push(value);

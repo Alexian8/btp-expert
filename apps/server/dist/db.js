@@ -404,17 +404,36 @@ async function addIndexIfNotExists(db, table, indexName, columns) {
         await db.query(`CREATE INDEX \`${indexName}\` ON \`${table}\` (${columns})`);
     }
 }
-// ─── Migrations enterprise (audit trail + RBAC users) ────────────────────
+// ─── Migrations enterprise (audit trail + RBAC + multi-tenant) ───────────
 //
 // Ajoute :
 //  • Profil enrichi sur `users` (email, firstName, lastName, avatarUrl,
 //    disabled, mustChangePassword, lastLoginAt)
+//  • Multi-tenant : `users.companyId` + `companyId` sur toutes les tables
+//    data + enrichissement `company` (name, isSetupComplete)
 //  • Champs d'audit `createdBy` / `updatedBy` (FK soft INT vers users.id)
 //    sur toutes les tables data critiques.
 //
 // Toutes les opérations sont idempotentes : safe à relancer plusieurs fois.
 async function runEnterpriseMigrations(db) {
-    // 1. Enrichissement table users
+    // 1. Multi-tenant : enrichissement table company (singleton -> tenant)
+    // On garde la table `company` existante (id=1, data JSON) et on lui ajoute
+    // les colonnes nécessaires au multi-tenant. Le SaaS multi-clients pourra
+    // ajouter d'autres rows à terme.
+    await addColumnIfNotExists(db, "company", "name", "VARCHAR(255) DEFAULT ''");
+    await addColumnIfNotExists(db, "company", "isSetupComplete", "TINYINT(1) NOT NULL DEFAULT 0");
+    await addColumnIfNotExists(db, "company", "createdAt", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+    // Si la company id=1 existe déjà avec des data populées (companyName défini
+    // dans le JSON), on marque isSetupComplete=1 — sinon on laisse à 0.
+    await db.query(`
+    UPDATE company
+    SET isSetupComplete = 1
+    WHERE id = 1
+      AND isSetupComplete = 0
+      AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.companyName')) IS NOT NULL
+      AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.companyName')) <> ''
+  `);
+    // 2. Enrichissement table users
     await addColumnIfNotExists(db, "users", "email", "VARCHAR(255) DEFAULT ''");
     await addColumnIfNotExists(db, "users", "firstName", "VARCHAR(128) DEFAULT ''");
     await addColumnIfNotExists(db, "users", "lastName", "VARCHAR(128) DEFAULT ''");
@@ -423,11 +442,14 @@ async function runEnterpriseMigrations(db) {
     await addColumnIfNotExists(db, "users", "mustChangePassword", "TINYINT(1) NOT NULL DEFAULT 0");
     await addColumnIfNotExists(db, "users", "lastLoginAt", "DATETIME NULL");
     await addColumnIfNotExists(db, "users", "updatedAt", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    // Multi-tenant : companyId sur users (default 1 = tenant existant)
+    await addColumnIfNotExists(db, "users", "companyId", "INT NOT NULL DEFAULT 1");
     await addIndexIfNotExists(db, "users", "idx_users_email", "email");
     await addIndexIfNotExists(db, "users", "idx_users_role", "role");
-    // 2. Audit trail (createdBy / updatedBy) sur les tables data
-    // FK soft INT (pas de FK contrainte stricte pour permettre la suppression
-    // d'un utilisateur sans casser l'historique). updatedBy nullable.
+    await addIndexIfNotExists(db, "users", "idx_users_companyId", "companyId");
+    // 3. Multi-tenant + audit trail sur les tables data
+    // companyId : isolation entre entreprises (default 1 pour les rows existantes)
+    // createdBy / updatedBy : qui a fait quoi à l'intérieur d'une company
     const auditTables = [
         "clients",
         "suppliers",
@@ -441,8 +463,10 @@ async function runEnterpriseMigrations(db) {
         "agenda_events",
     ];
     for (const t of auditTables) {
+        await addColumnIfNotExists(db, t, "companyId", "INT NOT NULL DEFAULT 1");
         await addColumnIfNotExists(db, t, "createdBy", "INT NULL");
         await addColumnIfNotExists(db, t, "updatedBy", "INT NULL");
+        await addIndexIfNotExists(db, t, `idx_${t}_companyId`, "companyId");
         await addIndexIfNotExists(db, t, `idx_${t}_createdBy`, "createdBy");
     }
 }

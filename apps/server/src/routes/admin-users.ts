@@ -19,6 +19,7 @@ import type { DB, RowDataPacket, ResultSetHeader } from "../db";
 import { requireAuth } from "../auth";
 import { requireRole, ROLES, isValidRole } from "../rbac";
 import { writeAudit, audited } from "../audit";
+import { sendMail, welcomeEmailHtml } from "../email";
 import type { Config } from "../config";
 
 const SALT_LEN = 16;
@@ -80,6 +81,7 @@ interface UserRow extends RowDataPacket {
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  companyId: number;
 }
 
 /** Convertit une row MySQL en réponse JSON publique (pas de hash). */
@@ -97,6 +99,7 @@ function publicUser(row: UserRow) {
     lastLoginAt: row.lastLoginAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    companyId: row.companyId,
   };
 }
 
@@ -106,15 +109,17 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
   // Toutes les routes ici exigent admin
   router.use(requireAuth(cfg), requireRole("admin"));
 
-  // ─── Liste ────────────────────────────────────────────────────────────
+  // ─── Liste (scopée par tenant) ────────────────────────────────────────
   router.get(
     "/",
-    wrap(async (_req, res) => {
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, email, firstName, lastName, avatarUrl,
                 role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt
-         FROM users ORDER BY createdAt DESC`
+                createdAt, updatedAt, companyId
+         FROM users WHERE companyId = ? ORDER BY createdAt DESC`,
+        [tenantId]
       );
       res.json(rows.map(publicUser));
     })
@@ -132,9 +137,9 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, email, firstName, lastName, avatarUrl,
                 role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt
-         FROM users WHERE id = ? LIMIT 1`,
-        [id]
+                createdAt, updatedAt, companyId
+         FROM users WHERE id = ? AND companyId = ? LIMIT 1`,
+        [id, req.user?.companyId ?? 1]
       );
       const row = rows[0];
       if (!row) {
@@ -159,7 +164,8 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       }
       const data = parsed.data;
 
-      // Unicité username
+      // Unicité username (globale — un username doit être unique cross-tenant
+      // car c'est un identifiant de login direct ; pas de qualification par tenant)
       const [dup] = await db.query<RowDataPacket[]>(
         "SELECT id FROM users WHERE username = ? LIMIT 1",
         [data.username]
@@ -174,10 +180,14 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       const wasGenerated = data.password === undefined;
       const hash = hashPassword(tempPassword);
 
+      // Multi-tenant : le nouveau user hérite de la company de l'admin créateur.
+      const tenantId = req.user?.companyId ?? 1;
+
       const [result] = await db.execute<ResultSetHeader>(
         `INSERT INTO users
-           (username, passwordHash, email, firstName, lastName, role, mustChangePassword)
-         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+           (username, passwordHash, email, firstName, lastName, role,
+            mustChangePassword, companyId)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
         [
           data.username,
           hash,
@@ -185,12 +195,13 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
           data.firstName,
           data.lastName,
           data.role,
+          tenantId,
         ]
       );
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, email, firstName, lastName, avatarUrl,
                 role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt
+                createdAt, updatedAt, companyId
          FROM users WHERE id = ? LIMIT 1`,
         [result.insertId]
       );
@@ -208,11 +219,40 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         },
       });
 
+      // ─── Envoi email de bienvenue (best-effort, async) ─────────────────
+      // Si SMTP est configuré, on envoie. Sinon le tempPassword est juste
+      // affiché dans la modal admin (comme avant).
+      let emailSent = false;
+      let emailError: string | undefined;
+      if (created.email) {
+        const [companyRows] = await db.query<RowDataPacket[]>(
+          "SELECT name FROM company WHERE id = ? LIMIT 1",
+          [tenantId]
+        );
+        const companyName = (companyRows[0] as { name?: string })?.name ?? "BatiDesk";
+        const html = welcomeEmailHtml({
+          firstName: created.firstName ?? "",
+          username: created.username,
+          tempPassword,
+          loginUrl: cfg.APP_URL || "https://intranet.jacobhabitat-dev.fr",
+          companyName,
+        });
+        const result = await sendMail(cfg, {
+          to: created.email,
+          subject: `[${companyName}] Vos accès BatiDesk`,
+          html,
+        });
+        emailSent = result.ok;
+        emailError = result.skipped ? "SMTP non configuré" : result.error;
+      }
+
       res.status(201).json({
         ...publicUser(created),
         // ⚠️ Le mot de passe temporaire n'est exposé QU'À LA CRÉATION,
         // jamais relisible ensuite. L'admin doit le copier maintenant.
         tempPassword: wasGenerated ? tempPassword : undefined,
+        emailSent,
+        emailError,
       });
     })
   );
@@ -265,22 +305,31 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(400).json({ message: "Aucun champ modifiable fourni" });
         return;
       }
-      // Snapshot avant pour traquer les vrais changements
+      // Snapshot avant pour traquer les vrais changements (scopé tenant)
+      const tenantId = req.user?.companyId ?? 1;
       const [beforeRows] = await db.query<UserRow[]>(
-        "SELECT role, disabled, email, firstName, lastName FROM users WHERE id = ? LIMIT 1",
-        [id]
+        "SELECT role, disabled, email, firstName, lastName FROM users WHERE id = ? AND companyId = ? LIMIT 1",
+        [id, tenantId]
       );
       const before = beforeRows[0];
+      if (!before) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
 
       values.push(id);
-      await db.execute(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, values as never[]);
+      values.push(tenantId);
+      await db.execute(
+        `UPDATE users SET ${sets.join(", ")} WHERE id = ? AND companyId = ?`,
+        values as never[]
+      );
 
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, email, firstName, lastName, avatarUrl,
                 role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt
-         FROM users WHERE id = ? LIMIT 1`,
-        [id]
+                createdAt, updatedAt, companyId
+         FROM users WHERE id = ? AND companyId = ? LIMIT 1`,
+        [id, req.user?.companyId ?? 1]
       );
       const row = rows[0];
       if (!row) {
@@ -337,11 +386,12 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(400).json({ message: "ID invalide" });
         return;
       }
+      const tenantId = req.user?.companyId ?? 1;
       const tempPassword = generateTempPassword();
       const hash = hashPassword(tempPassword);
       const [result] = await db.execute<ResultSetHeader>(
-        "UPDATE users SET passwordHash = ?, mustChangePassword = 1 WHERE id = ?",
-        [hash, id]
+        "UPDATE users SET passwordHash = ?, mustChangePassword = 1 WHERE id = ? AND companyId = ?",
+        [hash, id, tenantId]
       );
       if (result.affectedRows === 0) {
         res.status(404).json({ message: "Utilisateur introuvable" });
@@ -378,13 +428,14 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
           .json({ message: "Impossible de désactiver votre propre compte" });
         return;
       }
+      const tenantIdDel = req.user?.companyId ?? 1;
       const [beforeRows] = await db.query<UserRow[]>(
-        "SELECT username FROM users WHERE id = ? LIMIT 1",
-        [id]
+        "SELECT username FROM users WHERE id = ? AND companyId = ? LIMIT 1",
+        [id, tenantIdDel]
       );
       const [result] = await db.execute<ResultSetHeader>(
-        "UPDATE users SET disabled = 1 WHERE id = ?",
-        [id]
+        "UPDATE users SET disabled = 1 WHERE id = ? AND companyId = ?",
+        [id, tenantIdDel]
       );
       if (result.affectedRows === 0) {
         res.status(404).json({ message: "Utilisateur introuvable" });

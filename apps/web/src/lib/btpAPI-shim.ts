@@ -84,18 +84,48 @@ export function installBtpApiShim(): void {
   const webLogin = async (
     username: string,
     password: string
-  ): Promise<{ id: number; username: string; role: string; passwordHash: string } | null> => {
+  ): Promise<
+    | {
+        id: number;
+        username: string;
+        role: string;
+        email?: string;
+        firstName?: string;
+        lastName?: string;
+        mustChangePassword?: boolean;
+        companyId?: number;
+        isSetupComplete?: boolean;
+        companyName?: string;
+        passwordHash: string;
+      }
+    | null
+  > => {
     try {
-      const res = await http<{ id: number; username: string; role: string; token: string }>(
-        "POST",
-        "/api/auth/login",
-        { username, password }
-      );
+      const res = await http<{
+        id: number;
+        username: string;
+        role: string;
+        token: string;
+        email?: string;
+        firstName?: string;
+        lastName?: string;
+        mustChangePassword?: boolean;
+        companyId?: number;
+        isSetupComplete?: boolean;
+        companyName?: string;
+      }>("POST", "/api/auth/login", { username, password });
       if (res.token) setToken(res.token);
       return {
         id: res.id,
         username: res.username,
         role: res.role,
+        email: res.email,
+        firstName: res.firstName,
+        lastName: res.lastName,
+        mustChangePassword: res.mustChangePassword,
+        companyId: res.companyId,
+        isSetupComplete: res.isSetupComplete,
+        companyName: res.companyName,
         passwordHash: "WEB_AUTH_OK", // sentinel : ElectronDataService va sauter la vérif locale
       };
     } catch {

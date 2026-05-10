@@ -44,6 +44,7 @@ interface UserRow extends RowDataPacket {
   email?: string;
   firstName?: string;
   lastName?: string;
+  companyId?: number;
 }
 
 const wrap =
@@ -65,7 +66,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       }
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, passwordHash, role, disabled, mustChangePassword,
-                email, firstName, lastName
+                email, firstName, lastName, companyId
          FROM users WHERE username = ? LIMIT 1`,
         [parsed.data.username]
       );
@@ -123,8 +124,22 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         (e) => console.warn("[auth] update lastLoginAt failed:", e)
       );
 
-      const payload: AuthPayload = { sub: row.id, username: row.username, role: row.role };
+      const companyId = Number(row.companyId ?? 1);
+      const payload: AuthPayload = {
+        sub: row.id,
+        username: row.username,
+        role: row.role,
+        companyId,
+      };
       const token = signToken(payload, cfg);
+
+      // Récupère le statut setup de la company pour l'onboarding flow
+      const [companyRows] = await db.query<RowDataPacket[]>(
+        "SELECT isSetupComplete, name FROM company WHERE id = ? LIMIT 1",
+        [companyId]
+      );
+      const company = (companyRows[0] as { isSetupComplete?: number; name?: string }) ?? {};
+
       res.json({
         id: row.id,
         username: row.username,
@@ -133,6 +148,9 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         firstName: row.firstName ?? "",
         lastName: row.lastName ?? "",
         mustChangePassword: Boolean(row.mustChangePassword),
+        companyId,
+        isSetupComplete: Boolean(company.isSetupComplete),
+        companyName: company.name ?? "",
         token,
       });
     })
@@ -206,7 +224,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       }
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, role, email, firstName, lastName, avatarUrl,
-                disabled, mustChangePassword
+                disabled, mustChangePassword, companyId
          FROM users WHERE id = ? LIMIT 1`,
         [payload.sub]
       );
@@ -219,6 +237,12 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         res.status(403).json({ message: "Compte désactivé" });
         return;
       }
+      const companyId = Number(row.companyId ?? 1);
+      const [companyRows] = await db.query<RowDataPacket[]>(
+        "SELECT isSetupComplete, name FROM company WHERE id = ? LIMIT 1",
+        [companyId]
+      );
+      const company = (companyRows[0] as { isSetupComplete?: number; name?: string }) ?? {};
       res.json({
         id: row.id,
         username: row.username,
@@ -228,6 +252,9 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         lastName: row.lastName ?? "",
         avatarUrl: row.avatarUrl ?? "",
         mustChangePassword: Boolean(row.mustChangePassword),
+        companyId,
+        isSetupComplete: Boolean(company.isSetupComplete),
+        companyName: company.name ?? "",
       });
     })
   );
@@ -254,8 +281,9 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         return;
       }
       const hash = hashPassword(parsed.data.password);
+      // Le 1er admin est rattaché au tenant id=1 (créé par les migrations)
       const [result] = await db.execute<ResultSetHeader>(
-        "INSERT INTO users (username, passwordHash, role) VALUES (?, ?, 'admin')",
+        "INSERT INTO users (username, passwordHash, role, companyId) VALUES (?, ?, 'admin', 1)",
         [parsed.data.username, hash]
       );
       res.status(201).json({ id: result.insertId, username: parsed.data.username });

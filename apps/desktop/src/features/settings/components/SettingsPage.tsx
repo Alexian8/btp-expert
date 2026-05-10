@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Palette, User, Info, ShieldCheck, Building2, BookOpen, FileText, Menu } from "lucide-react";
 
 import { cn } from "@btp/ui";
+import { useAuthStore } from "@/stores/authStore";
 import {
   Card,
   CardContent,
@@ -85,6 +86,19 @@ const sections: Array<{
 
 export function SettingsPage() {
   const [active, setActive] = useState<SectionKey>("appearance");
+  const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  const isAdmin = user?.role === "admin";
+
+  // Sections réservées admin (modifient les données entreprise)
+  const adminOnlySections: SectionKey[] = ["company", "library", "documents", "security"];
+  const visibleSections = sections.filter(
+    (s) => isAdmin || !adminOnlySections.includes(s.key)
+  );
+
+  // Si l'employé clique sur une section admin par hash URL, on force appearance
+  if (!isAdmin && adminOnlySections.includes(active)) {
+    setActive("appearance");
+  }
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
@@ -98,7 +112,7 @@ export function SettingsPage() {
       <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6">
         {/* Side navigation */}
         <aside className="space-y-1">
-          {sections.map((s) => (
+          {visibleSections.map((s) => (
             <button
               key={s.key}
               onClick={() => !s.disabled && setActive(s.key)}

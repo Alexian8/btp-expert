@@ -18,6 +18,7 @@ import { buildMicrosoftRouter, buildEmailRouter } from "./routes/microsoft";
 import { buildAdminUsersRouter } from "./routes/admin-users";
 import { buildAdminLogsRouter } from "./routes/admin-logs";
 import { requireAuth } from "./auth";
+import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
 
 export interface AppContext {
@@ -223,6 +224,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     jsonColumns: ["tags"],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/clients", auth, buildCrudRouter(clients, { db: pool, resourceName: "clients" }));
 
@@ -235,6 +237,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     jsonColumns: ["tags"],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/suppliers", auth, buildCrudRouter(suppliers, { db: pool, resourceName: "suppliers" }));
   // Alias rétro-compatible
@@ -249,6 +252,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     jsonColumns: ["photos", "tags"],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/chantiers", auth, buildCrudRouter(chantiers, { db: pool, resourceName: "chantiers" }));
 
@@ -261,6 +265,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     jsonColumns: ["items", "companySnapshot"],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/quotes", auth, buildCrudRouter(quotes, { db: pool, resourceName: "quotes" }));
 
@@ -273,6 +278,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     jsonColumns: ["items", "companySnapshot"],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/invoices", auth, buildCrudRouter(invoices, { db: pool, resourceName: "invoices" }));
 
@@ -283,6 +289,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     sortableColumns: ["createdAt", "date", "amount"],
     writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments, { db: pool, resourceName: "invoice_payments" }));
 
@@ -306,6 +313,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     ],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/expenses", auth, buildCrudRouter(expenses, { db: pool, resourceName: "expenses" }));
 
@@ -330,6 +338,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     ],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/expense-notes", auth, buildCrudRouter(expenseNotes, { db: pool, resourceName: "expense_notes" }));
 
@@ -364,6 +373,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     ],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/subcontractors", auth, buildCrudRouter(subcontractors, { db: pool, resourceName: "subcontractors" }));
 
@@ -388,6 +398,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     ],
     hasUpdatedAt: true,
     hasAuditColumns: true,
+    tenantColumn: "companyId",
   });
   app.use("/api/agenda-events", auth, buildCrudRouter(agendaEvents, { db: pool, resourceName: "agenda_events" }));
 
@@ -397,10 +408,15 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   app.get(
     "/api/users/public",
     auth,
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
+      // Multi-tenant : on ne montre que les users de la même company
+      const tenantId = req.user?.companyId ?? 1;
       const [rows] = await pool.query<RowDataPacket[]>(
         `SELECT id, username, firstName, lastName, avatarUrl, role
-         FROM users WHERE disabled = 0 ORDER BY firstName, lastName, username`
+         FROM users
+         WHERE disabled = 0 AND companyId = ?
+         ORDER BY firstName, lastName, username`,
+        [tenantId]
       );
       res.json(rows);
     })
@@ -458,39 +474,88 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     })
   );
 
-  // ─── Company profile (singleton) ───────────────────────────────────────
+  // ─── Company profile (multi-tenant) ────────────────────────────────────
+  // GET : tous les users authentifiés peuvent lire leur propre company
+  // PATCH : admin only (les employés ne peuvent PAS modifier les infos d'entreprise)
+  // POST /complete-setup : marque l'onboarding comme terminé (admin only)
   app.get(
     "/api/company",
     auth,
-    asyncHandler(async (_req, res) => {
-      const [rows] = (await pool.query("SELECT data FROM company WHERE id = 1")) as unknown as [
-        Array<{ data: string | object }>,
-      ];
-      const r = (rows as Array<{ data: string | object }>)[0];
+    asyncHandler(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await pool.query<RowDataPacket[]>(
+        "SELECT data, name, isSetupComplete FROM company WHERE id = ? LIMIT 1",
+        [tenantId]
+      );
+      const r = (rows as Array<{
+        data: string | object;
+        name: string;
+        isSetupComplete: number;
+      }>)[0];
       if (!r) {
         res.json({});
         return;
       }
-      const data = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
-      res.json(data);
+      const data = typeof r.data === "string" ? JSON.parse(r.data) : r.data ?? {};
+      // On expose name + isSetupComplete au top niveau (à côté du blob `data`)
+      res.json({
+        ...data,
+        _meta: {
+          companyId: tenantId,
+          name: r.name ?? "",
+          isSetupComplete: Boolean(r.isSetupComplete),
+        },
+      });
     })
   );
 
   app.patch(
     "/api/company",
     auth,
+    requireRole("admin"),
     asyncHandler(async (req, res) => {
-      const [rows] = (await pool.query("SELECT data FROM company WHERE id = 1")) as unknown as [
-        Array<{ data: string | object }>,
-      ];
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await pool.query<RowDataPacket[]>(
+        "SELECT data FROM company WHERE id = ? LIMIT 1",
+        [tenantId]
+      );
       const existing = (rows as Array<{ data: string | object }>)[0];
       const current =
         existing && typeof existing.data === "string"
           ? JSON.parse(existing.data)
           : existing?.data ?? {};
-      const merged = { ...current, ...(req.body ?? {}) };
-      await pool.execute("UPDATE company SET data = ? WHERE id = 1", [JSON.stringify(merged)]);
+      // Si companyName est modifié, on met aussi à jour la colonne name
+      // dénormalisée (pour les jointures et l'affichage rapide)
+      const incoming = req.body ?? {};
+      const merged = { ...current, ...incoming };
+      const newName = (incoming as { companyName?: string }).companyName;
+      if (typeof newName === "string") {
+        await pool.execute(
+          "UPDATE company SET data = ?, name = ? WHERE id = ?",
+          [JSON.stringify(merged), newName, tenantId]
+        );
+      } else {
+        await pool.execute(
+          "UPDATE company SET data = ? WHERE id = ?",
+          [JSON.stringify(merged), tenantId]
+        );
+      }
       res.json(merged);
+    })
+  );
+
+  // Marque le setup comme terminé (sortie du tutoriel d'onboarding)
+  app.post(
+    "/api/company/complete-setup",
+    auth,
+    requireRole("admin"),
+    asyncHandler(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      await pool.execute(
+        "UPDATE company SET isSetupComplete = 1 WHERE id = ?",
+        [tenantId]
+      );
+      res.json({ ok: true, isSetupComplete: true });
     })
   );
 

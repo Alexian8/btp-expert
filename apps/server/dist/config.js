@@ -43,6 +43,16 @@ const Schema = zod_1.z.object({
     MS_SCOPES: zod_1.z
         .string()
         .default("offline_access User.Read Mail.Send Calendars.ReadWrite Files.ReadWrite.AppFolder"),
+    // ─── SMTP (provisioning email + envois transactionnels) ──────────────
+    // Si non configuré : sendMail() devient no-op (les credentials sont
+    // affichés à l'admin dans la modal de création, pas envoyés par email).
+    SMTP_HOST: zod_1.z.string().default(""),
+    SMTP_PORT: zod_1.z.coerce.number().int().positive().default(587),
+    SMTP_USER: zod_1.z.string().default(""),
+    SMTP_PASS: zod_1.z.string().default(""),
+    SMTP_FROM: zod_1.z.string().default(""),
+    /** URL publique de l'app, utilisée dans les emails (lien de connexion). */
+    APP_URL: zod_1.z.string().default("https://intranet.jacobhabitat-dev.fr"),
     NODE_ENV: zod_1.z.enum(["development", "production", "test"]).default("development"),
 });
 function loadConfig(env = process.env) {

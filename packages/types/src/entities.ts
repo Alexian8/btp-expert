@@ -121,6 +121,17 @@ export interface ChantierClause {
 export interface User {
   id: number;
   username: string;
-  role?: "admin" | "user";
+  role?: "admin" | "manager" | "accountant" | "worker" | "viewer" | "user";
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+  mustChangePassword?: boolean;
+  /** Multi-tenant : ID de l'entreprise du user. */
+  companyId?: number;
+  /** Statut onboarding de la company (exposé pour les guards de routing). */
+  isSetupComplete?: boolean;
+  /** Nom dénormalisé de la company (depuis company.name). */
+  companyName?: string;
   createdAt?: string;
 }
