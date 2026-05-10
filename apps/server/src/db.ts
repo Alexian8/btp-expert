@@ -1,13 +1,17 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // DB — pool MySQL (mysql2/promise) + migrations
 //
-// Le schéma est minimal et reproduit fidèlement celui de l'app desktop
-// (mêmes noms de tables et colonnes en camelCase) pour faciliter la migration.
-//
-// Le pool est partagé entre toutes les routes — pas de connexion par requête.
+// Schémas alignés sur l'app desktop (mêmes noms de tables/colonnes en
+// camelCase, mêmes types de PK string UUID). Cela permet à apps/web de
+// réutiliser le code desktop tel quel via le shim window.btpAPI.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import mysql, { type Pool, type PoolOptions, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
+import mysql, {
+  type Pool,
+  type PoolOptions,
+  type ResultSetHeader,
+  type RowDataPacket,
+} from "mysql2/promise";
 import type { Config } from "./config";
 
 export type DB = Pool;
@@ -40,11 +44,12 @@ export async function pingPool(db: Pool): Promise<void> {
 }
 
 // ─── Migrations ──────────────────────────────────────────────────────────
-// CREATE TABLE IF NOT EXISTS — idempotent. Les schémas sont volontairement
-// proches de la version SQLite desktop pour permettre une migration facile.
+// CREATE TABLE IF NOT EXISTS — idempotent. Pour réécrire un schéma sans
+// perdre les autres tables, utiliser apps/server/scripts/reset-tables.js.
 
 export async function runMigrations(db: Pool): Promise<void> {
   const statements = [
+    // ─── Auth ──────────────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS users (
       id INT PRIMARY KEY AUTO_INCREMENT,
       username VARCHAR(64) UNIQUE NOT NULL,
@@ -53,115 +58,147 @@ export async function runMigrations(db: Pool): Promise<void> {
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
-    `CREATE TABLE IF NOT EXISTS clients (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      nom VARCHAR(255) NOT NULL,
-      email VARCHAR(255),
-      telephone VARCHAR(64),
-      adresse TEXT,
-      siret VARCHAR(32),
-      notes TEXT,
-      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL,
-      INDEX idx_clients_email (email),
-      INDEX idx_clients_siret (siret)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-
-    `CREATE TABLE IF NOT EXISTS fournisseurs (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      nom VARCHAR(255) NOT NULL,
-      email VARCHAR(255),
-      telephone VARCHAR(64),
-      adresse TEXT,
-      siret VARCHAR(32),
-      notes TEXT,
-      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL,
-      INDEX idx_fournisseurs_siret (siret)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-
-    `CREATE TABLE IF NOT EXISTS chantiers (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      nom VARCHAR(255) NOT NULL,
-      clientId INT NULL,
-      adresse TEXT,
-      statut VARCHAR(64),
-      priorite VARCHAR(32),
-      dateDebut DATE,
-      dateFin DATE,
-      notes TEXT,
-      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL,
-      INDEX idx_chantiers_client (clientId),
-      INDEX idx_chantiers_statut (statut),
-      CONSTRAINT fk_chantiers_client FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-
+    // ─── Settings (key/value) ──────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS settings (
       \`key\` VARCHAR(128) PRIMARY KEY,
       value LONGTEXT NOT NULL,
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
-    // ─── Invoices (factures) ──────────────────────────────────────────────
-    // PK est un UUID string (compat schéma desktop), pas un AUTO_INCREMENT.
-    `CREATE TABLE IF NOT EXISTS invoices (
-      id VARCHAR(64) PRIMARY KEY,
-      reference VARCHAR(64) DEFAULT '',
-      status VARCHAR(32) DEFAULT 'brouillon',
-      type VARCHAR(32) DEFAULT 'standard',
-      title VARCHAR(255) DEFAULT '',
-      clientId VARCHAR(64) DEFAULT '',
-      chantierId VARCHAR(64) DEFAULT '',
-      fromQuoteId VARCHAR(64) DEFAULT '',
-      issueDate DATE NULL,
-      dueDate DATE NULL,
-      paymentTermsDays INT DEFAULT 30,
-      sentAt DATETIME NULL,
-      paidAt DATETIME NULL,
-      items JSON NOT NULL,
-      globalDiscountMode VARCHAR(16) DEFAULT 'none',
-      globalDiscountPercent DECIMAL(5,2) DEFAULT 0,
-      globalDiscountAmount DECIMAL(15,2) DEFAULT 0,
-      acompteBasedOnQuoteId VARCHAR(64) DEFAULT '',
-      acomptePercent DECIMAL(5,2) DEFAULT 0,
-      avoirReferenceInvoiceId VARCHAR(64) DEFAULT '',
-      introText TEXT,
-      conditionsText TEXT,
-      footerText TEXT,
-      internalNotes TEXT,
-      companySnapshot JSON,
-      totalHT DECIMAL(15,2) DEFAULT 0,
-      totalTTC DECIMAL(15,2) DEFAULT 0,
-      totalPaid DECIMAL(15,2) DEFAULT 0,
-      lastReminderSentAt DATETIME NULL,
-      remindersCount INT DEFAULT 0,
+    // ─── OAuth tokens (Microsoft Graph) ────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS oauth_tokens (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      provider VARCHAR(32) NOT NULL,
+      userId INT NOT NULL,
+      accountEmail VARCHAR(255) DEFAULT '',
+      accessToken TEXT NOT NULL,
+      refreshToken TEXT,
+      expiresAt DATETIME NULL,
+      scope TEXT,
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX idx_invoices_status (status),
-      INDEX idx_invoices_client (clientId),
-      INDEX idx_invoices_chantier (chantierId),
-      INDEX idx_invoices_fromQuote (fromQuoteId),
-      INDEX idx_invoices_reference (reference),
-      INDEX idx_invoices_dueDate (dueDate)
+      UNIQUE KEY uniq_provider_user (provider, userId),
+      INDEX idx_oauth_user (userId)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
-    // ─── Paiements (table jointe avec FK cascade) ─────────────────────────
-    `CREATE TABLE IF NOT EXISTS invoice_payments (
+    // ─── Clients (riche, aligné desktop) ───────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS clients (
       id VARCHAR(64) PRIMARY KEY,
-      invoiceId VARCHAR(64) NOT NULL,
-      amount DECIMAL(15,2) NOT NULL,
-      \`date\` DATE NOT NULL,
-      method VARCHAR(32) DEFAULT 'virement',
-      reference VARCHAR(255) DEFAULT '',
+      type VARCHAR(32) NOT NULL DEFAULT 'particulier',
+      civility VARCHAR(16) DEFAULT '',
+      firstName VARCHAR(128) DEFAULT '',
+      lastName VARCHAR(128) DEFAULT '',
+      companyName VARCHAR(255) DEFAULT '',
+      email VARCHAR(255) DEFAULT '',
+      phoneMobile VARCHAR(64) DEFAULT '',
+      phoneFixed VARCHAR(64) DEFAULT '',
+      addressLine1 VARCHAR(255) DEFAULT '',
+      addressLine2 VARCHAR(255) DEFAULT '',
+      postalCode VARCHAR(16) DEFAULT '',
+      city VARCHAR(128) DEFAULT '',
+      country VARCHAR(64) DEFAULT 'France',
+      billingAddressSame TINYINT(1) DEFAULT 1,
+      billingAddressLine1 VARCHAR(255) DEFAULT '',
+      billingAddressLine2 VARCHAR(255) DEFAULT '',
+      billingPostalCode VARCHAR(16) DEFAULT '',
+      billingCity VARCHAR(128) DEFAULT '',
+      billingCountry VARCHAR(64) DEFAULT 'France',
+      siret VARCHAR(32) DEFAULT '',
+      siren VARCHAR(32) DEFAULT '',
+      tvaIntracom VARCHAR(32) DEFAULT '',
+      legalForm VARCHAR(64) DEFAULT '',
+      apeCode VARCHAR(16) DEFAULT '',
+      apeLabel VARCHAR(255) DEFAULT '',
+      tags JSON,
+      source VARCHAR(64) DEFAULT '',
+      notes TEXT,
+      firstContactAt VARCHAR(32) DEFAULT '',
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_clients_name (lastName, firstName, companyName),
+      INDEX idx_clients_city (city),
+      INDEX idx_clients_type (type),
+      INDEX idx_clients_email (email),
+      INDEX idx_clients_siret (siret)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    // ─── Suppliers (renommée de fournisseurs pour matcher desktop) ─────────
+    `CREATE TABLE IF NOT EXISTS suppliers (
+      id VARCHAR(64) PRIMARY KEY,
+      companyName VARCHAR(255) DEFAULT '',
+      contactFirstName VARCHAR(128) DEFAULT '',
+      contactLastName VARCHAR(128) DEFAULT '',
+      email VARCHAR(255) DEFAULT '',
+      phoneMobile VARCHAR(64) DEFAULT '',
+      phoneFixed VARCHAR(64) DEFAULT '',
+      website VARCHAR(255) DEFAULT '',
+      addressLine1 VARCHAR(255) DEFAULT '',
+      addressLine2 VARCHAR(255) DEFAULT '',
+      postalCode VARCHAR(16) DEFAULT '',
+      city VARCHAR(128) DEFAULT '',
+      country VARCHAR(64) DEFAULT 'France',
+      siret VARCHAR(32) DEFAULT '',
+      siren VARCHAR(32) DEFAULT '',
+      tvaIntracom VARCHAR(32) DEFAULT '',
+      legalForm VARCHAR(64) DEFAULT '',
+      apeCode VARCHAR(16) DEFAULT '',
+      apeLabel VARCHAR(255) DEFAULT '',
+      category VARCHAR(64) DEFAULT 'Matériaux',
+      iban VARCHAR(64) DEFAULT '',
+      bic VARCHAR(32) DEFAULT '',
+      paymentTermsDays INT DEFAULT 30,
+      paymentMethod VARCHAR(32) DEFAULT 'Virement',
+      tags JSON,
       notes TEXT,
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_payments_invoice (invoiceId),
-      CONSTRAINT fk_payments_invoice FOREIGN KEY (invoiceId)
-        REFERENCES invoices(id) ON DELETE CASCADE
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_suppliers_name (companyName),
+      INDEX idx_suppliers_category (category),
+      INDEX idx_suppliers_siret (siret)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
-    // ─── Devis (mêmes colonnes que invoices, schéma desktop aligné) ───────
+    // ─── Company profile (singleton) ───────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS company (
+      id INT PRIMARY KEY DEFAULT 1,
+      data JSON,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    `INSERT IGNORE INTO company (id, data) VALUES (1, '{}')`,
+
+    // ─── Chantiers (riche) ─────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS chantiers (
+      id VARCHAR(64) PRIMARY KEY,
+      reference VARCHAR(64) DEFAULT '',
+      title VARCHAR(255) DEFAULT '',
+      status VARCHAR(32) DEFAULT 'prospect',
+      priority VARCHAR(32) DEFAULT 'normal',
+      clientId VARCHAR(64) DEFAULT '',
+      addressLine1 VARCHAR(255) DEFAULT '',
+      addressLine2 VARCHAR(255) DEFAULT '',
+      postalCode VARCHAR(16) DEFAULT '',
+      city VARCHAR(128) DEFAULT '',
+      country VARCHAR(64) DEFAULT 'France',
+      nature VARCHAR(128) DEFAULT '',
+      description TEXT,
+      startDateEstimated VARCHAR(32) DEFAULT '',
+      endDateEstimated VARCHAR(32) DEFAULT '',
+      startDateActual VARCHAR(32) DEFAULT '',
+      endDateActual VARCHAR(32) DEFAULT '',
+      budgetEstimatedHT DECIMAL(15,2) DEFAULT 0,
+      budgetEstimatedTTC DECIMAL(15,2) DEFAULT 0,
+      photos JSON,
+      tags JSON,
+      categoryId VARCHAR(64) DEFAULT '',
+      notes TEXT,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_chantiers_status (status),
+      INDEX idx_chantiers_client (clientId),
+      INDEX idx_chantiers_reference (reference)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    // ─── Quotes (devis, aligné desktop) ────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS quotes (
       id VARCHAR(64) PRIMARY KEY,
       reference VARCHAR(64) DEFAULT '',
@@ -169,11 +206,11 @@ export async function runMigrations(db: Pool): Promise<void> {
       title VARCHAR(255) DEFAULT '',
       clientId VARCHAR(64) DEFAULT '',
       chantierId VARCHAR(64) DEFAULT '',
-      issueDate DATE NULL,
-      validUntilDate DATE NULL,
-      acceptedAt DATETIME NULL,
-      sentAt DATETIME NULL,
-      items JSON NOT NULL,
+      issueDate VARCHAR(32) DEFAULT '',
+      validUntilDate VARCHAR(32) DEFAULT '',
+      acceptedAt VARCHAR(32) DEFAULT '',
+      sentAt VARCHAR(32) DEFAULT '',
+      items JSON,
       globalDiscountMode VARCHAR(16) DEFAULT 'none',
       globalDiscountPercent DECIMAL(5,2) DEFAULT 0,
       globalDiscountAmount DECIMAL(15,2) DEFAULT 0,
@@ -192,101 +229,150 @@ export async function runMigrations(db: Pool): Promise<void> {
       INDEX idx_quotes_reference (reference)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
-    // ─── Dépenses (achats fournisseurs, frais, etc.) ──────────────────────
+    // ─── Invoices (factures) ───────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS invoices (
+      id VARCHAR(64) PRIMARY KEY,
+      reference VARCHAR(64) DEFAULT '',
+      status VARCHAR(32) DEFAULT 'brouillon',
+      type VARCHAR(32) DEFAULT 'standard',
+      title VARCHAR(255) DEFAULT '',
+      clientId VARCHAR(64) DEFAULT '',
+      chantierId VARCHAR(64) DEFAULT '',
+      fromQuoteId VARCHAR(64) DEFAULT '',
+      issueDate VARCHAR(32) DEFAULT '',
+      dueDate VARCHAR(32) DEFAULT '',
+      paymentTermsDays INT DEFAULT 30,
+      sentAt VARCHAR(32) DEFAULT '',
+      paidAt VARCHAR(32) DEFAULT '',
+      items JSON,
+      globalDiscountMode VARCHAR(16) DEFAULT 'none',
+      globalDiscountPercent DECIMAL(5,2) DEFAULT 0,
+      globalDiscountAmount DECIMAL(15,2) DEFAULT 0,
+      acompteBasedOnQuoteId VARCHAR(64) DEFAULT '',
+      acomptePercent DECIMAL(5,2) DEFAULT 0,
+      avoirReferenceInvoiceId VARCHAR(64) DEFAULT '',
+      introText TEXT,
+      conditionsText TEXT,
+      footerText TEXT,
+      internalNotes TEXT,
+      companySnapshot JSON,
+      totalHT DECIMAL(15,2) DEFAULT 0,
+      totalTTC DECIMAL(15,2) DEFAULT 0,
+      totalPaid DECIMAL(15,2) DEFAULT 0,
+      lastReminderSentAt VARCHAR(32) DEFAULT '',
+      remindersCount INT DEFAULT 0,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_invoices_status (status),
+      INDEX idx_invoices_client (clientId),
+      INDEX idx_invoices_chantier (chantierId),
+      INDEX idx_invoices_fromQuote (fromQuoteId),
+      INDEX idx_invoices_reference (reference)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    `CREATE TABLE IF NOT EXISTS invoice_payments (
+      id VARCHAR(64) PRIMARY KEY,
+      invoiceId VARCHAR(64) NOT NULL,
+      amount DECIMAL(15,2) NOT NULL,
+      \`date\` VARCHAR(32) NOT NULL,
+      method VARCHAR(32) DEFAULT 'virement',
+      reference VARCHAR(255) DEFAULT '',
+      notes TEXT,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_payments_invoice (invoiceId),
+      CONSTRAINT fk_payments_invoice FOREIGN KEY (invoiceId)
+        REFERENCES invoices(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    // ─── Dépenses ──────────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS expenses (
-      id INT PRIMARY KEY AUTO_INCREMENT,
+      id VARCHAR(64) PRIMARY KEY,
       label VARCHAR(255) NOT NULL,
       amount DECIMAL(15,2) NOT NULL,
-      \`date\` DATE NOT NULL,
+      \`date\` VARCHAR(32) NOT NULL,
       category VARCHAR(64) DEFAULT '',
-      supplierId INT NULL,
-      chantierId VARCHAR(64) NULL,
+      supplierId VARCHAR(64) DEFAULT '',
+      chantierId VARCHAR(64) DEFAULT '',
       paymentMethod VARCHAR(32) DEFAULT '',
-      paidDate DATE NULL,
-      isPaid BOOLEAN DEFAULT 0,
+      paidDate VARCHAR(32) DEFAULT '',
+      isPaid TINYINT(1) DEFAULT 0,
       notes TEXT,
       attachmentPath VARCHAR(512) DEFAULT '',
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_expenses_date (\`date\`),
       INDEX idx_expenses_supplier (supplierId),
       INDEX idx_expenses_chantier (chantierId)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
-    // ─── Notes de frais (frais persos remboursables) ──────────────────────
+    // ─── Notes de frais ────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS expense_notes (
-      id INT PRIMARY KEY AUTO_INCREMENT,
+      id VARCHAR(64) PRIMARY KEY,
       label VARCHAR(255) NOT NULL,
       amount DECIMAL(15,2) NOT NULL,
-      \`date\` DATE NOT NULL,
+      \`date\` VARCHAR(32) NOT NULL,
       category VARCHAR(64) DEFAULT '',
-      chantierId VARCHAR(64) NULL,
-      isReimbursable BOOLEAN DEFAULT 1,
-      isReimbursed BOOLEAN DEFAULT 0,
-      reimbursedDate DATE NULL,
-      isValidated BOOLEAN DEFAULT 0,
-      validatedAt DATETIME NULL,
+      chantierId VARCHAR(64) DEFAULT '',
+      isReimbursable TINYINT(1) DEFAULT 1,
+      isReimbursed TINYINT(1) DEFAULT 0,
+      reimbursedDate VARCHAR(32) DEFAULT '',
+      isValidated TINYINT(1) DEFAULT 0,
+      validatedAt VARCHAR(32) DEFAULT '',
       attachmentPath VARCHAR(512) DEFAULT '',
       notes TEXT,
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_expense_notes_date (\`date\`),
       INDEX idx_expense_notes_chantier (chantierId)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
     // ─── Sous-traitants ────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS subcontractors (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      nom VARCHAR(255) NOT NULL,
-      siret VARCHAR(32) DEFAULT '',
+      id VARCHAR(64) PRIMARY KEY,
+      companyName VARCHAR(255) NOT NULL,
+      contactFirstName VARCHAR(128) DEFAULT '',
+      contactLastName VARCHAR(128) DEFAULT '',
       email VARCHAR(255) DEFAULT '',
-      telephone VARCHAR(64) DEFAULT '',
-      adresse TEXT,
-      contactPerson VARCHAR(255) DEFAULT '',
+      phoneMobile VARCHAR(64) DEFAULT '',
+      phoneFixed VARCHAR(64) DEFAULT '',
+      siret VARCHAR(32) DEFAULT '',
+      siren VARCHAR(32) DEFAULT '',
+      tvaIntracom VARCHAR(32) DEFAULT '',
+      addressLine1 VARCHAR(255) DEFAULT '',
+      addressLine2 VARCHAR(255) DEFAULT '',
+      postalCode VARCHAR(16) DEFAULT '',
+      city VARCHAR(128) DEFAULT '',
+      country VARCHAR(64) DEFAULT 'France',
       activity VARCHAR(255) DEFAULT '',
       retentionRate DECIMAL(5,2) DEFAULT 0,
       vatRate DECIMAL(5,2) DEFAULT 20,
-      isVatExempt BOOLEAN DEFAULT 0,
+      isVatExempt TINYINT(1) DEFAULT 0,
+      iban VARCHAR(64) DEFAULT '',
+      bic VARCHAR(32) DEFAULT '',
+      paymentTermsDays INT DEFAULT 30,
       notes TEXT,
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-      INDEX idx_subcontractors_siret (siret)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-
-    // ─── OAuth tokens (Microsoft Outlook/Graph) ────────────────────────────
-    // Un token par user (sub user JWT). Refresh token pour rotation auto.
-    `CREATE TABLE IF NOT EXISTS oauth_tokens (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      provider VARCHAR(32) NOT NULL,
-      userId INT NOT NULL,
-      accountEmail VARCHAR(255) DEFAULT '',
-      accessToken TEXT NOT NULL,
-      refreshToken TEXT,
-      expiresAt DATETIME NULL,
-      scope TEXT,
-      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uniq_provider_user (provider, userId),
-      INDEX idx_oauth_user (userId)
+      INDEX idx_subcontractors_siret (siret)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
     // ─── Agenda events ─────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS agenda_events (
-      id INT PRIMARY KEY AUTO_INCREMENT,
+      id VARCHAR(64) PRIMARY KEY,
       title VARCHAR(255) NOT NULL,
       description TEXT,
       type VARCHAR(32) DEFAULT 'meeting',
-      \`startDate\` DATETIME NOT NULL,
-      \`endDate\` DATETIME NULL,
-      isAllDay BOOLEAN DEFAULT 0,
+      \`startDate\` VARCHAR(32) NOT NULL,
+      \`endDate\` VARCHAR(32) DEFAULT '',
+      isAllDay TINYINT(1) DEFAULT 0,
       location VARCHAR(255) DEFAULT '',
-      clientId VARCHAR(64) NULL,
-      chantierId VARCHAR(64) NULL,
+      clientId VARCHAR(64) DEFAULT '',
+      chantierId VARCHAR(64) DEFAULT '',
       reminderMinutes INT NULL,
       outlookEventId VARCHAR(255) DEFAULT '',
-      lastSyncedAt DATETIME NULL,
+      lastSyncedAt VARCHAR(32) DEFAULT '',
       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_agenda_start (\`startDate\`),
       INDEX idx_agenda_client (clientId),
       INDEX idx_agenda_chantier (chantierId)
@@ -296,4 +382,30 @@ export async function runMigrations(db: Pool): Promise<void> {
   for (const sql of statements) {
     await db.query(sql);
   }
+}
+
+// ─── Reset des tables (DESTRUCTIF) ────────────────────────────────────────
+// Drop puis recrée toutes les tables sauf users/settings/oauth_tokens.
+// À utiliser quand le schéma a changé. À NE JAMAIS appeler en prod sans backup.
+export async function resetDataTables(db: Pool): Promise<void> {
+  const drops = [
+    "invoice_payments",
+    "invoices",
+    "quotes",
+    "expenses",
+    "expense_notes",
+    "subcontractors",
+    "agenda_events",
+    "chantiers",
+    "clients",
+    "suppliers",
+    "fournisseurs", // ancien nom (avant rename)
+    "company",
+  ];
+  await db.query("SET FOREIGN_KEY_CHECKS = 0");
+  for (const t of drops) {
+    await db.query(`DROP TABLE IF EXISTS \`${t}\``);
+  }
+  await db.query("SET FOREIGN_KEY_CHECKS = 1");
+  await runMigrations(db);
 }

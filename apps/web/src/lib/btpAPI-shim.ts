@@ -168,11 +168,27 @@ export function installBtpApiShim(): void {
       http<Record<string, unknown>>("PATCH", "/api/settings", patch),
   };
 
+  // ─── Helper : génère un UUID-like pour les ressources qui en attendent ─
+  const genId = (): string => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  };
+
+  // Le code desktop construit ses entités avec id déjà fixé OU laisse le serveur
+  // décider. Côté serveur, on a primaryKey="client" donc on EXIGE un id.
+  // → on injecte un UUID si le payload n'en a pas.
+  const ensureId = (data: unknown): unknown => {
+    if (typeof data !== "object" || data === null) return data;
+    const obj = data as Record<string, unknown>;
+    if (!obj.id) obj.id = genId();
+    return obj;
+  };
+
   // ─── Clients ───────────────────────────────────────────────────────────
   const clients = {
     clientsList: () => http("GET", "/api/clients"),
     clientsGet: (id: string | number) => http("GET", `/api/clients/${encodeURIComponent(String(id))}`),
-    clientsCreate: (data: unknown) => http("POST", "/api/clients", data),
+    clientsCreate: (data: unknown) => http("POST", "/api/clients", ensureId(data)),
     clientsUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
       http("PATCH", `/api/clients/${encodeURIComponent(String(id))}`, data),
     clientsDelete: (id: string | number) =>
@@ -183,20 +199,29 @@ export function installBtpApiShim(): void {
     },
   };
 
-  // ─── Suppliers (= fournisseurs côté serveur) ───────────────────────────
+  // ─── Suppliers ─────────────────────────────────────────────────────────
   const suppliers = {
-    suppliersList: () => http("GET", "/api/fournisseurs"),
+    suppliersList: () => http("GET", "/api/suppliers"),
     suppliersGet: (id: string | number) =>
-      http("GET", `/api/fournisseurs/${encodeURIComponent(String(id))}`),
-    suppliersCreate: (data: unknown) => http("POST", "/api/fournisseurs", data),
+      http("GET", `/api/suppliers/${encodeURIComponent(String(id))}`),
+    suppliersCreate: (data: unknown) => http("POST", "/api/suppliers", ensureId(data)),
     suppliersUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
-      http("PATCH", `/api/fournisseurs/${encodeURIComponent(String(id))}`, data),
+      http("PATCH", `/api/suppliers/${encodeURIComponent(String(id))}`, data),
     suppliersDelete: (id: string | number) =>
-      http("DELETE", `/api/fournisseurs/${encodeURIComponent(String(id))}`),
+      http("DELETE", `/api/suppliers/${encodeURIComponent(String(id))}`),
     suppliersCount: async (): Promise<number> => {
-      const r = await http<{ count: number }>("GET", "/api/fournisseurs/count");
+      const r = await http<{ count: number }>("GET", "/api/suppliers/count");
       return r.count;
     },
+  };
+
+  // ─── Company profile (singleton) ───────────────────────────────────────
+  const company = {
+    companyGet: () => http("GET", "/api/company"),
+    companyUpdate: (patch: unknown) => http("PATCH", "/api/company", patch),
+    companyUploadLogo: stub("companyUploadLogo", { success: false, error: "Upload logo non disponible en web" }),
+    companyDeleteLogo: stub("companyDeleteLogo", { success: true }),
+    companyReadLogo: stub("companyReadLogo", null),
   };
 
   // ─── Chantiers ─────────────────────────────────────────────────────────
@@ -208,11 +233,11 @@ export function installBtpApiShim(): void {
       const all = (await http<unknown[]>("GET", "/api/chantiers")) as Array<{ clientId: unknown }>;
       return all.filter((c) => String(c.clientId) === String(clientId));
     },
-    chantiersCreate: (data: unknown) => http("POST", "/api/chantiers", data),
+    chantiersCreate: (data: unknown) => http("POST", "/api/chantiers", ensureId(data)),
     chantiersUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
       http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, data),
     chantiersUpdateStatus: ({ id, status }: { id: string | number; status: string }) =>
-      http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, { statut: status }),
+      http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, { status }),
     chantiersDelete: (id: string | number) =>
       http("DELETE", `/api/chantiers/${encodeURIComponent(String(id))}`),
     chantiersCount: async (): Promise<number> => {
@@ -223,6 +248,39 @@ export function installBtpApiShim(): void {
     chantiersUploadPhoto: stub("chantiersUploadPhoto", { success: false }),
     chantiersDeletePhoto: stub("chantiersDeletePhoto", { success: false }),
     chantiersReadPhoto: stub("chantiersReadPhoto", null),
+  };
+
+  // ─── Quotes (devis) ────────────────────────────────────────────────────
+  const quotes = {
+    quotesList: () => http("GET", "/api/quotes"),
+    quotesGet: (id: string | number) => http("GET", `/api/quotes/${encodeURIComponent(String(id))}`),
+    quotesListByClient: async (clientId: string | number) => {
+      const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ clientId: unknown }>;
+      return all.filter((c) => String(c.clientId) === String(clientId));
+    },
+    quotesListByChantier: async (chantierId: string | number) => {
+      const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ chantierId: unknown }>;
+      return all.filter((c) => String(c.chantierId) === String(chantierId));
+    },
+    quotesCreate: (data: unknown) => http("POST", "/api/quotes", ensureId(data)),
+    quotesUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
+      http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, data),
+    quotesUpdateStatus: ({ id, status }: { id: string | number; status: string }) =>
+      http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, { status }),
+    quotesDelete: (id: string | number) =>
+      http("DELETE", `/api/quotes/${encodeURIComponent(String(id))}`),
+    quotesDuplicate: stub("quotesDuplicate", null),
+    quotesConvertToPo: stub("quotesConvertToPo", null),
+    quotesCount: async (): Promise<number> => {
+      const r = await http<{ count: number }>("GET", "/api/quotes/count");
+      return r.count;
+    },
+    quotesCountByStatus: stub("quotesCountByStatus", {} as Record<string, number>),
+    quotesExportPdfPreview: stub("quotesExportPdfPreview", { success: false, error: "PDF web pas encore implémenté" }),
+    quotesExportPdfSaveAs: stub("quotesExportPdfSaveAs", { success: false }),
+    quotesOpenPdfExternal: stub("quotesOpenPdfExternal", { success: false }),
+    quotesSendViaOutlook: stub("quotesSendViaOutlook", { success: false, error: "Envoi via Outlook : passer par /api/email/send" }),
+    quotesGetDesignationHistory: stub("quotesGetDesignationHistory", [] as unknown[]),
   };
 
   // ─── Invoices ──────────────────────────────────────────────────────────
@@ -238,8 +296,11 @@ export function installBtpApiShim(): void {
       const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ chantierId: unknown }>;
       return all.filter((i) => String(i.chantierId) === String(chantierId));
     },
-    invoicesListByQuote: stub("invoicesListByQuote", [] as unknown[]),
-    invoicesCreate: (data: unknown) => http("POST", "/api/invoices", data),
+    invoicesListByQuote: async (quoteId: string | number) => {
+      const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ fromQuoteId: unknown }>;
+      return all.filter((i) => String(i.fromQuoteId) === String(quoteId));
+    },
+    invoicesCreate: (data: unknown) => http("POST", "/api/invoices", ensureId(data)),
     invoicesUpdate: (id: string | number, data: unknown) =>
       http("PATCH", `/api/invoices/${encodeURIComponent(String(id))}`, data),
     invoicesUpdateStatus: (id: string | number, status: string) =>
@@ -260,7 +321,7 @@ export function installBtpApiShim(): void {
       )) as Array<{ invoiceId: unknown }>;
       return all.filter((p) => String(p.invoiceId) === String(invoiceId));
     },
-    invoicesAddPayment: (payment: unknown) => http("POST", "/api/invoice-payments", payment),
+    invoicesAddPayment: (payment: unknown) => http("POST", "/api/invoice-payments", ensureId(payment)),
     invoicesDeletePayment: (paymentId: string | number) =>
       http("DELETE", `/api/invoice-payments/${encodeURIComponent(String(paymentId))}`),
     invoicesMarkReminderSent: stub("invoicesMarkReminderSent", { success: true }),
@@ -268,27 +329,6 @@ export function installBtpApiShim(): void {
     invoicesExportPdfSaveAs: stub("invoicesExportPdfSaveAs", { success: false }),
     invoicesOpenPdfExternal: stub("invoicesOpenPdfExternal", { success: false }),
     invoicesSendViaOutlook: stub("invoicesSendViaOutlook", { success: false, error: "Outlook web pas encore implémenté" }),
-  };
-
-  // ─── Quotes (devis) — pas encore branchés serveur, stubs ──────────────
-  const quotes = {
-    quotesList: stub("quotesList", [] as unknown[]),
-    quotesGet: stub("quotesGet", null),
-    quotesListByClient: stub("quotesListByClient", [] as unknown[]),
-    quotesListByChantier: stub("quotesListByChantier", [] as unknown[]),
-    quotesCreate: stub("quotesCreate", null),
-    quotesUpdate: stub("quotesUpdate", null),
-    quotesUpdateStatus: stub("quotesUpdateStatus", null),
-    quotesDelete: stub("quotesDelete", null),
-    quotesDuplicate: stub("quotesDuplicate", null),
-    quotesConvertToPo: stub("quotesConvertToPo", null),
-    quotesCount: stub("quotesCount", 0),
-    quotesCountByStatus: stub("quotesCountByStatus", {} as Record<string, number>),
-    quotesExportPdfPreview: stub("quotesExportPdfPreview", { success: false }),
-    quotesExportPdfSaveAs: stub("quotesExportPdfSaveAs", { success: false }),
-    quotesOpenPdfExternal: stub("quotesOpenPdfExternal", { success: false }),
-    quotesSendViaOutlook: stub("quotesSendViaOutlook", { success: false }),
-    quotesGetDesignationHistory: stub("quotesGetDesignationHistory", [] as unknown[]),
   };
 
   // ─── Backup système (web utilise /api/backup/*) ────────────────────────
@@ -596,11 +636,12 @@ export function installBtpApiShim(): void {
   (window as unknown as { btpAPI: unknown }).btpAPI = {
     ...auth,
     ...settings,
+    ...company,
     ...clients,
     ...suppliers,
     ...chantiers,
-    ...invoices,
     ...quotes,
+    ...invoices,
     ...backup,
     ...microsoft,
     ...allOtherStubs,

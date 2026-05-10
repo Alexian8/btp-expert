@@ -22,6 +22,147 @@ export interface AppContext {
   config: Config;
 }
 
+// ─── Listes de colonnes ──────────────────────────────────────────────────
+const CLIENT_COLS = [
+  "type",
+  "civility",
+  "firstName",
+  "lastName",
+  "companyName",
+  "email",
+  "phoneMobile",
+  "phoneFixed",
+  "addressLine1",
+  "addressLine2",
+  "postalCode",
+  "city",
+  "country",
+  "billingAddressSame",
+  "billingAddressLine1",
+  "billingAddressLine2",
+  "billingPostalCode",
+  "billingCity",
+  "billingCountry",
+  "siret",
+  "siren",
+  "tvaIntracom",
+  "legalForm",
+  "apeCode",
+  "apeLabel",
+  "tags",
+  "source",
+  "notes",
+  "firstContactAt",
+];
+
+const SUPPLIER_COLS = [
+  "companyName",
+  "contactFirstName",
+  "contactLastName",
+  "email",
+  "phoneMobile",
+  "phoneFixed",
+  "website",
+  "addressLine1",
+  "addressLine2",
+  "postalCode",
+  "city",
+  "country",
+  "siret",
+  "siren",
+  "tvaIntracom",
+  "legalForm",
+  "apeCode",
+  "apeLabel",
+  "category",
+  "iban",
+  "bic",
+  "paymentTermsDays",
+  "paymentMethod",
+  "tags",
+  "notes",
+];
+
+const CHANTIER_COLS = [
+  "reference",
+  "title",
+  "status",
+  "priority",
+  "clientId",
+  "addressLine1",
+  "addressLine2",
+  "postalCode",
+  "city",
+  "country",
+  "nature",
+  "description",
+  "startDateEstimated",
+  "endDateEstimated",
+  "startDateActual",
+  "endDateActual",
+  "budgetEstimatedHT",
+  "budgetEstimatedTTC",
+  "photos",
+  "tags",
+  "categoryId",
+  "notes",
+];
+
+const QUOTE_COLS = [
+  "reference",
+  "status",
+  "title",
+  "clientId",
+  "chantierId",
+  "issueDate",
+  "validUntilDate",
+  "acceptedAt",
+  "sentAt",
+  "items",
+  "globalDiscountMode",
+  "globalDiscountPercent",
+  "globalDiscountAmount",
+  "introText",
+  "conditionsText",
+  "footerText",
+  "internalNotes",
+  "companySnapshot",
+  "totalHT",
+  "totalTTC",
+];
+
+const INVOICE_COLS = [
+  "reference",
+  "status",
+  "type",
+  "title",
+  "clientId",
+  "chantierId",
+  "fromQuoteId",
+  "issueDate",
+  "dueDate",
+  "paymentTermsDays",
+  "sentAt",
+  "paidAt",
+  "items",
+  "globalDiscountMode",
+  "globalDiscountPercent",
+  "globalDiscountAmount",
+  "acompteBasedOnQuoteId",
+  "acomptePercent",
+  "avoirReferenceInvoiceId",
+  "introText",
+  "conditionsText",
+  "footerText",
+  "internalNotes",
+  "companySnapshot",
+  "totalHT",
+  "totalTTC",
+  "totalPaid",
+  "lastReminderSentAt",
+  "remindersCount",
+];
+
 export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; ctx: AppContext }> {
   const pool = db ?? createPool(cfg);
   await runMigrations(pool);
@@ -38,95 +179,71 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   app.use(express.json({ limit: "10mb" }));
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, version: "0.1.0", time: new Date().toISOString() });
+    res.json({ ok: true, version: "0.2.0", time: new Date().toISOString() });
   });
 
   app.use("/api/auth", buildAuthRouter(pool, cfg));
 
   const auth = requireAuth(cfg);
 
+  // ─── Clients ───────────────────────────────────────────────────────────
   const clients = new MysqlRepository(pool, "clients", {
-    filterableColumns: ["nom", "email", "siret"],
-    sortableColumns: ["id", "nom", "createdAt"],
-    writableColumns: ["nom", "email", "telephone", "adresse", "siret", "notes"],
+    primaryKey: "client",
+    filterableColumns: ["type", "city", "siret", "email"],
+    sortableColumns: ["createdAt", "lastName", "companyName"],
+    writableColumns: CLIENT_COLS,
+    jsonColumns: ["tags"],
     hasUpdatedAt: true,
   });
   app.use("/api/clients", auth, buildCrudRouter(clients));
 
-  const fournisseurs = new MysqlRepository(pool, "fournisseurs", {
-    filterableColumns: ["nom", "email", "siret"],
-    sortableColumns: ["id", "nom", "createdAt"],
-    writableColumns: ["nom", "email", "telephone", "adresse", "siret", "notes"],
+  // ─── Suppliers ─────────────────────────────────────────────────────────
+  const suppliers = new MysqlRepository(pool, "suppliers", {
+    primaryKey: "client",
+    filterableColumns: ["category", "city", "siret"],
+    sortableColumns: ["createdAt", "companyName"],
+    writableColumns: SUPPLIER_COLS,
+    jsonColumns: ["tags"],
     hasUpdatedAt: true,
   });
-  app.use("/api/fournisseurs", auth, buildCrudRouter(fournisseurs));
+  app.use("/api/suppliers", auth, buildCrudRouter(suppliers));
+  // Alias rétro-compatible
+  app.use("/api/fournisseurs", auth, buildCrudRouter(suppliers));
 
+  // ─── Chantiers ─────────────────────────────────────────────────────────
   const chantiers = new MysqlRepository(pool, "chantiers", {
-    filterableColumns: ["clientId", "statut", "priorite"],
-    sortableColumns: ["id", "nom", "dateDebut", "createdAt"],
-    writableColumns: [
-      "nom",
-      "clientId",
-      "adresse",
-      "statut",
-      "priorite",
-      "dateDebut",
-      "dateFin",
-      "notes",
-    ],
+    primaryKey: "client",
+    filterableColumns: ["status", "priority", "clientId", "city", "categoryId"],
+    sortableColumns: ["createdAt", "reference", "title", "startDateEstimated"],
+    writableColumns: CHANTIER_COLS,
+    jsonColumns: ["photos", "tags"],
     hasUpdatedAt: true,
   });
   app.use("/api/chantiers", auth, buildCrudRouter(chantiers));
 
-  // ─── Factures (PK string UUID, items JSON) ─────────────────────────────
+  // ─── Quotes ────────────────────────────────────────────────────────────
+  const quotes = new MysqlRepository(pool, "quotes", {
+    primaryKey: "client",
+    filterableColumns: ["status", "clientId", "chantierId", "reference"],
+    sortableColumns: ["createdAt", "issueDate", "reference", "totalTTC"],
+    writableColumns: QUOTE_COLS,
+    jsonColumns: ["items", "companySnapshot"],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/quotes", auth, buildCrudRouter(quotes));
+
+  // ─── Invoices ──────────────────────────────────────────────────────────
   const invoices = new MysqlRepository(pool, "invoices", {
     primaryKey: "client",
-    filterableColumns: [
-      "status",
-      "type",
-      "clientId",
-      "chantierId",
-      "fromQuoteId",
-      "reference",
-    ],
+    filterableColumns: ["status", "type", "clientId", "chantierId", "fromQuoteId", "reference"],
     sortableColumns: ["createdAt", "issueDate", "dueDate", "reference", "totalTTC"],
-    writableColumns: [
-      "reference",
-      "status",
-      "type",
-      "title",
-      "clientId",
-      "chantierId",
-      "fromQuoteId",
-      "issueDate",
-      "dueDate",
-      "paymentTermsDays",
-      "sentAt",
-      "paidAt",
-      "items",
-      "globalDiscountMode",
-      "globalDiscountPercent",
-      "globalDiscountAmount",
-      "acompteBasedOnQuoteId",
-      "acomptePercent",
-      "avoirReferenceInvoiceId",
-      "introText",
-      "conditionsText",
-      "footerText",
-      "internalNotes",
-      "companySnapshot",
-      "totalHT",
-      "totalTTC",
-      "totalPaid",
-      "lastReminderSentAt",
-      "remindersCount",
-    ],
+    writableColumns: INVOICE_COLS,
     jsonColumns: ["items", "companySnapshot"],
     hasUpdatedAt: true,
   });
   app.use("/api/invoices", auth, buildCrudRouter(invoices));
 
-  // ─── Paiements (sub-resource des factures) ─────────────────────────────
+  // ─── Invoice payments ──────────────────────────────────────────────────
   const invoicePayments = new MysqlRepository(pool, "invoice_payments", {
     primaryKey: "client",
     filterableColumns: ["invoiceId", "method"],
@@ -135,40 +252,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   });
   app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments));
 
-  // ─── Devis ─────────────────────────────────────────────────────────────
-  const quotes = new MysqlRepository(pool, "quotes", {
-    primaryKey: "client",
-    filterableColumns: ["status", "clientId", "chantierId", "reference"],
-    sortableColumns: ["createdAt", "issueDate", "reference", "totalTTC"],
-    writableColumns: [
-      "reference",
-      "status",
-      "title",
-      "clientId",
-      "chantierId",
-      "issueDate",
-      "validUntilDate",
-      "acceptedAt",
-      "sentAt",
-      "items",
-      "globalDiscountMode",
-      "globalDiscountPercent",
-      "globalDiscountAmount",
-      "introText",
-      "conditionsText",
-      "footerText",
-      "internalNotes",
-      "companySnapshot",
-      "totalHT",
-      "totalTTC",
-    ],
-    jsonColumns: ["items", "companySnapshot"],
-    hasUpdatedAt: true,
-  });
-  app.use("/api/quotes", auth, buildCrudRouter(quotes));
-
-  // ─── Dépenses ──────────────────────────────────────────────────────────
+  // ─── Expenses ──────────────────────────────────────────────────────────
   const expenses = new MysqlRepository(pool, "expenses", {
+    primaryKey: "client",
     filterableColumns: ["category", "supplierId", "chantierId", "isPaid"],
     sortableColumns: ["date", "amount", "createdAt"],
     writableColumns: [
@@ -188,8 +274,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   });
   app.use("/api/expenses", auth, buildCrudRouter(expenses));
 
-  // ─── Notes de frais ────────────────────────────────────────────────────
+  // ─── Expense notes ─────────────────────────────────────────────────────
   const expenseNotes = new MysqlRepository(pool, "expense_notes", {
+    primaryKey: "client",
     filterableColumns: ["category", "chantierId", "isReimbursed", "isValidated"],
     sortableColumns: ["date", "amount", "createdAt"],
     writableColumns: [
@@ -210,21 +297,33 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   });
   app.use("/api/expense-notes", auth, buildCrudRouter(expenseNotes));
 
-  // ─── Sous-traitants ────────────────────────────────────────────────────
+  // ─── Subcontractors ────────────────────────────────────────────────────
   const subcontractors = new MysqlRepository(pool, "subcontractors", {
-    filterableColumns: ["activity", "siret"],
-    sortableColumns: ["nom", "createdAt"],
+    primaryKey: "client",
+    filterableColumns: ["activity", "siret", "city"],
+    sortableColumns: ["companyName", "createdAt"],
     writableColumns: [
-      "nom",
-      "siret",
+      "companyName",
+      "contactFirstName",
+      "contactLastName",
       "email",
-      "telephone",
-      "adresse",
-      "contactPerson",
+      "phoneMobile",
+      "phoneFixed",
+      "siret",
+      "siren",
+      "tvaIntracom",
+      "addressLine1",
+      "addressLine2",
+      "postalCode",
+      "city",
+      "country",
       "activity",
       "retentionRate",
       "vatRate",
       "isVatExempt",
+      "iban",
+      "bic",
+      "paymentTermsDays",
       "notes",
     ],
     hasUpdatedAt: true,
@@ -233,6 +332,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // ─── Agenda events ─────────────────────────────────────────────────────
   const agendaEvents = new MysqlRepository(pool, "agenda_events", {
+    primaryKey: "client",
     filterableColumns: ["type", "clientId", "chantierId"],
     sortableColumns: ["startDate", "createdAt"],
     writableColumns: [
@@ -253,18 +353,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   });
   app.use("/api/agenda-events", auth, buildCrudRouter(agendaEvents));
 
-  // ─── Microsoft OAuth (Outlook + Graph) ─────────────────────────────────
-  // Les routes /login et /callback sont publiques (le user JWT est passé
-  // en query parce que les redirects ne portent pas l'header Authorization).
-  app.use("/api/auth/microsoft", buildMicrosoftRouter(pool, cfg));
-
-  // ─── Email via Graph API (nécessite que le user soit connecté) ─────────
-  app.use("/api/email", auth, buildEmailRouter(pool, cfg));
-
-  // ─── Backup serveur ────────────────────────────────────────────────────
-  app.use("/api/backup", auth, buildBackupRouter(pool, cfg));
-
-  // ─── Settings (key/value JSON) ─────────────────────────────────────────
+  // ─── Settings ──────────────────────────────────────────────────────────
   app.get(
     "/api/settings",
     auth,
@@ -316,17 +405,56 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     })
   );
 
-  // ─── Static SPA (web app buildée) ──────────────────────────────────────
-  // Le doc root contient un dossier `public/` créé par le déploiement web
-  // (cp apps/web/dist/* public/). On le sert pour toute requête non-/api.
+  // ─── Company profile (singleton) ───────────────────────────────────────
+  app.get(
+    "/api/company",
+    auth,
+    asyncHandler(async (_req, res) => {
+      const [rows] = (await pool.query("SELECT data FROM company WHERE id = 1")) as unknown as [
+        Array<{ data: string | object }>,
+      ];
+      const r = (rows as Array<{ data: string | object }>)[0];
+      if (!r) {
+        res.json({});
+        return;
+      }
+      const data = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+      res.json(data);
+    })
+  );
+
+  app.patch(
+    "/api/company",
+    auth,
+    asyncHandler(async (req, res) => {
+      const [rows] = (await pool.query("SELECT data FROM company WHERE id = 1")) as unknown as [
+        Array<{ data: string | object }>,
+      ];
+      const existing = (rows as Array<{ data: string | object }>)[0];
+      const current =
+        existing && typeof existing.data === "string"
+          ? JSON.parse(existing.data)
+          : existing?.data ?? {};
+      const merged = { ...current, ...(req.body ?? {}) };
+      await pool.execute("UPDATE company SET data = ? WHERE id = 1", [JSON.stringify(merged)]);
+      res.json(merged);
+    })
+  );
+
+  // ─── Microsoft + email ─────────────────────────────────────────────────
+  app.use("/api/auth/microsoft", buildMicrosoftRouter(pool, cfg));
+  app.use("/api/email", auth, buildEmailRouter(pool, cfg));
+
+  // ─── Backup serveur ────────────────────────────────────────────────────
+  app.use("/api/backup", auth, buildBackupRouter(pool, cfg));
+
+  // ─── Static SPA ────────────────────────────────────────────────────────
   const publicDir = path.resolve(process.cwd(), "public");
   if (fs.existsSync(publicDir)) {
     app.use(express.static(publicDir, { maxAge: "1y", index: false }));
-    // SPA fallback : toute route inconnue (sauf /api/*) → index.html
     app.get(/^(?!\/api).*/, (_req, res, next) => {
       const indexPath = path.join(publicDir, "index.html");
       if (fs.existsSync(indexPath)) {
-        // index.html sans cache pour pousser les nouveaux builds rapidement
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.sendFile(indexPath);
       } else {
@@ -335,12 +463,12 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     });
   }
 
-  // 404 handler (uniquement /api/* qui n'a pas matché — SPA déjà géré au-dessus)
+  // 404
   app.use((_req, res) => {
     res.status(404).json({ message: "Route inconnue" });
   });
 
-  // Error handler global
+  // Error handler
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error("[express] error:", err);
     res
