@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
 import { AppRouter } from "@/app/Router";
+import { ChangePasswordModal } from "@/features/auth/components/ChangePasswordModal";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUsersStore } from "@/stores/usersStore";
@@ -45,6 +46,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppRouter />
+      {/* Modal bloquant si l'utilisateur doit changer son mot de passe à
+          la 1ère connexion (mustChangePassword = 1) */}
+      <ChangePasswordModal />
       <Toaster
         position="bottom-right"
         toastOptions={{
