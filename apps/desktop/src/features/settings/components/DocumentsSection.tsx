@@ -426,15 +426,8 @@ export function DocumentsSection() {
     toast.success("Paramètres enregistrés");
   };
 
-  if (loading) {
-    return (
-      <SettingsSectionWrapper title="Documents" description="Personnalisation PDF et templates email">
-        <div className="text-center py-12 text-muted-foreground text-sm">Chargement...</div>
-      </SettingsSectionWrapper>
-    );
-  }
-
-  const showAccent = pdfStyle !== "sobre"; // le sobre est noir & blanc, pas de couleur
+  // ⚠️ Tous les hooks DOIVENT être appelés AVANT le early return (loading).
+  // Sinon React error #310 "Rendered more hooks than during the previous render".
   const company = useCompanyStore((s) => s.company) as Record<string, unknown>;
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -449,6 +442,16 @@ export function DocumentsSection() {
     }
     return <QuotePdfDocument quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
   }, [pdfStyle, pdfAccentColor, pdfFooterText, pdfFont, company]);
+
+  if (loading) {
+    return (
+      <SettingsSectionWrapper title="Documents" description="Personnalisation PDF et templates email">
+        <div className="text-center py-12 text-muted-foreground text-sm">Chargement...</div>
+      </SettingsSectionWrapper>
+    );
+  }
+
+  const showAccent = pdfStyle !== "sobre"; // le sobre est noir & blanc, pas de couleur
 
   function applyPreset(p: Preset): void {
     setPdfStyle(p.pdfStyle);
