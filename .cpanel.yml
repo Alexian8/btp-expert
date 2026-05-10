@@ -12,23 +12,32 @@
 ---
 deployment:
   tasks:
-    # 1) Synchronise le code source vers le doc root du sous-domaine
+    # ─── Stratégie : déploiement RAPIDE (10s au lieu de 5min) ──────────────
+    # On NE FAIT PAS npm install ni npm run build sur cPanel :
+    #   • npm install --workspaces est cassé sur cPanel (env vars corrompues)
+    #     et prend 3-5 min quand ça marche
+    #   • le build du serveur ET du front sont committés dans Git :
+    #       - apps/server/dist/  (whitelisté via .gitignore)
+    #       - apps/web/dist/     (force-add via `git add -f`)
+    #
+    # Le développeur doit donc, AVANT de push :
+    #   1. npm run build -w @btp/server      (si code serveur modifié)
+    #   2. npm run build -w @btp/web         (si code front modifié)
+    #   3. git add -f apps/web/dist apps/server/dist && git commit && git push
+    #
+    # En cas de NOUVELLE dépendance npm, lancer manuellement depuis Terminal :
+    #   cd ~/intranet.jacobhabitat-dev.fr && npm install --omit=dev
+
+    # 1) Synchronise le code (sources + dist déjà compilés) vers le doc root
     - export DEPLOYPATH=/home/$USER/intranet.jacobhabitat-dev.fr
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/rsync -av --exclude='node_modules' --exclude='.git' --exclude='dist_electron' --exclude='apps/desktop' --exclude='.htaccess' ./ $DEPLOYPATH/
 
-    # 2) Installe les dépendances (workspace npm — installe core, types, server)
-    - cd $DEPLOYPATH && /usr/local/bin/npm install --omit=dev --workspaces --include-workspace-root
-
-    # 3) Build du serveur TypeScript → JavaScript
-    - cd $DEPLOYPATH && /usr/local/bin/npm run build -w @btp/server
-
-    # 4) Déploie le build Vite du front (apps/web/dist) vers public/.
-    #    Le serveur Express sert ce dossier comme SPA. Le dist est committé
-    #    dans Git (généré localement via `npm run build -w @btp/web`).
+    # 2) Déploie le build Vite du front (apps/web/dist) vers public/.
+    #    Express le sert comme SPA.
     - /bin/mkdir -p $DEPLOYPATH/public
     - /bin/rsync -av --delete $DEPLOYPATH/apps/web/dist/ $DEPLOYPATH/public/
 
-    # 5) Restart de l'app Node.js (touche restart.txt = signal Passenger)
+    # 3) Restart de l'app Node.js (touche restart.txt = signal Passenger)
     - /bin/mkdir -p $DEPLOYPATH/tmp
     - /bin/touch $DEPLOYPATH/tmp/restart.txt

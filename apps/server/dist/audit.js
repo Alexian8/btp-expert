@@ -10,13 +10,14 @@ exports.audited = audited;
 exports.writeAudit = writeAudit;
 exports.listAuditLogs = listAuditLogs;
 /**
- * Extrait IP + User-Agent + identité de la requête.
+ * Extrait IP + User-Agent + identité + tenant de la requête.
  * À appeler au début d'un handler pour avoir l'auteur.
  */
 function audited(req, override) {
     return {
         userId: req.user?.sub ?? null,
         username: req.user?.username ?? "",
+        companyId: req.user?.companyId ?? null,
         ip: req.ip ?? "",
         userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
         ...override,
@@ -29,8 +30,9 @@ function audited(req, override) {
 async function writeAudit(db, entry) {
     try {
         await db.execute(`INSERT INTO audit_logs
-         (userId, username, action, resource, resourceId, ip, userAgent, meta)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+         (companyId, userId, username, action, resource, resourceId, ip, userAgent, meta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            entry.companyId ?? null,
             entry.userId,
             entry.username ?? "",
             entry.action,
@@ -49,6 +51,12 @@ async function writeAudit(db, entry) {
 async function listAuditLogs(db, q) {
     const wheres = [];
     const params = [];
+    // ⚠️ Isolation multi-tenant : si companyId fourni, on filtre strictement.
+    // Les logs sans companyId (legacy ou système) ne fuitent PAS aux admins.
+    if (q.companyId != null) {
+        wheres.push("companyId = ?");
+        params.push(q.companyId);
+    }
     if (q.userId != null) {
         wheres.push("userId = ?");
         params.push(q.userId);
@@ -78,7 +86,7 @@ async function listAuditLogs(db, q) {
     const orderSql = q.order === "asc" ? "ASC" : "DESC";
     const limit = Math.min(Math.max(q.limit ?? 50, 1), 500);
     const offset = Math.max(q.offset ?? 0, 0);
-    const [rows] = await db.query(`SELECT id, timestamp, userId, username, action, resource, resourceId,
+    const [rows] = await db.query(`SELECT id, timestamp, companyId, userId, username, action, resource, resourceId,
             ip, userAgent, meta
      FROM audit_logs ${whereSql}
      ORDER BY timestamp ${orderSql}, id ${orderSql}
