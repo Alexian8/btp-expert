@@ -325,20 +325,19 @@ export function installBtpApiShim(): void {
   };
 
   // ─── Microsoft (Outlook + OneDrive) — stub pour l'instant ─────────────
-  // Phase 2 : implémenter via /api/auth/microsoft/* + /api/email/* serveur
   const microsoft = {
     msLogin: stub("msLogin", { success: false, error: "Microsoft web pas encore branché" }),
     msLogout: stub("msLogout", { success: true }),
-    msGetAccount: stub("msGetAccount", null),
-    msGetQuota: stub("msGetQuota", null),
+    msGetAccount: stub("msGetAccount", { account: null, isLoggedIn: false }),
+    msGetQuota: stub("msGetQuota", { used: 0, total: 0 }),
     msOneDriveUpload: stub("msOneDriveUpload", { success: false }),
     msOneDriveList: stub("msOneDriveList", [] as unknown[]),
     msOneDriveDelete: stub("msOneDriveDelete", { success: false }),
     msOneDriveApplyRetention: stub("msOneDriveApplyRetention", { success: true }),
-    msOneDriveCheckLatest: stub("msOneDriveCheckLatest", null),
+    msOneDriveCheckLatest: stub("msOneDriveCheckLatest", { hasNewer: false, latest: null }),
     msOneDriveRestore: stub("msOneDriveRestore", { success: false }),
-    emailPrepareQuoteMail: stub("emailPrepareQuoteMail", null),
-    emailPrepareInvoiceMail: stub("emailPrepareInvoiceMail", null),
+    emailPrepareQuoteMail: stub("emailPrepareQuoteMail", { success: false, error: "Email web pas branché" }),
+    emailPrepareInvoiceMail: stub("emailPrepareInvoiceMail", { success: false, error: "Email web pas branché" }),
     emailSendDocument: stub("emailSendDocument", { success: false, error: "Outlook web pas encore branché" }),
   };
 
@@ -538,9 +537,17 @@ export function installBtpApiShim(): void {
 function createStubsFor(names: readonly string[]): Record<string, () => Promise<unknown>> {
   const out: Record<string, () => Promise<unknown>> = {};
   for (const name of names) {
-    // Heuristique : si nom commence par "list", retourne []. Sinon null.
-    const looksLikeList = /^(.*List|.*ListBy|.*ListAll|.*Search)/.test(name);
-    out[name] = stub(name, looksLikeList ? [] : null);
+    // Heuristique pour deviner le format de retour attendu par le code desktop :
+    //  - nom contient List/Search/All  → tableau vide
+    //  - nom contient Count           → 0
+    //  - nom contient Stats/Pipeline/Delays/Comparison/Seasonality → objet "vide" cohérent
+    //  - autre (action) → { success: false, error: "non disponible en web" }
+    const lower = name.toLowerCase();
+    // Par défaut : objet vide {} — sûr car {}.anything === undefined (pas de TypeError)
+    let fallback: unknown = {};
+    if (/list|search|history|expir/i.test(lower)) fallback = [];
+    else if (/count|hash/.test(lower)) fallback = 0;
+    out[name] = stub(name, fallback);
   }
   return out;
 }
