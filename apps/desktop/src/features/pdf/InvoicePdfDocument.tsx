@@ -4,6 +4,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 import type { Invoice, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
@@ -36,7 +37,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: COLORS.primary,
   },
-  companyBlock: { flex: 1 },
+  companyBlock: { flex: 1, flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  companyLogo: { width: 60, height: 60, objectFit: "contain" },
+  companyText: { flex: 1 },
   companyName: { fontSize: 18, fontFamily: "Helvetica-Bold", color: COLORS.primary, marginBottom: 4 },
   companyLine: { fontSize: 8, color: COLORS.muted, lineHeight: 1.4 },
   docTypeBlock: { alignItems: "flex-end", minWidth: 200 },
@@ -269,8 +272,13 @@ export function InvoicePdfDocument({ invoice, client, company = {} }: Props) {
         {/* Header */}
         <View style={styles.header} fixed>
           <View style={styles.companyBlock}>
-            <Text style={styles.companyName}>{companyName}</Text>
-            {companyLines.map((l, i) => <Text key={i} style={styles.companyLine}>{l}</Text>)}
+            {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
+              <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+            )}
+            <View style={styles.companyText}>
+              <Text style={styles.companyName}>{companyName}</Text>
+              {companyLines.map((l, i) => <Text key={i} style={styles.companyLine}>{l}</Text>)}
+            </View>
           </View>
           <View style={styles.docTypeBlock}>
             <Text style={styles.docType}>{typeLabel}</Text>

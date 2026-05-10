@@ -27,6 +27,7 @@ import { SendInvoiceByEmailModal } from "./SendInvoiceByEmailModal";
 import { PdfActions } from "@/features/pdf/PdfActions";
 import { InvoicePdfDocument } from "@/features/pdf/InvoicePdfDocument";
 import { InvoicePdfMinimal } from "@/features/pdf/InvoicePdfMinimal";
+import { InvoicePdfClassique } from "@/features/pdf/InvoicePdfClassique";
 import {
   EMPTY_INVOICE,
   INVOICE_STATUS_META,
@@ -333,6 +334,7 @@ ${companyName}`,
                       templates={{
                         modern: <InvoicePdfDocument invoice={existing} client={c} company={co} />,
                         sobre: <InvoicePdfMinimal invoice={existing} client={c} company={co} />,
+                        classique: <InvoicePdfClassique invoice={existing} client={c} company={co} />,
                       }}
                       persistKey="invoice-template"
                       defaultTemplate="modern"

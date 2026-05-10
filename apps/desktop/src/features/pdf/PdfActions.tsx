@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 const TEMPLATE_LABELS: Record<string, string> = {
   modern: "Moderne (couleur)",
   sobre: "Sobre (noir & blanc)",
+  classique: "Classique BTP (Times serif)",
 };
 
 interface Props {

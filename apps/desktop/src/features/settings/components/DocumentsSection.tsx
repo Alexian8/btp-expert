@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { PDFViewer } from "@react-pdf/renderer";
 import {
   Palette,
   Sparkles,
@@ -11,6 +12,8 @@ import {
   Type,
   Layout,
   Eye,
+  Wrench,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +23,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsSectionWrapper } from "./SettingsPage";
+import { useCompanyStore } from "@/stores/companyStore";
+import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
+import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
+import { QuotePdfClassique } from "@/features/pdf/QuotePdfClassique";
+import type { Quote, Client } from "@btp/types";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DocumentsSection — Personnalisation PDF + numérotation + templates email
@@ -54,31 +62,245 @@ const STYLE_OPTIONS: Array<{
   value: PdfStyle;
   label: string;
   description: string;
-  preview: string; // mini-preview ASCII pour donner une idée
-  available: boolean;
+  preview: string;
 }> = [
   {
     value: "moderne",
     label: "Moderne",
     description: "En-tête coloré, design épuré façon Pennylane / Tolteck",
     preview: "▓▓▓ HEADER\n  ━━━━━\n  ▌ ▌ ▌\n  ─────",
-    available: true,
   },
   {
     value: "sobre",
     label: "Sobre",
-    description: "Noir & blanc minimaliste façon classique BTP",
+    description: "Noir & blanc minimaliste façon TerréA",
     preview: "ENTREPRISE\n┌───┬───┐\n│ │ │ │ │\n└───┴───┘",
-    available: true,
   },
   {
     value: "classique",
     label: "Classique BTP",
-    description: "Bientôt — bordures épaisses + serif traditionnel",
-    preview: "═══════════\n║ ║ ║ ║ ║\n═══════════",
-    available: false,
+    description: "Bordures épaisses + Times serif, esprit traditionnel",
+    preview: "╔═══════╗\n║ ║ ║ ║ ║\n╚═══════╝",
   },
 ];
+
+// ─── Préréglages métiers ──────────────────────────────────────────────
+interface Preset {
+  id: string;
+  label: string;
+  emoji: string;
+  description: string;
+  pdfStyle: PdfStyle;
+  pdfAccentColor: string;
+  pdfFont: string;
+}
+
+const PRESETS: Preset[] = [
+  {
+    id: "default",
+    label: "BatiDesk standard",
+    emoji: "🏗️",
+    description: "Bleu pro, moderne — par défaut",
+    pdfStyle: "moderne",
+    pdfAccentColor: "#2563eb",
+    pdfFont: "Helvetica",
+  },
+  {
+    id: "macon",
+    label: "Maçon",
+    emoji: "🧱",
+    description: "Brun terre, classique BTP",
+    pdfStyle: "classique",
+    pdfAccentColor: "#7c2d12",
+    pdfFont: "Times New Roman",
+  },
+  {
+    id: "plombier",
+    label: "Plombier",
+    emoji: "🔧",
+    description: "Bleu turquoise, moderne",
+    pdfStyle: "moderne",
+    pdfAccentColor: "#0891b2",
+    pdfFont: "Helvetica",
+  },
+  {
+    id: "electricien",
+    label: "Électricien",
+    emoji: "⚡",
+    description: "Jaune ambre, moderne",
+    pdfStyle: "moderne",
+    pdfAccentColor: "#ea580c",
+    pdfFont: "Helvetica",
+  },
+  {
+    id: "peintre",
+    label: "Peintre",
+    emoji: "🎨",
+    description: "Violet créatif, moderne",
+    pdfStyle: "moderne",
+    pdfAccentColor: "#7c3aed",
+    pdfFont: "Inter",
+  },
+  {
+    id: "architecte",
+    label: "Architecte",
+    emoji: "📐",
+    description: "Sobre noir & blanc, élégant",
+    pdfStyle: "sobre",
+    pdfAccentColor: "#111827",
+    pdfFont: "Helvetica",
+  },
+  {
+    id: "couvreur",
+    label: "Couvreur",
+    emoji: "🏠",
+    description: "Émeraude, classique",
+    pdfStyle: "classique",
+    pdfAccentColor: "#10b981",
+    pdfFont: "Times New Roman",
+  },
+];
+
+// ─── Devis fictif pour le live preview ──────────────────────────────
+const SAMPLE_CLIENT: Client = {
+  id: "sample-client",
+  type: "particulier",
+  civility: "M.",
+  firstName: "Jean",
+  lastName: "Dupont",
+  companyName: "",
+  email: "jean.dupont@example.com",
+  phoneMobile: "06 12 34 56 78",
+  phoneFixed: "",
+  addressLine1: "12 rue de la République",
+  addressLine2: "",
+  postalCode: "55700",
+  city: "Stenay",
+  country: "France",
+  billingAddressSame: 1 as unknown as boolean,
+  billingAddressLine1: "",
+  billingAddressLine2: "",
+  billingPostalCode: "",
+  billingCity: "",
+  billingCountry: "",
+  siret: "",
+  siren: "",
+  tvaIntracom: "",
+  legalForm: "",
+  apeCode: "",
+  apeLabel: "",
+  tags: [],
+  source: "",
+  notes: "",
+  firstContactAt: "",
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+} as unknown as Client;
+
+const SAMPLE_QUOTE: Quote = {
+  id: "sample-quote",
+  reference: "DEV-2026-0001",
+  status: "brouillon",
+  title: "Rénovation salle de bain",
+  clientId: "sample-client",
+  chantierId: "",
+  issueDate: new Date().toISOString().slice(0, 10),
+  validUntil: new Date(Date.now() + 90 * 86400_000).toISOString().slice(0, 10),
+  acceptedAt: "",
+  sentAt: "",
+  items: [
+    {
+      id: "s1",
+      kind: "section",
+      title: "Travaux préparatoires",
+      description: "",
+      quantity: 0,
+      unit: "",
+      unitPriceHT: 0,
+      vatRate: 20,
+      discountPercent: 0,
+      discountAmount: 0,
+      discountMode: "none",
+    },
+    {
+      id: "1",
+      kind: "line",
+      title: "Dépose de l'existant",
+      description: "Évacuation comprise",
+      quantity: 1,
+      unit: "forfait",
+      unitPriceHT: 500,
+      vatRate: 20,
+      discountPercent: 0,
+      discountAmount: 0,
+      discountMode: "none",
+    },
+    {
+      id: "s2",
+      kind: "section",
+      title: "Pose et finitions",
+      description: "",
+      quantity: 0,
+      unit: "",
+      unitPriceHT: 0,
+      vatRate: 20,
+      discountPercent: 0,
+      discountAmount: 0,
+      discountMode: "none",
+    },
+    {
+      id: "2",
+      kind: "line",
+      title: "Carrelage mural",
+      description: "Faïence 25×40 — pose droite",
+      quantity: 28,
+      unit: "m²",
+      unitPriceHT: 95,
+      vatRate: 10,
+      discountPercent: 0,
+      discountAmount: 0,
+      discountMode: "none",
+    },
+    {
+      id: "3",
+      kind: "line",
+      title: "Plomberie",
+      description: "Installation douche italienne, mitigeur thermostatique",
+      quantity: 1,
+      unit: "forfait",
+      unitPriceHT: 1850,
+      vatRate: 10,
+      discountPercent: 0,
+      discountAmount: 0,
+      discountMode: "none",
+    },
+    {
+      id: "4",
+      kind: "line",
+      title: "Meuble vasque",
+      description: "Suspendu 80 cm, 1 vasque, miroir",
+      quantity: 1,
+      unit: "u",
+      unitPriceHT: 720,
+      vatRate: 10,
+      discountPercent: 0,
+      discountAmount: 0,
+      discountMode: "none",
+    },
+  ],
+  globalDiscountMode: "none",
+  globalDiscountPercent: 0,
+  globalDiscountAmount: 0,
+  introText: "Suite à votre demande, voici le devis détaillé pour la rénovation de votre salle de bain.",
+  conditionsText: "Devis gratuit valable 90 jours. Acompte de 30 % à la commande.",
+  footerText: "",
+  internalNotes: "",
+  companySnapshot: {},
+  totalHT: 0,
+  totalTTC: 0,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+} as unknown as Quote;
 
 export function DocumentsSection() {
   const [tab, setTab] = useState<Tab>("pdf");
@@ -213,6 +435,27 @@ export function DocumentsSection() {
   }
 
   const showAccent = pdfStyle !== "sobre"; // le sobre est noir & blanc, pas de couleur
+  const company = useCompanyStore((s) => s.company) as Record<string, unknown>;
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Preview PDF avec les paramètres en cours
+  const previewDocument = useMemo(() => {
+    const co = { ...company, pdfAccentColor, pdfFooterText, pdfFont };
+    if (pdfStyle === "sobre") {
+      return <QuotePdfMinimal quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
+    }
+    if (pdfStyle === "classique") {
+      return <QuotePdfClassique quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
+    }
+    return <QuotePdfDocument quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
+  }, [pdfStyle, pdfAccentColor, pdfFooterText, pdfFont, company]);
+
+  function applyPreset(p: Preset): void {
+    setPdfStyle(p.pdfStyle);
+    setPdfAccentColor(p.pdfAccentColor);
+    setPdfFont(p.pdfFont);
+    toast.success(`Préréglage "${p.label}" appliqué — pense à enregistrer`);
+  }
 
   return (
     <SettingsSectionWrapper
@@ -220,26 +463,84 @@ export function DocumentsSection() {
       description="Personnalisation PDF, numérotation et templates email"
     >
       {/* ─── Tabs ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit mb-6">
-        <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")} icon={FileText} label="Style PDF" />
-        <TabButton
-          active={tab === "numbering"}
-          onClick={() => setTab("numbering")}
-          icon={Hash}
-          label="Numérotation"
-        />
-        <TabButton active={tab === "email"} onClick={() => setTab("email")} icon={Mail} label="Emails" />
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+          <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")} icon={FileText} label="Style PDF" />
+          <TabButton
+            active={tab === "numbering"}
+            onClick={() => setTab("numbering")}
+            icon={Hash}
+            label="Numérotation"
+          />
+          <TabButton active={tab === "email"} onClick={() => setTab("email")} icon={Mail} label="Emails" />
+        </div>
+        {tab === "pdf" && (
+          <Button
+            variant={previewOpen ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPreviewOpen((v) => !v)}
+          >
+            {previewOpen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {previewOpen ? "Cacher l'aperçu" : "Aperçu temps réel"}
+          </Button>
+        )}
       </div>
 
-      <motion.div
-        key={tab}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-      >
+      <div className={cn("grid gap-5", previewOpen && tab === "pdf" ? "grid-cols-1 lg:grid-cols-[1fr_500px]" : "grid-cols-1")}>
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
         {/* ─── Tab PDF ──────────────────────────────────────────────── */}
         {tab === "pdf" && (
           <div className="space-y-5">
+            {/* Card 0 — Préréglages métier */}
+            <Card icon={Wrench} title="Préréglages métier" description="Un click pour configurer style + couleur + police selon ton corps de métier">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {PRESETS.map((p) => {
+                  const matches =
+                    pdfStyle === p.pdfStyle &&
+                    pdfAccentColor.toLowerCase() === p.pdfAccentColor.toLowerCase() &&
+                    pdfFont === p.pdfFont;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      className={cn(
+                        "p-3 rounded-lg border-2 text-left transition-all",
+                        matches
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-border/80 hover:bg-accent/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl leading-none">{p.emoji}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium leading-tight">{p.label}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                            {p.description}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Aperçu mini : carré couleur + nom du style */}
+                      <div className="flex items-center gap-1 mt-2">
+                        <span
+                          className="w-3 h-3 rounded-sm border border-border/60"
+                          style={{ backgroundColor: p.pdfAccentColor }}
+                        />
+                        <span className="text-[10px] text-muted-foreground">
+                          {p.pdfStyle === "moderne" ? "Moderne" : p.pdfStyle === "sobre" ? "Sobre" : "Classique"} · {p.pdfFont}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+
             {/* Card 1 — Style global */}
             <Card icon={Sparkles} title="Style général" description="Aspect visuel de tes devis et factures">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
@@ -247,24 +548,15 @@ export function DocumentsSection() {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => opt.available && setPdfStyle(opt.value)}
-                    disabled={!opt.available}
+                    onClick={() => setPdfStyle(opt.value)}
                     className={cn(
                       "relative p-3 rounded-lg border-2 text-left transition-all overflow-hidden",
-                      pdfStyle === opt.value && opt.available
+                      pdfStyle === opt.value
                         ? "border-primary bg-primary/5"
-                        : "border-border hover:border-border/80 hover:bg-accent/50",
-                      !opt.available && "opacity-50 cursor-not-allowed"
+                        : "border-border hover:border-border/80 hover:bg-accent/50"
                     )}
                   >
-                    <div className="font-medium text-sm flex items-center gap-2">
-                      {opt.label}
-                      {!opt.available && (
-                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">
-                          Bientôt
-                        </span>
-                      )}
-                    </div>
+                    <div className="font-medium text-sm">{opt.label}</div>
                     <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                       {opt.description}
                     </div>
@@ -618,7 +910,38 @@ export function DocumentsSection() {
             />
           </div>
         )}
-      </motion.div>
+        </motion.div>
+
+        {/* ─── Side panel : aperçu PDF live ───────────────────────────── */}
+        {previewOpen && tab === "pdf" && (
+          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-5rem)] flex flex-col bg-card border border-border rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40 shrink-0">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-primary" />
+                <span className="text-xs font-medium">Aperçu temps réel — devis fictif</span>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setPreviewOpen(false)} title="Fermer">
+                <EyeOff className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            <div className="flex-1 bg-muted/20 min-h-[600px]">
+              <PDFViewer
+                key={`${pdfStyle}-${pdfAccentColor}-${pdfFont}-${(company.logoDataUrl as string ?? "").slice(0, 50)}`}
+                style={{ width: "100%", height: "100%", border: "none" }}
+                showToolbar={false}
+              >
+                {previewDocument as React.ReactElement}
+              </PDFViewer>
+            </div>
+            <div className="px-3 py-2 border-t border-border bg-muted/40 shrink-0">
+              <p className="text-[10px] text-muted-foreground">
+                💡 L'aperçu se met à jour automatiquement quand tu changes les paramètres.
+                Données fictives — utilise un vrai devis pour tester sur tes données.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Save button sticky en bas */}
       <div className="flex justify-end pt-4 mt-6 border-t border-border">

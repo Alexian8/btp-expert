@@ -28,6 +28,7 @@ import { ConvertToInvoiceModal } from "@/features/invoices/components/ConvertToI
 import { PdfActions } from "@/features/pdf/PdfActions";
 import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
 import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
+import { QuotePdfClassique } from "@/features/pdf/QuotePdfClassique";
 import {
   EMPTY_QUOTE, QUOTE_STATUS_META, QUOTE_STATUS_ORDER,
   type Quote, type QuoteItem, type QuoteStatus, type LineWorkType,
@@ -286,6 +287,7 @@ ${company?.companyName || ""}`;
                         templates={{
                           modern: <QuotePdfDocument quote={existing} client={c} company={co} />,
                           sobre: <QuotePdfMinimal quote={existing} client={c} company={co} />,
+                          classique: <QuotePdfClassique quote={existing} client={c} company={co} />,
                         }}
                         persistKey="quote-template"
                         defaultTemplate="modern"

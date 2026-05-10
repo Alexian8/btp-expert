@@ -4,6 +4,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 import type { Quote, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
@@ -25,6 +26,8 @@ const styles = StyleSheet.create({
   },
 
   // ── Header ────────────────────────────────────────────────────────────
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
+  companyLogo: { width: 70, height: 50, objectFit: "contain" },
   companyName: {
     fontSize: 26,
     fontFamily: "Helvetica-Bold",
@@ -325,7 +328,12 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
     <Document title={quote.reference || "Devis"} author={companyName}>
       <Page size="A4" style={styles.page}>
         {/* Header company */}
-        <Text style={styles.companyName}>{companyName}</Text>
+        <View style={styles.headerRow}>
+          {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
+            <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+          )}
+          <Text style={styles.companyName}>{companyName}</Text>
+        </View>
         {companyAddress && <Text style={styles.companyAddress}>{companyAddress}</Text>}
         <Text style={styles.companyDot}>•</Text>
 

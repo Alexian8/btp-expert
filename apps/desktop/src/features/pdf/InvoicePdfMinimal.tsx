@@ -4,6 +4,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 import type { Invoice, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
@@ -19,6 +20,8 @@ const GREY_LIGHT = "#f5f5f5";
 const styles = StyleSheet.create({
   page: { padding: 30, fontSize: 9, color: BLACK, fontFamily: "Helvetica" },
 
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
+  companyLogo: { width: 70, height: 50, objectFit: "contain" },
   companyName: { fontSize: 26, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, marginBottom: 4 },
   companyAddress: { fontSize: 9, marginBottom: 18 },
   companyDot: { fontSize: 14, marginBottom: 12 },
@@ -206,7 +209,12 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
         {/* Tampon "PAYÉE" en haut à droite si payée */}
         {isPaid && <Text style={styles.statusStamp}>P A Y É E</Text>}
 
-        <Text style={styles.companyName}>{companyName}</Text>
+        <View style={styles.headerRow}>
+          {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
+            <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+          )}
+          <Text style={styles.companyName}>{companyName}</Text>
+        </View>
         {companyAddress && <Text style={styles.companyAddress}>{companyAddress}</Text>}
         <Text style={styles.companyDot}>•</Text>
 
