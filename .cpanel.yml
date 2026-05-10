@@ -15,7 +15,7 @@ deployment:
     # 1) Synchronise le code source vers le doc root du sous-domaine
     - export DEPLOYPATH=/home/$USER/intranet.jacobhabitat-dev.fr
     - /bin/mkdir -p $DEPLOYPATH
-    - /bin/rsync -av --delete --exclude='node_modules' --exclude='.git' --exclude='dist_electron' --exclude='apps/desktop' ./ $DEPLOYPATH/
+    - /bin/rsync -av --exclude='node_modules' --exclude='.git' --exclude='dist_electron' --exclude='apps/desktop' --exclude='.htaccess' ./ $DEPLOYPATH/
 
     # 2) Installe les dépendances (workspace npm — installe core, types, server)
     - cd $DEPLOYPATH && /usr/local/bin/npm install --omit=dev --workspaces --include-workspace-root

@@ -18,11 +18,14 @@ git pull
 echo ""
 echo "→ rsync vers $DEPLOY_DIR..."
 mkdir -p "$DEPLOY_DIR"
-rsync -av --delete \
+# IMPORTANT : pas de --delete, sinon on écrase le .htaccess généré par
+# cPanel pour Phusion Passenger (qui n'est pas dans le repo Git).
+rsync -av \
   --exclude='node_modules' \
   --exclude='.git' \
   --exclude='dist_electron' \
   --exclude='apps/desktop' \
+  --exclude='.htaccess' \
   ./ "$DEPLOY_DIR/"
 
 cd "$DEPLOY_DIR"
