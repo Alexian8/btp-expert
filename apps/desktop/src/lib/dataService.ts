@@ -436,15 +436,44 @@ export class ElectronDataService implements IDataService {
       webLogin?: (
         u: string,
         p: string
-      ) => Promise<{ id: number; username: string; role: string } | null>;
+      ) => Promise<{
+        id: number;
+        username: string;
+        role: string;
+        email?: string;
+        firstName?: string;
+        lastName?: string;
+        mustChangePassword?: boolean;
+        companyId?: number;
+        isSetupComplete?: boolean;
+        companyName?: string;
+      } | null>;
     };
     if (api.isWeb && api.webLogin) {
-      const user = await api.webLogin(username, password);
+      const user = (await api.webLogin(username, password)) as
+        | (User & {
+            email?: string;
+            firstName?: string;
+            lastName?: string;
+            mustChangePassword?: boolean;
+            companyId?: number;
+            isSetupComplete?: boolean;
+            companyName?: string;
+          })
+        | null;
       if (!user) return null;
+      // Propage TOUS les champs (multi-tenant + onboarding)
       this.currentUser = {
         id: user.id,
         username: user.username,
-        role: (user.role as "admin" | "user") || "user",
+        role: (user.role as User["role"]) || "user",
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        mustChangePassword: user.mustChangePassword,
+        companyId: user.companyId,
+        isSetupComplete: user.isSetupComplete,
+        companyName: user.companyName,
       };
       return this.currentUser;
     }

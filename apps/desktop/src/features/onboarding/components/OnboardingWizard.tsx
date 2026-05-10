@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useCompanyStore } from "@/stores/companyStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import { useChantiersStore } from "@/stores/chantiersStore";
+import { useAuthStore } from "@/stores/authStore";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // OnboardingWizard — Premier lancement (Session 19)
@@ -46,18 +47,43 @@ export function OnboardingWizard({ open, onClose }: Props) {
     if (open) setStep("welcome");
   }, [open]);
 
-  const handleFinish = () => {
-    // Marquer comme terminé
+  // Marque le setup comme terminé côté serveur (company.isSetupComplete = 1)
+  // pour que l'admin ne voie plus jamais le tutoriel à la prochaine connexion.
+  const markSetupComplete = async (): Promise<void> => {
+    // 1. Flag local (compat anciennes versions)
     if (typeof window !== "undefined") {
       try { localStorage.setItem("batidesk.onboarding.done", "1"); } catch {}
     }
+    // 2. Persistance serveur via /api/company/complete-setup (admin only)
+    try {
+      const token = localStorage.getItem("btp.web.token");
+      if (token) {
+        await fetch("/api/company/complete-setup", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch (e) {
+      // Best-effort. Si le call échoue, l'utilisateur verra encore le wizard
+      // au prochain login mais pourra le skip à nouveau.
+      console.warn("[onboarding] complete-setup failed:", e);
+    }
+    // 3. Mise à jour locale du user pour ne pas avoir à se reloguer
+    const u = useAuthStore.getState().user;
+    if (u) {
+      useAuthStore.setState({
+        user: { ...u, isSetupComplete: true },
+      });
+    }
+  };
+
+  const handleFinish = async () => {
+    await markSetupComplete();
     onClose();
   };
 
-  const handleSkip = () => {
-    if (typeof window !== "undefined") {
-      try { localStorage.setItem("batidesk.onboarding.done", "1"); } catch {}
-    }
+  const handleSkip = async () => {
+    await markSetupComplete();
     onClose();
   };
 

@@ -59,7 +59,20 @@ export function OnboardingGate() {
     const looksDone =
       Boolean(company.companyName) || alreadyDoneLocally;
 
-    if (!looksDone) {
+    if (looksDone) {
+      // Cas legacy : l'utilisateur a déjà rempli sa company mais
+      // isSetupComplete=0 en DB. On le marque comme terminé côté serveur
+      // pour qu'il ne revoie plus jamais le wizard.
+      const token = localStorage.getItem("btp.web.token");
+      if (token) {
+        fetch("/api/company/complete-setup", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {
+          /* best-effort */
+        });
+      }
+    } else {
       setTimeout(() => setOpen(true), 800);
     }
     setChecked(true);
