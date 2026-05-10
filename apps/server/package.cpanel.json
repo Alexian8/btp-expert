@@ -1,0 +1,19 @@
+{
+  "name": "btp-server-deploy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "package.json dédié déploiement cPanel — inline des deps de apps/server (npm cPanel ne résout pas bien les workspaces)",
+  "main": "app.js",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.4",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
