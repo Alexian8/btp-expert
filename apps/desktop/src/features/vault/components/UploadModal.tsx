@@ -11,18 +11,29 @@ import { useVaultStore } from "@/stores/vaultStore";
 import { TagPicker } from "./TagPicker";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// UploadModal — Modal d'upload avec métadonnées (description, expiration, tags)
+// UploadModal — Modal d'upload de fichiers (web-native)
+//
+// Reçoit des File[] natifs depuis VaultPage (drag-drop ou input file).
+// Pour chaque fichier : POST /api/vault/upload avec le blob en body.
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface Props {
   open: boolean;
   folderId: string;
-  filePaths: string[];
+  files: File[];
   onClose: () => void;
   onSuccess: () => void;
+  /** Liens automatiques (utilisé quand on upload depuis un chantier/client). */
+  context?: {
+    chantierId?: string;
+    clientId?: string;
+    quoteId?: string;
+    invoiceId?: string;
+    category?: string;
+  };
 }
 
-export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: Props) {
+export function UploadModal({ open, folderId, files, onClose, onSuccess, context }: Props) {
   const uploadDocument = useVaultStore((s) => s.uploadDocument);
   const [description, setDescription] = useState("");
   const [expirationDate, setExpirationDate] = useState("");
@@ -31,42 +42,57 @@ export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: P
   const [progress, setProgress] = useState({ done: 0, total: 0 });
 
   const handleSubmit = async () => {
-    if (filePaths.length === 0) return;
+    if (files.length === 0) return;
 
     setUploading(true);
-    setProgress({ done: 0, total: filePaths.length });
+    setProgress({ done: 0, total: files.length });
 
     let successCount = 0;
     let errorCount = 0;
+    const errors: string[] = [];
 
-    for (let i = 0; i < filePaths.length; i++) {
-      const sourcePath = filePaths[i];
-      const fileName = sourcePath.split(/[/\\]/).pop() || `Fichier ${i + 1}`;
-
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
       const r = await uploadDocument({
         folderId,
-        sourcePath,
-        fileName,
-        description: i === 0 ? description : "", // description sur le 1er seulement si plusieurs
+        file,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        description: i === 0 ? description : "",
         expirationDate,
-        tags: selectedTagIds.map(id => ({ id })),
+        tags: selectedTagIds.map((id) => ({ id })),
+        ...(context ?? {}),
       });
       if (r.success) successCount++;
-      else errorCount++;
-      setProgress({ done: i + 1, total: filePaths.length });
+      else {
+        errorCount++;
+        if (r.error) errors.push(`${file.name}: ${r.error}`);
+      }
+      setProgress({ done: i + 1, total: files.length });
     }
 
     setUploading(false);
-    if (successCount > 0) toast.success(`${successCount} fichier(s) ajouté(s)`);
-    if (errorCount > 0) toast.error(`${errorCount} fichier(s) en erreur`);
+    if (successCount > 0) toast.success(`${successCount} fichier(s) ajouté(s) au coffre-fort`);
+    if (errorCount > 0) {
+      toast.error(`${errorCount} fichier(s) en erreur`, {
+        description: errors[0]?.slice(0, 200),
+      });
+    }
 
     onSuccess();
     onClose();
-    // Reset
     setDescription("");
     setExpirationDate("");
     setSelectedTagIds([]);
   };
+
+  function fmtSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
+  }
+
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
   return (
     <AnimatePresence>
@@ -93,7 +119,7 @@ export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: P
                 <div>
                   <h2 className="text-lg font-semibold">Ajouter au coffre-fort</h2>
                   <p className="text-xs text-muted-foreground">
-                    {filePaths.length} fichier{filePaths.length > 1 ? "s" : ""} à chiffrer et stocker
+                    {files.length} fichier{files.length > 1 ? "s" : ""} · {fmtSize(totalSize)}
                   </p>
                 </div>
               </div>
@@ -106,16 +132,14 @@ export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: P
               {/* Liste fichiers */}
               <div>
                 <Label className="text-xs">Fichiers sélectionnés</Label>
-                <div className="mt-1.5 max-h-32 overflow-y-auto bg-muted rounded-md p-2 space-y-1">
-                  {filePaths.map((p, idx) => {
-                    const name = p.split(/[/\\]/).pop() || `Fichier ${idx + 1}`;
-                    return (
-                      <div key={idx} className="flex items-center gap-2 text-xs">
-                        <FileText className="w-3 h-3 text-muted-foreground" />
-                        <span className="truncate">{name}</span>
-                      </div>
-                    );
-                  })}
+                <div className="mt-1.5 max-h-40 overflow-y-auto bg-muted rounded-md p-2 space-y-1">
+                  {files.map((f, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs">
+                      <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
+                      <span className="truncate flex-1">{f.name}</span>
+                      <span className="text-muted-foreground tabular-nums">{fmtSize(f.size)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -132,7 +156,9 @@ export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: P
               </div>
 
               <div>
-                <Label htmlFor="expiration">Date d'expiration (pour assurances, qualifications...)</Label>
+                <Label htmlFor="expiration">
+                  Date d'expiration (assurances, qualifications, attestations…)
+                </Label>
                 <div className="relative mt-1.5">
                   <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
@@ -151,17 +177,22 @@ export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: P
                   Tags (mots-clés pour la recherche)
                 </Label>
                 <div className="mt-1.5">
-                  <TagPicker selectedTagIds={selectedTagIds} onChange={setSelectedTagIds} />
+                  <TagPicker
+                    selectedTagIds={selectedTagIds}
+                    onChange={setSelectedTagIds}
+                  />
                 </div>
               </div>
 
               {uploading && (
                 <div className="bg-muted rounded-md p-3 text-center text-xs text-muted-foreground">
-                  Chiffrement et stockage : {progress.done} / {progress.total}
+                  Upload en cours : {progress.done} / {progress.total}
                   <div className="mt-2 h-1 bg-border rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary transition-all"
-                      style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                      style={{
+                        width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
+                      }}
                     />
                   </div>
                 </div>
@@ -169,8 +200,10 @@ export function UploadModal({ open, folderId, filePaths, onClose, onSuccess }: P
             </div>
 
             <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-              <Button variant="outline" onClick={onClose} disabled={uploading}>Annuler</Button>
-              <Button onClick={handleSubmit} loading={uploading}>
+              <Button variant="outline" onClick={onClose} disabled={uploading}>
+                Annuler
+              </Button>
+              <Button onClick={handleSubmit} loading={uploading} disabled={files.length === 0}>
                 <Upload className="w-4 h-4" />
                 Ajouter au coffre-fort
               </Button>

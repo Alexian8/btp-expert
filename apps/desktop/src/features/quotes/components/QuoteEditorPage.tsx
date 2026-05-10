@@ -300,6 +300,12 @@ ${company?.companyName || ""}`;
                         persistKey="quote-template"
                         defaultTemplate="modern"
                         fileName={`${existing.reference || "Devis"}.pdf`}
+                        vaultContext={{
+                          quoteId: existing.id,
+                          clientId: existing.clientId || undefined,
+                          chantierId: existing.chantierId || undefined,
+                          category: "generated_quote",
+                        }}
                       />
                     );
                   })()}

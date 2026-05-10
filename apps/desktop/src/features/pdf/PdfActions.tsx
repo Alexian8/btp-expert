@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { pdf } from "@react-pdf/renderer";
-import { Eye, Download, FileText, X, Loader2, Palette } from "lucide-react";
+import { Eye, Download, FileText, X, Loader2, Palette, Archive, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,16 @@ interface Props {
   onDownloaded?: (blob: Blob) => void;
   /** Affichage compact (icônes seules) si true. */
   compact?: boolean;
+  /** Si défini, affiche un bouton "Sauvegarder dans le coffre" qui upload
+   *  le PDF généré au vault avec auto-link au chantier/quote/invoice. */
+  vaultContext?: {
+    chantierId?: string;
+    clientId?: string;
+    quoteId?: string;
+    invoiceId?: string;
+    /** Catégorie au sens vault_documents.category. */
+    category?: string;
+  };
 }
 
 export function PdfActions({
@@ -56,6 +66,7 @@ export function PdfActions({
   fileName,
   onDownloaded,
   compact = false,
+  vaultContext,
 }: Props) {
   // Choix de template (persistant si persistKey fourni)
   const templateKeys = templates ? Object.keys(templates) : [];
@@ -87,11 +98,64 @@ export function PdfActions({
     ? templates[selectedTemplate] ?? null
     : doc ?? null;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState<"preview" | "download" | null>(null);
+  const [loading, setLoading] = useState<"preview" | "download" | "vault" | null>(null);
+  const [savedToVault, setSavedToVault] = useState(false);
 
   async function generateBlob(): Promise<Blob> {
     if (!activeDoc) throw new Error("Aucun template PDF disponible");
     return await pdf(activeDoc).toBlob();
+  }
+
+  async function handleSaveToVault(): Promise<void> {
+    if (loading || !vaultContext) return;
+    setLoading("vault");
+    try {
+      const blob = await generateBlob();
+      const api = window.btpAPI as
+        | {
+            vaultUploadDocument?: (params: {
+              folderId?: string;
+              file?: Blob;
+              fileName?: string;
+              mimeType?: string;
+              description?: string;
+              category?: string;
+              chantierId?: string;
+              clientId?: string;
+              quoteId?: string;
+              invoiceId?: string;
+            }) => Promise<{ success: boolean; id?: string; error?: string }>;
+          }
+        | undefined;
+      if (!api?.vaultUploadDocument) {
+        toast.error("Coffre-fort indisponible");
+        return;
+      }
+      const r = await api.vaultUploadDocument({
+        file: blob,
+        fileName,
+        mimeType: "application/pdf",
+        description: `Généré depuis BatiDesk le ${new Date().toLocaleString("fr-FR")}`,
+        category: vaultContext.category ?? "generated_pdf",
+        chantierId: vaultContext.chantierId,
+        clientId: vaultContext.clientId,
+        quoteId: vaultContext.quoteId,
+        invoiceId: vaultContext.invoiceId,
+      });
+      if (r.success) {
+        setSavedToVault(true);
+        toast.success("PDF rangé dans le coffre-fort");
+        // Reset l'état "saved" après quelques secondes pour pouvoir
+        // re-sauver une nouvelle version
+        setTimeout(() => setSavedToVault(false), 4000);
+      } else {
+        toast.error(r.error || "Échec sauvegarde");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setLoading(null);
+    }
   }
 
   async function handlePreview() {
@@ -186,6 +250,28 @@ export function PdfActions({
           )}
           {!compact && <span>Télécharger PDF</span>}
         </Button>
+        {vaultContext && (
+          <Button
+            variant="outline"
+            size={compact ? "icon" : "default"}
+            onClick={handleSaveToVault}
+            disabled={loading !== null || !activeDoc || savedToVault}
+            title="Sauvegarder dans le coffre-fort"
+          >
+            {loading === "vault" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : savedToVault ? (
+              <Check className="w-4 h-4 text-emerald-500" />
+            ) : (
+              <Archive className="w-4 h-4" />
+            )}
+            {!compact && (
+              <span className="hidden sm:inline">
+                {savedToVault ? "Rangé" : "Coffre"}
+              </span>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Modal preview avec iframe PDF — Portal pour échapper au containing

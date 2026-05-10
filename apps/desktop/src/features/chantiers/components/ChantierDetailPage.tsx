@@ -25,6 +25,7 @@ import { useChantiersStore } from "@/stores/chantiersStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import { useQuotesStore } from "@/stores/quotesStore";
 import { useDocCategoriesStore } from "@/stores/chantierDocCategoriesStore";
+import { InlineDocumentsSection } from "@/features/vault/components/InlineDocumentsSection";
 import { ChantierFormModal } from "./ChantierFormModal";
 import { DocCategoriesManager } from "./DocCategoriesManager";
 import { CategoryBadge } from "./CategoryBadge";
@@ -624,13 +625,28 @@ function TimelineItem({ event, index, onChanged }: { event: any; index: number; 
 // Onglet DOCUMENTS (drag & drop)
 // ═══════════════════════════════════════════════════════════════════════════
 function TabDocuments({ chantierId }: { chantierId: string }) {
+  // Branche maintenant sur le vrai coffre-fort (vault) via la route serveur
+  // GET /api/vault/documents?chantierId=... — les uploads sont auto-liés au
+  // chantier (chantierId injecté dans le payload).
+  return (
+    <div className="max-w-4xl">
+      <InlineDocumentsSection
+        chantierId={chantierId}
+        defaultCategory="chantier"
+        title="Documents du chantier"
+        description="Plans, photos, contrats, attestations… liés à ce chantier. Stockés dans le coffre-fort."
+      />
+    </div>
+  );
+}
+
+// Bloc legacy : conservé pour compat si jamais appelé (à supprimer plus tard)
+function _LegacyTabDocumentsUnused({ chantierId }: { chantierId: string }) {
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("Autre");
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [categoriesManagerOpen, setCategoriesManagerOpen] = useState(false);
-
-  // Session 21 : catégories personnalisées
   const { categories, fetch: fetchCategories } = useDocCategoriesStore();
 
   const refresh = async () => {
@@ -663,8 +679,6 @@ function TabDocuments({ chantierId }: { chantierId: string }) {
       toast.error(r.error || "Erreur");
     }
   };
-
-  // Liste des noms de catégories pour le select
   const categoryNames = categories.length > 0
     ? categories.map((c) => c.name)
     : ["Autre"];

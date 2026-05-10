@@ -345,6 +345,12 @@ ${companyName}`,
                       persistKey="invoice-template"
                       defaultTemplate="modern"
                       fileName={`${existing.reference || "Facture"}.pdf`}
+                      vaultContext={{
+                        invoiceId: existing.id,
+                        clientId: existing.clientId || undefined,
+                        chantierId: existing.chantierId || undefined,
+                        category: "generated_invoice",
+                      }}
                     />
                   );
                 })()}

@@ -43,7 +43,8 @@ export function VaultPage() {
   const [editDoc, setEditDoc] = useState<VaultDocumentWithTags | null>(null);
 
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [uploadPaths, setUploadPaths] = useState<string[]>([]);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [folderModalOpen, setFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<VaultFolder | null>(null);
@@ -131,28 +132,24 @@ export function VaultPage() {
       return;
     }
 
-    // Récupérer les chemins (Electron expose .path sur les File natifs)
-    const paths = files.map((f: any) => f.path).filter(Boolean);
-    if (paths.length === 0) {
-      toast.error("Impossible de récupérer les chemins des fichiers");
-      return;
-    }
-
-    setUploadPaths(paths);
+    setUploadFiles(files);
     setUploadOpen(true);
   };
 
-  const handleClickAdd = async () => {
+  const handleClickAdd = (): void => {
     if (!selectedFolderId) {
       toast.error("Sélectionnez un dossier d'abord");
       return;
     }
-    if (!window.btpAPI?.vaultPickFiles) return;
-    const r = await window.btpAPI.vaultPickFiles();
-    if (r.success && r.paths.length > 0) {
-      setUploadPaths(r.paths);
-      setUploadOpen(true);
-    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploadFiles(files);
+    setUploadOpen(true);
   };
 
   const handleSearch = (q: string) => {
@@ -350,8 +347,8 @@ export function VaultPage() {
       <UploadModal
         open={uploadOpen}
         folderId={selectedFolderId}
-        filePaths={uploadPaths}
-        onClose={() => { setUploadOpen(false); setUploadPaths([]); }}
+        files={uploadFiles}
+        onClose={() => { setUploadOpen(false); setUploadFiles([]); }}
         onSuccess={() => fetchDocuments(selectedFolderId || undefined)}
       />
       <EditFolderModal
@@ -360,6 +357,14 @@ export function VaultPage() {
         parentId={createParentId}
         onClose={() => setFolderModalOpen(false)}
         onSuccess={() => {}}
+      />
+      {/* Input file caché — déclenché par handleClickAdd */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={handleFileInputChange}
+        className="hidden"
       />
     </div>
   );

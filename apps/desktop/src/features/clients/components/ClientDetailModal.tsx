@@ -13,6 +13,7 @@ import { formatSiret } from "@/lib/sireneService";
 import { useChantiersStore } from "@/stores/chantiersStore";
 import { useQuotesStore } from "@/stores/quotesStore";
 import { LinkedEventsList } from "@/features/agenda/components/LinkedEventsList";
+import { InlineDocumentsSection } from "@/features/vault/components/InlineDocumentsSection";
 import { CHANTIER_STATUS_META, QUOTE_STATUS_META, type Client } from "@btp/types";
 import { CHANTIER_STATUS_ICON } from "@/features/chantiers/statusIcons";
 import { formatEuros } from "@/features/quotes/quoteEngine";
@@ -311,6 +312,16 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
                   </div>
                 )}
               </Section>
+
+              {/* Documents du client */}
+              <div className="pt-2">
+                <InlineDocumentsSection
+                  clientId={client.id}
+                  defaultCategory="client"
+                  title="Documents du client"
+                  description="Devis signés, courriers, échanges, factures…"
+                />
+              </div>
 
               {/* Agenda lié (Session 12) */}
               <div className="pt-2">

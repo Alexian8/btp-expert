@@ -27,7 +27,22 @@ interface VaultState {
   deleteFolder: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // Documents
-  uploadDocument: (params: { folderId: string; sourcePath: string; fileName?: string; description?: string; expirationDate?: string; tags?: any[] }) => Promise<{ success: boolean; id?: string; error?: string }>;
+  uploadDocument: (params: {
+    folderId: string;
+    /** Web : passer le File natif. Desktop legacy : passer sourcePath. */
+    file?: Blob | File;
+    sourcePath?: string;
+    fileName?: string;
+    mimeType?: string;
+    description?: string;
+    expirationDate?: string;
+    tags?: any[];
+    chantierId?: string;
+    clientId?: string;
+    quoteId?: string;
+    invoiceId?: string;
+    category?: string;
+  }) => Promise<{ success: boolean; id?: string; error?: string }>;
   updateDocument: (id: string, data: any) => Promise<{ success: boolean; error?: string }>;
   trashDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
   restoreDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
