@@ -480,7 +480,7 @@ export function installBtpApiShim(): void {
     invoicesConvertFromQuote: async (
       arg1: unknown,
       arg2?: unknown
-    ): Promise<{ success: boolean; id?: string; error?: string }> => {
+    ): Promise<{ success: boolean; id?: string; invoice?: Record<string, unknown>; error?: string }> => {
       // Le code desktop appelle soit invoicesConvertFromQuote(quoteId, options)
       // soit invoicesConvertFromQuote({ quoteId, options }). On accepte les deux.
       let quoteId: string | number;
@@ -565,11 +565,16 @@ export function installBtpApiShim(): void {
           remindersCount: 0,
         };
 
-        const result = await wrapCreate(http("POST", "/api/invoices", payload));
-        if (!result.success) {
-          console.error("[shim] invoicesConvertFromQuote failed:", result.error);
+        // Le code desktop attend `{success, invoice: {id, reference, ...}}`
+        try {
+          const created = (await http<Record<string, unknown>>("POST", "/api/invoices", payload)) as
+            | Record<string, unknown>
+            | null;
+          return { success: true, invoice: created ?? { id: payload.id }, id: payload.id as string };
+        } catch (e) {
+          console.error("[shim] invoicesConvertFromQuote POST failed:", e);
+          return { success: false, error: e instanceof Error ? e.message : "Erreur" };
         }
-        return result;
       } catch (e) {
         console.error("[shim] invoicesConvertFromQuote exception:", e);
         return { success: false, error: e instanceof Error ? e.message : "Erreur" };
