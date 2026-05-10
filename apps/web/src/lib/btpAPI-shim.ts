@@ -571,7 +571,135 @@ export function installBtpApiShim(): void {
     },
   };
 
-  // ─── Toutes les autres méthodes du preload (vault, agenda, etc.) ──────
+  // ─── Expenses (dépenses) ───────────────────────────────────────────────
+  const expensesAPI = {
+    accountingListExpenses: () => httpGet("/api/expenses").catch(() => []),
+    accountingGetExpenseById: (id: string | number) =>
+      httpGet(`/api/expenses/${encodeURIComponent(String(id))}`).catch(() => null),
+    accountingCreateExpense: (data: unknown) =>
+      wrapCreate(http("POST", "/api/expenses", ensureId(data))),
+    accountingUpdateExpense: ({ id, data }: { id: string | number; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/expenses/${encodeURIComponent(String(id))}`, data)),
+    accountingDeleteExpense: (id: string | number) =>
+      wrapAction(http("DELETE", `/api/expenses/${encodeURIComponent(String(id))}`)),
+    accountingMarkExpensePaid: ({
+      id,
+      paidDate,
+      paymentMethod,
+    }: {
+      id: string | number;
+      paidDate?: string;
+      paymentMethod?: string;
+    }) =>
+      wrapAction(
+        http("PATCH", `/api/expenses/${encodeURIComponent(String(id))}`, {
+          isPaid: 1,
+          paidDate,
+          paymentMethod,
+        })
+      ),
+  };
+
+  // ─── Expense notes (notes de frais) ────────────────────────────────────
+  const expenseNotesAPI = {
+    expenseNotesList: () => httpGet("/api/expense-notes").catch(() => []),
+    expenseNotesGetById: (id: string | number) =>
+      httpGet(`/api/expense-notes/${encodeURIComponent(String(id))}`).catch(() => null),
+    expenseNotesCreate: (data: unknown) =>
+      wrapCreate(http("POST", "/api/expense-notes", ensureId(data))),
+    expenseNotesUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/expense-notes/${encodeURIComponent(String(id))}`, data)),
+    expenseNotesDelete: (id: string | number) =>
+      wrapAction(http("DELETE", `/api/expense-notes/${encodeURIComponent(String(id))}`)),
+    expenseNotesValidate: (id: string | number) =>
+      wrapAction(
+        http("PATCH", `/api/expense-notes/${encodeURIComponent(String(id))}`, {
+          isValidated: 1,
+          validatedAt: new Date().toISOString(),
+        })
+      ),
+    expenseNotesMarkReimbursed: ({ id, date }: { id: string | number; date?: string }) =>
+      wrapAction(
+        http("PATCH", `/api/expense-notes/${encodeURIComponent(String(id))}`, {
+          isReimbursed: 1,
+          reimbursedDate: date,
+        })
+      ),
+    expenseNotesListByChantier: async (chantierId: string | number) => {
+      try {
+        const all = (await httpGet<unknown[]>("/api/expense-notes")) as Array<{ chantierId: unknown }>;
+        return all.filter((c) => String(c.chantierId) === String(chantierId));
+      } catch {
+        return [];
+      }
+    },
+  };
+
+  // ─── Subcontractors (sous-traitants) ───────────────────────────────────
+  const subcontractorsAPI = {
+    subcontractorsList: () => httpGet("/api/subcontractors").catch(() => []),
+    subcontractorsGetById: (id: string | number) =>
+      httpGet(`/api/subcontractors/${encodeURIComponent(String(id))}`).catch(() => null),
+    subcontractorsCreate: (data: unknown) =>
+      wrapCreate(http("POST", "/api/subcontractors", ensureId(data))),
+    subcontractorsUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/subcontractors/${encodeURIComponent(String(id))}`, data)),
+    subcontractorsDelete: (id: string | number) =>
+      wrapAction(http("DELETE", `/api/subcontractors/${encodeURIComponent(String(id))}`)),
+  };
+
+  // ─── Agenda events ─────────────────────────────────────────────────────
+  const agendaAPI = {
+    agendaList: () => httpGet("/api/agenda-events").catch(() => []),
+    agendaGetById: (id: string | number) =>
+      httpGet(`/api/agenda-events/${encodeURIComponent(String(id))}`).catch(() => null),
+    agendaCreate: (data: unknown) =>
+      wrapCreate(http("POST", "/api/agenda-events", ensureId(data))),
+    agendaUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/agenda-events/${encodeURIComponent(String(id))}`, data)),
+    agendaDelete: (id: string | number) =>
+      wrapAction(http("DELETE", `/api/agenda-events/${encodeURIComponent(String(id))}`)),
+    agendaListToday: async () => {
+      try {
+        const all = (await httpGet<Array<{ startDate: string }>>("/api/agenda-events")) ?? [];
+        const today = new Date().toISOString().slice(0, 10);
+        return all.filter((e) => e.startDate?.slice(0, 10) === today);
+      } catch {
+        return [];
+      }
+    },
+    agendaListUpcoming: async (days: number = 7) => {
+      try {
+        const all = (await httpGet<Array<{ startDate: string }>>("/api/agenda-events")) ?? [];
+        const now = Date.now();
+        const limit = now + days * 24 * 3600 * 1000;
+        return all.filter((e) => {
+          const t = new Date(e.startDate).getTime();
+          return t >= now && t <= limit;
+        });
+      } catch {
+        return [];
+      }
+    },
+    agendaListByClient: async (clientId: string | number) => {
+      try {
+        const all = (await httpGet<unknown[]>("/api/agenda-events")) as Array<{ clientId: unknown }>;
+        return all.filter((c) => String(c.clientId) === String(clientId));
+      } catch {
+        return [];
+      }
+    },
+    agendaListByChantier: async (chantierId: string | number) => {
+      try {
+        const all = (await httpGet<unknown[]>("/api/agenda-events")) as Array<{ chantierId: unknown }>;
+        return all.filter((c) => String(c.chantierId) === String(chantierId));
+      } catch {
+        return [];
+      }
+    },
+  };
+
+  // ─── Toutes les autres méthodes du preload (vault, etc.) ──────────────
   // On les expose comme stubs doux pour ne pas crasher l'app.
   const allOtherStubs = createStubsFor([
     // Account
@@ -579,9 +707,7 @@ export function installBtpApiShim(): void {
     "updatePassword",
     // PDF Lab
     "pdfGeneratePreview",
-    // Company
-    "companyGet",
-    "companyUpdate",
+    // Company logo (le get/update vrais sont au-dessus)
     "companyUploadLogo",
     "companyDeleteLogo",
     "companyReadLogo",
@@ -640,51 +766,23 @@ export function installBtpApiShim(): void {
     "vaultEnsureClientFolder",
     "vaultEnsureChantierFolder",
     "vaultPickFiles",
-    // Agenda
-    "agendaList",
-    "agendaGetById",
-    "agendaCreate",
-    "agendaUpdate",
-    "agendaDelete",
+    // Agenda : sync Outlook + stats uniquement (CRUD/list câblés au-dessus)
     "agendaSyncAllToOutlook",
     "agendaSyncOne",
     "agendaGetStats",
-    "agendaListToday",
-    "agendaListUpcoming",
-    "agendaListByClient",
-    "agendaListByChantier",
     "agendaEnsureChantierEvent",
     "agendaEnsureSignatureEvent",
-    // Accounting
-    "accountingListExpenses",
-    "accountingGetExpenseById",
-    "accountingCreateExpense",
-    "accountingUpdateExpense",
-    "accountingDeleteExpense",
-    "accountingMarkExpensePaid",
+    // Accounting (les CRUD expenses sont câblés au-dessus, ces stubs sont les stats)
     "accountingGetFinanceStats",
     "accountingGetMonthlyEvolution",
     "accountingGetTopClients",
     "accountingGetTopSuppliers",
     "accountingGetChantierMargins",
     "accountingExportFEC",
-    // Expense Notes
-    "expenseNotesList",
-    "expenseNotesGetById",
-    "expenseNotesCreate",
-    "expenseNotesUpdate",
-    "expenseNotesDelete",
-    "expenseNotesValidate",
-    "expenseNotesMarkReimbursed",
+    // Expense notes : stats & export uniquement (CRUD câblé au-dessus)
     "expenseNotesGetStats",
-    "expenseNotesListByChantier",
     "expenseNotesExportMonth",
-    // Subcontractors
-    "subcontractorsList",
-    "subcontractorsGetById",
-    "subcontractorsCreate",
-    "subcontractorsUpdate",
-    "subcontractorsDelete",
+    // Subcontractors : stats uniquement (CRUD câblé au-dessus)
     "subcontractorsGetStats",
     "subcontractorsListAttestations",
     "subcontractorsCreateAttestation",
@@ -754,6 +852,10 @@ export function installBtpApiShim(): void {
     ...chantiers,
     ...quotes,
     ...invoices,
+    ...expensesAPI,
+    ...expenseNotesAPI,
+    ...subcontractorsAPI,
+    ...agendaAPI,
     ...backup,
     ...microsoft,
     ...allOtherStubs,
