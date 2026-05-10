@@ -1,0 +1,20 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# .htaccess web app — note : pas utilisé en prod sur o2switch !
+#
+# Sur o2switch, c'est cPanel qui régénère le .htaccess du doc root avec la
+# config Passenger. Notre serveur Express sert la SPA via express.static('public').
+#
+# Ce fichier est gardé pour les éventuels déploiements sur des hébergeurs
+# Apache classiques sans Node (ex: serveur statique seul).
+# ═══════════════════════════════════════════════════════════════════════════
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/api(/|$)
+  RewriteRule ^.*$ /index.html [L]
+</IfModule>

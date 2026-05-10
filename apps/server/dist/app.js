@@ -11,6 +11,8 @@ exports.createApp = createApp;
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const node_path_1 = __importDefault(require("node:path"));
+const node_fs_1 = __importDefault(require("node:fs"));
 const db_1 = require("./db");
 const repository_1 = require("./repository");
 const crud_1 = require("./routes/crud");
@@ -163,7 +165,26 @@ async function createApp(cfg, db) {
         }
         res.json(obj);
     }));
-    // 404 handler
+    // ─── Static SPA (web app buildée) ──────────────────────────────────────
+    // Le doc root contient un dossier `public/` créé par le déploiement web
+    // (cp apps/web/dist/* public/). On le sert pour toute requête non-/api.
+    const publicDir = node_path_1.default.resolve(process.cwd(), "public");
+    if (node_fs_1.default.existsSync(publicDir)) {
+        app.use(express_1.default.static(publicDir, { maxAge: "1y", index: false }));
+        // SPA fallback : toute route inconnue (sauf /api/*) → index.html
+        app.get(/^(?!\/api).*/, (_req, res, next) => {
+            const indexPath = node_path_1.default.join(publicDir, "index.html");
+            if (node_fs_1.default.existsSync(indexPath)) {
+                // index.html sans cache pour pousser les nouveaux builds rapidement
+                res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                res.sendFile(indexPath);
+            }
+            else {
+                next();
+            }
+        });
+    }
+    // 404 handler (uniquement /api/* qui n'a pas matché — SPA déjà géré au-dessus)
     app.use((_req, res) => {
         res.status(404).json({ message: "Route inconnue" });
     });

@@ -6,6 +6,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import path from "node:path";
+import fs from "node:fs";
 import type { Config } from "./config";
 import { type DB, createPool, runMigrations } from "./db";
 import { MysqlRepository } from "./repository";
@@ -187,7 +189,26 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     })
   );
 
-  // 404 handler
+  // ─── Static SPA (web app buildée) ──────────────────────────────────────
+  // Le doc root contient un dossier `public/` créé par le déploiement web
+  // (cp apps/web/dist/* public/). On le sert pour toute requête non-/api.
+  const publicDir = path.resolve(process.cwd(), "public");
+  if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir, { maxAge: "1y", index: false }));
+    // SPA fallback : toute route inconnue (sauf /api/*) → index.html
+    app.get(/^(?!\/api).*/, (_req, res, next) => {
+      const indexPath = path.join(publicDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        // index.html sans cache pour pousser les nouveaux builds rapidement
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    });
+  }
+
+  // 404 handler (uniquement /api/* qui n'a pas matché — SPA déjà géré au-dessus)
   app.use((_req, res) => {
     res.status(404).json({ message: "Route inconnue" });
   });
