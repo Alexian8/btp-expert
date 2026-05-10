@@ -43,6 +43,18 @@ const Schema = zod_1.z.object({
     MS_SCOPES: zod_1.z
         .string()
         .default("offline_access User.Read Mail.Send Calendars.ReadWrite Files.ReadWrite.AppFolder"),
+    // ─── cPanel API (création de mailboxes pour les nouveaux users) ──────
+    // Optionnel : si non configuré, BatiDesk crée les users sans mailbox.
+    // CPANEL_HOST     : ex "intranet.jacobhabitat-dev.fr" (le serveur cPanel)
+    // CPANEL_USERNAME : ton login cPanel (ex "mime9297")
+    // CPANEL_API_TOKEN: token généré dans cPanel → Manage API Tokens
+    // CPANEL_EMAIL_DOMAIN  : domaine autorisé (sécurité). Ex : "intranet.jacobhabitat-dev.fr"
+    // CPANEL_EMAIL_QUOTA_MB: quota défaut par mailbox (MB)
+    CPANEL_HOST: zod_1.z.string().default(""),
+    CPANEL_USERNAME: zod_1.z.string().default(""),
+    CPANEL_API_TOKEN: zod_1.z.string().default(""),
+    CPANEL_EMAIL_DOMAIN: zod_1.z.string().default(""),
+    CPANEL_EMAIL_QUOTA_MB: zod_1.z.coerce.number().int().positive().default(250),
     // ─── SMTP (provisioning email + envois transactionnels) ──────────────
     // Si non configuré : sendMail() devient no-op (les credentials sont
     // affichés à l'admin dans la modal de création, pas envoyés par email).

@@ -456,6 +456,9 @@ async function runEnterpriseMigrations(db) {
     await addColumnIfNotExists(db, "users", "disabled", "TINYINT(1) NOT NULL DEFAULT 0");
     await addColumnIfNotExists(db, "users", "mustChangePassword", "TINYINT(1) NOT NULL DEFAULT 0");
     await addColumnIfNotExists(db, "users", "lastLoginAt", "DATETIME NULL");
+    // Indique si une mailbox cPanel a été créée pour ce user (auto-suppression
+    // au hard-delete possible).
+    await addColumnIfNotExists(db, "users", "cpanelEmailCreated", "TINYINT(1) NOT NULL DEFAULT 0");
     await addColumnIfNotExists(db, "users", "updatedAt", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
     // Multi-tenant : companyId sur users (default 1 = tenant existant)
     // NULL = super_admin (pas rattaché à une company)

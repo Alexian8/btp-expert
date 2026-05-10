@@ -31,17 +31,23 @@ export interface CreateUserPayload {
   lastName?: string;
   role: Role;
   password?: string; // si absent, le serveur génère un temp password
+  /** Si true, crée aussi une mailbox cPanel pour cet utilisateur. */
+  createMailbox?: boolean;
 }
 
 export interface CreatedUser extends AdminUser {
-  /** Présent uniquement si le serveur a généré un temp password (à afficher
-   *  une seule fois à l'admin pour qu'il le transmette à l'utilisateur). */
+  /** Présent uniquement si le serveur a généré un temp password. */
   tempPassword?: string;
-  /** True si le serveur a réussi à envoyer l'email de bienvenue.
-   *  False si SMTP non configuré, email vide, ou erreur d'envoi. */
   emailSent?: boolean;
-  /** Raison si emailSent === false (ex: "SMTP non configuré", erreur réseau). */
   emailError?: string;
+  /** True si une mailbox cPanel a été créée avec succès. */
+  mailboxCreated?: boolean;
+  /** Raison si mailboxCreated === false (ex: "domaine non autorisé"). */
+  mailboxError?: string;
+  /** True si la mailbox existait déjà (pas une vraie erreur). */
+  mailboxAlreadyExists?: boolean;
+  /** True si la config cPanel est présente côté serveur (pour l'UI). */
+  cpanelEnabled?: boolean;
 }
 
 const TOKEN_KEY = "btp.web.token";

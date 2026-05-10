@@ -522,6 +522,14 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
     "TINYINT(1) NOT NULL DEFAULT 0"
   );
   await addColumnIfNotExists(db, "users", "lastLoginAt", "DATETIME NULL");
+  // Indique si une mailbox cPanel a été créée pour ce user (auto-suppression
+  // au hard-delete possible).
+  await addColumnIfNotExists(
+    db,
+    "users",
+    "cpanelEmailCreated",
+    "TINYINT(1) NOT NULL DEFAULT 0"
+  );
   await addColumnIfNotExists(
     db,
     "users",

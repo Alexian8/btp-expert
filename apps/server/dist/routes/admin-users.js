@@ -25,6 +25,7 @@ const auth_1 = require("../auth");
 const rbac_1 = require("../rbac");
 const audit_1 = require("../audit");
 const email_1 = require("../email");
+const cpanel_email_1 = require("../cpanel-email");
 const SALT_LEN = 16;
 const KEY_LEN = 64;
 function hashPassword(password) {
@@ -54,6 +55,9 @@ const CreateUserSchema = zod_1.z.object({
     lastName: zod_1.z.string().max(128).optional().default(""),
     role: zod_1.z.enum(rbac_1.ROLES),
     password: zod_1.z.string().min(8).max(256).optional(), // si absent, on génère
+    /** Si true, crée aussi une mailbox cPanel (utilise data.email). Le domaine
+     *  doit matcher CPANEL_EMAIL_DOMAIN configuré côté serveur. */
+    createMailbox: zod_1.z.boolean().optional().default(false),
 });
 const UpdateUserSchema = zod_1.z.object({
     email: zod_1.z.string().email().max(255).optional(),
@@ -164,6 +168,33 @@ function buildAdminUsersRouter(db, cfg) {
                 tempPasswordGenerated: wasGenerated,
             },
         });
+        // ─── Création mailbox cPanel (optionnelle) ─────────────────────────
+        // Si l'admin a coché "Créer une mailbox cPanel" ET que l'email est
+        // dans le domaine autorisé, on crée la boîte mail via UAPI.
+        // Le password de la mailbox = même que le tempPassword BatiDesk
+        // (l'utilisateur les change tous les deux indépendamment ensuite).
+        let mailboxCreated = false;
+        let mailboxError;
+        let mailboxAlreadyExists = false;
+        if (data.createMailbox && created.email) {
+            const r = await (0, cpanel_email_1.createMailbox)(cfg, {
+                email: created.email,
+                password: tempPassword,
+            });
+            mailboxCreated = r.ok;
+            mailboxError = r.error;
+            mailboxAlreadyExists = Boolean(r.alreadyExists);
+            if (r.ok) {
+                await db.execute("UPDATE users SET cpanelEmailCreated = 1 WHERE id = ?", [created.id]);
+                void (0, audit_1.writeAudit)(db, {
+                    ...(0, audit_1.audited)(req),
+                    action: "cpanel_mailbox_created",
+                    resource: "users",
+                    resourceId: String(created.id),
+                    meta: { email: created.email, quotaMB: cfg.CPANEL_EMAIL_QUOTA_MB },
+                });
+            }
+        }
         // ─── Envoi email de bienvenue (best-effort, async) ─────────────────
         // Si SMTP est configuré, on envoie. Sinon le tempPassword est juste
         // affiché dans la modal admin (comme avant).
@@ -178,6 +209,14 @@ function buildAdminUsersRouter(db, cfg) {
                 tempPassword,
                 loginUrl: cfg.APP_URL || "https://intranet.jacobhabitat-dev.fr",
                 companyName,
+                mailbox: mailboxCreated
+                    ? {
+                        email: created.email,
+                        imapHost: cfg.CPANEL_HOST || "intranet.jacobhabitat-dev.fr",
+                        smtpHost: cfg.CPANEL_HOST || "intranet.jacobhabitat-dev.fr",
+                        webmailUrl: `https://${cfg.CPANEL_HOST || "intranet.jacobhabitat-dev.fr"}/webmail`,
+                    }
+                    : undefined,
             });
             const result = await (0, email_1.sendMail)(cfg, {
                 to: created.email,
@@ -194,6 +233,10 @@ function buildAdminUsersRouter(db, cfg) {
             tempPassword: wasGenerated ? tempPassword : undefined,
             emailSent,
             emailError,
+            mailboxCreated,
+            mailboxError,
+            mailboxAlreadyExists,
+            cpanelEnabled: (0, cpanel_email_1.isCpanelConfigured)(cfg),
         });
     }));
     // ─── Modification ─────────────────────────────────────────────────────
@@ -372,7 +415,7 @@ function buildAdminUsersRouter(db, cfg) {
         }
         const tenantId = req.user?.companyId ?? 1;
         // Récupère l'utilisateur cible (scopé tenant)
-        const [targetRows] = await db.query("SELECT id, username, role, email FROM users WHERE id = ? AND companyId = ? LIMIT 1", [id, tenantId]);
+        const [targetRows] = await db.query("SELECT id, username, role, email, cpanelEmailCreated FROM users WHERE id = ? AND companyId = ? LIMIT 1", [id, tenantId]);
         const target = targetRows[0];
         if (!target) {
             res.status(404).json({ message: "Utilisateur introuvable" });
@@ -396,6 +439,24 @@ function buildAdminUsersRouter(db, cfg) {
             res.status(404).json({ message: "Utilisateur introuvable" });
             return;
         }
+        // Si l'utilisateur avait une mailbox cPanel, on la supprime aussi
+        // (best-effort, ne fait pas échouer la suppression user si ça plante).
+        let mailboxDeleted = false;
+        let mailboxDeleteError;
+        if (target.cpanelEmailCreated && target.email) {
+            const r = await (0, cpanel_email_1.deleteMailbox)(cfg, target.email);
+            mailboxDeleted = r.ok;
+            mailboxDeleteError = r.error;
+            if (r.ok) {
+                void (0, audit_1.writeAudit)(db, {
+                    ...(0, audit_1.audited)(req),
+                    action: "cpanel_mailbox_deleted",
+                    resource: "users",
+                    resourceId: String(id),
+                    meta: { email: target.email },
+                });
+            }
+        }
         void (0, audit_1.writeAudit)(db, {
             ...(0, audit_1.audited)(req),
             action: "user_deleted_permanent",
@@ -405,6 +466,8 @@ function buildAdminUsersRouter(db, cfg) {
                 username: target.username,
                 role: target.role,
                 email: target.email ?? "",
+                mailboxDeleted,
+                mailboxDeleteError,
             },
         });
         res.status(204).end();

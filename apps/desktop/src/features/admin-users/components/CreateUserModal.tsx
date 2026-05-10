@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UserPlus, Copy, Check, AlertCircle, Mail, MailX } from "lucide-react";
+import { X, UserPlus, Copy, Check, AlertCircle, Mail, MailX, Inbox } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [role, setRole] = useState<Role>("worker");
+  const [createMailbox, setCreateMailbox] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdUser, setCreatedUser] = useState<CreatedUser | null>(null);
@@ -49,6 +50,7 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
     setFirstName("");
     setLastName("");
     setRole("worker");
+    setCreateMailbox(false);
     setError(null);
     setLoading(false);
     setCreatedUser(null);
@@ -66,6 +68,7 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
         role,
+        createMailbox: createMailbox && Boolean(email.trim()),
         // pas de password fourni → le serveur en génère un
       });
       setCreatedUser(created);
@@ -222,6 +225,43 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
                       </span>
                     </div>
                   </div>
+
+                  {/* Résultat création mailbox cPanel */}
+                  {createdUser.mailboxCreated && (
+                    <div className="flex items-start gap-2 p-3 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-400">
+                      <Inbox className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <strong>Boîte mail cPanel créée</strong>
+                        <p className="mt-0.5 opacity-90">
+                          La mailbox <strong>{createdUser.email}</strong> est active.
+                          Les paramètres IMAP/SMTP sont inclus dans l'email envoyé à
+                          l'utilisateur.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {createdUser.mailboxAlreadyExists && (
+                    <div className="flex items-start gap-2 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <strong>Mailbox déjà existante</strong>
+                        <p className="mt-0.5 opacity-90">
+                          Une boîte mail à cette adresse existait déjà sur cPanel.
+                          Le password n'a PAS été modifié — l'utilisateur garde son
+                          mot de passe mailbox actuel.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {createdUser.mailboxError && !createdUser.mailboxAlreadyExists && (
+                    <div className="flex items-start gap-2 p-3 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-400">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <strong>Échec création mailbox</strong>
+                        <p className="mt-0.5 opacity-90">{createdUser.mailboxError}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4" id="create-user-form">
@@ -272,6 +312,36 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
                       placeholder="jdupont@jacobhabitat.fr"
                     />
                   </div>
+
+                  {/* Création mailbox cPanel — visible uniquement si email rempli */}
+                  {email.trim() && (
+                    <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-border hover:bg-accent/50 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={createMailbox}
+                        onChange={(e) => setCreateMailbox(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded shrink-0 accent-primary"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Inbox className="w-4 h-4 text-primary" />
+                          <span className="font-medium text-sm">
+                            Créer également une boîte mail cPanel
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Une vraie mailbox sera créée sur ton serveur (IMAP + SMTP).
+                          L'utilisateur pourra envoyer/recevoir des emails depuis{" "}
+                          <code className="font-mono bg-muted px-1 py-0.5 rounded text-foreground">
+                            {email.trim()}
+                          </code>
+                          . Le mot de passe sera identique à celui de BatiDesk au
+                          départ. <em>Nécessite la config CPANEL_API_TOKEN côté
+                          serveur, sinon l'option est ignorée.</em>
+                        </p>
+                      </div>
+                    </label>
+                  )}
 
                   <div>
                     <Label className="block mb-2">Rôle *</Label>

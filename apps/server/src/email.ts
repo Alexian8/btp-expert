@@ -309,6 +309,14 @@ export interface WelcomeEmailInput {
   tempPassword: string;
   loginUrl: string;
   companyName?: string;
+  /** Si fourni, ajoute une section avec les paramètres IMAP/SMTP de la
+   *  mailbox cPanel créée pour le user. */
+  mailbox?: {
+    email: string;
+    imapHost: string;
+    smtpHost: string;
+    webmailUrl: string;
+  };
 }
 
 /**
@@ -321,6 +329,28 @@ export function welcomeEmailHtml(opts: WelcomeEmailInput): string {
   const tempPassword = escapeHtml(opts.tempPassword);
   const loginUrl = escapeHtml(opts.loginUrl);
   const companyName = escapeHtml(opts.companyName ?? "BatiDesk");
+
+  // Section optionnelle "Mailbox cPanel"
+  const mailboxBlock = opts.mailbox
+    ? `
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin:16px 0;">
+                <tr>
+                  <td style="padding:20px;">
+                    <div style="font-size:13px;font-weight:600;color:#1e3a8a;margin-bottom:8px;">📬 Votre boîte mail professionnelle</div>
+                    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px;">Adresse email</div>
+                    <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#0f172a;margin-bottom:12px;">${escapeHtml(opts.mailbox.email)}</div>
+                    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px;">Mot de passe mailbox</div>
+                    <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#0f172a;margin-bottom:12px;">Identique au mot de passe BatiDesk ci-dessus</div>
+                    <div style="font-size:12px;line-height:1.6;color:#475569;margin-top:12px;border-top:1px solid #bfdbfe;padding-top:12px;">
+                      <strong>Webmail :</strong> <a href="${escapeHtml(opts.mailbox.webmailUrl)}" style="color:#2563eb;">${escapeHtml(opts.mailbox.webmailUrl)}</a><br>
+                      <strong>IMAP entrant :</strong> ${escapeHtml(opts.mailbox.imapHost)} · port 993 (SSL)<br>
+                      <strong>SMTP sortant :</strong> ${escapeHtml(opts.mailbox.smtpHost)} · port 465 (SSL)<br>
+                      <strong>Username :</strong> ${escapeHtml(opts.mailbox.email)}
+                    </div>
+                  </td>
+                </tr>
+              </table>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -362,7 +392,7 @@ export function welcomeEmailHtml(opts: WelcomeEmailInput): string {
 
               <p style="margin:0 0 24px 0;font-size:14px;line-height:1.6;color:#475569;">
                 <strong>Pour votre sécurité, vous devrez changer ce mot de passe à la première connexion.</strong>
-              </p>
+              </p>${mailboxBlock}
 
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px 0;">
                 <tr>
