@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { pdf } from "@react-pdf/renderer";
 import { Eye, Download, FileText, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -111,39 +112,43 @@ export function PdfActions({ document: doc, fileName, onDownloaded, compact = fa
         </Button>
       </div>
 
-      {/* Modal preview avec iframe PDF */}
-      {previewUrl && (
-        <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-          onClick={closePreview}
-        >
+      {/* Modal preview avec iframe PDF — Portal pour échapper au containing
+          block créé par motion.div / transform de framer-motion */}
+      {previewUrl &&
+        createPortal(
           <div
-            className="bg-card border border-border rounded-lg shadow-soft-xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex items-center justify-center p-2 sm:p-4"
+            onClick={closePreview}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/40">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">{fileName}</span>
+            <div
+              className="bg-card border border-border rounded-lg shadow-soft-xl w-full max-w-5xl h-[95vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/40 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-primary shrink-0" />
+                  <span className="text-sm font-medium truncate">{fileName}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={handleDownload}>
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Télécharger</span>
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={closePreview} title="Fermer">
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleDownload}>
-                  <Download className="w-3.5 h-3.5" />
-                  Télécharger
-                </Button>
-                <Button variant="ghost" size="icon" onClick={closePreview} title="Fermer">
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
+              <iframe
+                src={previewUrl}
+                title="Aperçu PDF"
+                className="flex-1 w-full border-none bg-white"
+                style={{ minHeight: 0 }}
+              />
             </div>
-            <iframe
-              src={previewUrl}
-              title="Aperçu PDF"
-              className="flex-1 w-full bg-muted/20 border-none"
-            />
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }
