@@ -25,6 +25,7 @@ import { PurchaseOrderDetailPage } from "@/features/purchase-orders/components/P
 import { StatisticsPage } from "@/features/stats/components/StatisticsPage";
 import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
 import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
+import { LogsPage } from "@/features/admin-logs/components/LogsPage";
 import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -171,6 +172,14 @@ const router = createBrowserRouter(
           element: (
             <AdminOnlyRoute>
               <UsersAdminPage />
+            </AdminOnlyRoute>
+          ),
+        },
+        {
+          path: "admin/logs",
+          element: (
+            <AdminOnlyRoute>
+              <LogsPage />
             </AdminOnlyRoute>
           ),
         },

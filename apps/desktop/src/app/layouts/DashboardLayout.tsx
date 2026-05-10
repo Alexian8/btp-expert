@@ -349,6 +349,10 @@ export function DashboardLayout() {
                       <UserIcon className="w-4 h-4" />
                       <span>Gestion utilisateurs</span>
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/admin/logs")}>
+                      <Activity className="w-4 h-4" />
+                      <span>Journal d'activité</span>
+                    </DropdownMenuItem>
                   </>
                 )}
                 <DropdownMenuSeparator />

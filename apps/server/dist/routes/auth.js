@@ -13,6 +13,7 @@ const express_1 = require("express");
 const zod_1 = require("zod");
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const auth_1 = require("../auth");
+const audit_1 = require("../audit");
 const SALT_LEN = 16;
 const KEY_LEN = 64;
 function hashPassword(password) {
@@ -48,9 +49,20 @@ function buildAuthRouter(db, cfg) {
                 email, firstName, lastName
          FROM users WHERE username = ? LIMIT 1`, [parsed.data.username]);
         const row = rows[0];
+        const ip = req.ip ?? "";
+        const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
         if (!row || !verifyPassword(parsed.data.password, row.passwordHash)) {
-            // Audit : log les échecs (sans exposer l'existence/non-existence du compte)
-            console.warn(`[auth] LOGIN FAIL ip=${req.ip} username=${parsed.data.username} reason=${!row ? "unknown_user" : "bad_password"}`);
+            const reason = !row ? "unknown_user" : "bad_password";
+            console.warn(`[auth] LOGIN FAIL ip=${ip} username=${parsed.data.username} reason=${reason}`);
+            // Audit DB
+            void (0, audit_1.writeAudit)(db, {
+                userId: row?.id ?? null,
+                username: parsed.data.username,
+                action: "login_fail",
+                ip,
+                userAgent,
+                meta: { reason },
+            });
             // Délai constant pour éviter timing attack (existence du compte)
             await new Promise((r) => setTimeout(r, 200));
             res.status(401).json({ message: "Identifiants invalides" });
@@ -58,11 +70,27 @@ function buildAuthRouter(db, cfg) {
         }
         // Compte désactivé : refuser même si le password est correct
         if (row.disabled) {
-            console.warn(`[auth] LOGIN BLOCKED disabled account ip=${req.ip} username=${parsed.data.username}`);
+            console.warn(`[auth] LOGIN BLOCKED disabled account ip=${ip} username=${parsed.data.username}`);
+            void (0, audit_1.writeAudit)(db, {
+                userId: row.id,
+                username: row.username,
+                action: "login_blocked",
+                ip,
+                userAgent,
+                meta: { reason: "disabled" },
+            });
             res.status(403).json({ message: "Compte désactivé. Contactez un administrateur." });
             return;
         }
-        console.log(`[auth] LOGIN OK ip=${req.ip} username=${row.username} role=${row.role}`);
+        console.log(`[auth] LOGIN OK ip=${ip} username=${row.username} role=${row.role}`);
+        void (0, audit_1.writeAudit)(db, {
+            userId: row.id,
+            username: row.username,
+            action: "login_ok",
+            ip,
+            userAgent,
+            meta: { role: row.role },
+        });
         // Met à jour lastLoginAt (best-effort, ne bloque pas la réponse)
         db.execute("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?", [row.id]).catch((e) => console.warn("[auth] update lastLoginAt failed:", e));
         const payload = { sub: row.id, username: row.username, role: row.role };
@@ -107,6 +135,14 @@ function buildAuthRouter(db, cfg) {
         }
         const newHash = hashPassword(parsed.data.newPassword);
         await db.execute("UPDATE users SET passwordHash = ?, mustChangePassword = 0 WHERE id = ?", [newHash, row.id]);
+        void (0, audit_1.writeAudit)(db, {
+            userId: payload.sub,
+            username: payload.username,
+            action: "change_password",
+            ip: req.ip ?? "",
+            userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+            meta: null,
+        });
         res.status(204).end();
     }));
     router.post("/logout", (_req, res) => {

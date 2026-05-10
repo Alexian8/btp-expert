@@ -18,6 +18,7 @@ import crypto from "node:crypto";
 import type { DB, RowDataPacket, ResultSetHeader } from "../db";
 import { requireAuth } from "../auth";
 import { requireRole, ROLES, isValidRole } from "../rbac";
+import { writeAudit, audited } from "../audit";
 import type { Config } from "../config";
 
 const SALT_LEN = 16;
@@ -194,6 +195,19 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         [result.insertId]
       );
       const created = rows[0]!;
+
+      void writeAudit(db, {
+        ...audited(req),
+        action: "user_created",
+        resource: "users",
+        resourceId: String(created.id),
+        meta: {
+          username: created.username,
+          role: created.role,
+          tempPasswordGenerated: wasGenerated,
+        },
+      });
+
       res.status(201).json({
         ...publicUser(created),
         // ⚠️ Le mot de passe temporaire n'est exposé QU'À LA CRÉATION,
@@ -251,6 +265,13 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(400).json({ message: "Aucun champ modifiable fourni" });
         return;
       }
+      // Snapshot avant pour traquer les vrais changements
+      const [beforeRows] = await db.query<UserRow[]>(
+        "SELECT role, disabled, email, firstName, lastName FROM users WHERE id = ? LIMIT 1",
+        [id]
+      );
+      const before = beforeRows[0];
+
       values.push(id);
       await db.execute(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, values as never[]);
 
@@ -266,6 +287,43 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(404).json({ message: "Utilisateur introuvable" });
         return;
       }
+
+      // Logs spécifiques selon le type de changement
+      if (before && parsed.data.role && parsed.data.role !== before.role) {
+        void writeAudit(db, {
+          ...audited(req),
+          action: "user_role_changed",
+          resource: "users",
+          resourceId: String(id),
+          meta: {
+            username: row.username,
+            oldRole: before.role,
+            newRole: parsed.data.role,
+          },
+        });
+      }
+      if (before && parsed.data.disabled !== undefined && Boolean(before.disabled) !== parsed.data.disabled) {
+        void writeAudit(db, {
+          ...audited(req),
+          action: parsed.data.disabled ? "user_disabled" : "user_enabled",
+          resource: "users",
+          resourceId: String(id),
+          meta: { username: row.username },
+        });
+      }
+      const otherFieldsChanged = Object.keys(parsed.data).filter(
+        (k) => k !== "role" && k !== "disabled"
+      );
+      if (otherFieldsChanged.length > 0) {
+        void writeAudit(db, {
+          ...audited(req),
+          action: "user_updated",
+          resource: "users",
+          resourceId: String(id),
+          meta: { username: row.username, changedFields: otherFieldsChanged },
+        });
+      }
+
       res.json(publicUser(row));
     })
   );
@@ -289,6 +347,18 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(404).json({ message: "Utilisateur introuvable" });
         return;
       }
+      // Récupérer username pour log lisible
+      const [rows] = await db.query<UserRow[]>(
+        "SELECT username FROM users WHERE id = ? LIMIT 1",
+        [id]
+      );
+      void writeAudit(db, {
+        ...audited(req),
+        action: "user_password_reset",
+        resource: "users",
+        resourceId: String(id),
+        meta: { username: rows[0]?.username ?? "" },
+      });
       res.json({ tempPassword });
     })
   );
@@ -308,6 +378,10 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
           .json({ message: "Impossible de désactiver votre propre compte" });
         return;
       }
+      const [beforeRows] = await db.query<UserRow[]>(
+        "SELECT username FROM users WHERE id = ? LIMIT 1",
+        [id]
+      );
       const [result] = await db.execute<ResultSetHeader>(
         "UPDATE users SET disabled = 1 WHERE id = ?",
         [id]
@@ -316,6 +390,13 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(404).json({ message: "Utilisateur introuvable" });
         return;
       }
+      void writeAudit(db, {
+        ...audited(req),
+        action: "user_disabled",
+        resource: "users",
+        resourceId: String(id),
+        meta: { username: beforeRows[0]?.username ?? "" },
+      });
       res.status(204).end();
     })
   );

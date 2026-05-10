@@ -10,12 +10,13 @@
 //   DELETE /:id         → delete
 //
 // SÉCURITÉ : `createdBy` / `updatedBy` ne sont JAMAIS lus depuis req.body.
-// Le middleware d'auth (requireAuth) populate req.user à partir du JWT
-// vérifié, et c'est cette valeur (req.user.sub) qui est passée au repo.
+// AUDIT : chaque create/update/delete est loggé en DB via writeAudit (best-effort).
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import type { MysqlRepository } from "../repository";
+import type { DB } from "../db";
+import { writeAudit, audited } from "../audit";
 
 const wrap =
   (handler: (req: Request, res: Response) => Promise<void>) =>
@@ -23,8 +24,16 @@ const wrap =
     handler(req, res).catch(next);
   };
 
+export interface CrudRouterOptions {
+  /** Pool MySQL — requis si on veut activer l'audit log. */
+  db?: DB;
+  /** Nom de la ressource pour les logs (ex: "quotes", "invoices"). */
+  resourceName?: string;
+}
+
 export function buildCrudRouter<T extends Record<string, unknown> & { id?: number }>(
-  repo: MysqlRepository<T>
+  repo: MysqlRepository<T>,
+  opts: CrudRouterOptions = {}
 ): Router {
   const router = Router();
 
@@ -59,10 +68,21 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
     "/",
     wrap(async (req, res) => {
       try {
-        // SÉCURITÉ : on lit l'ID utilisateur depuis le JWT vérifié, JAMAIS du body
         const auditUserId = req.user?.sub;
         const created = await repo.create(req.body ?? {}, auditUserId);
         res.status(201).json(created);
+
+        // Audit (best-effort, après réponse client pour ne pas la retarder)
+        if (opts.db && opts.resourceName) {
+          const id = (created as { id?: unknown }).id;
+          void writeAudit(opts.db, {
+            ...audited(req),
+            action: "create",
+            resource: opts.resourceName,
+            resourceId: id != null ? String(id) : "",
+            meta: extractKeyFields(req.body, opts.resourceName),
+          });
+        }
       } catch (e) {
         res.status(400).json({ message: e instanceof Error ? e.message : "Bad request" });
       }
@@ -79,20 +99,87 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
         return;
       }
       res.json(updated);
+
+      if (opts.db && opts.resourceName) {
+        // On log juste les noms de champs modifiés (pas les valeurs — RGPD-friendly
+        // et évite de stocker du PII dans les logs).
+        const changedFields = Object.keys(req.body ?? {}).filter(
+          (k) => k !== "id" && k !== "createdBy" && k !== "updatedBy"
+        );
+        void writeAudit(opts.db, {
+          ...audited(req),
+          action: "update",
+          resource: opts.resourceName,
+          resourceId: String(req.params.id),
+          meta: { changedFields },
+        });
+      }
     })
   );
 
   router.delete(
     "/:id",
     wrap(async (req, res) => {
+      // Capturer un snapshot avant delete pour avoir le contexte dans le log
+      let snapshot: Record<string, unknown> | null = null;
+      if (opts.db && opts.resourceName) {
+        try {
+          const before = await repo.findById(String(req.params.id));
+          snapshot = before ? extractKeyFields(before, opts.resourceName) : null;
+        } catch {
+          /* best-effort */
+        }
+      }
+
       const ok = await repo.delete(String(req.params.id));
       if (!ok) {
         res.status(404).json({ message: "Not found" });
         return;
       }
       res.status(204).end();
+
+      if (opts.db && opts.resourceName) {
+        void writeAudit(opts.db, {
+          ...audited(req),
+          action: "delete",
+          resource: opts.resourceName,
+          resourceId: String(req.params.id),
+          meta: snapshot ? { snapshot } : null,
+        });
+      }
     })
   );
 
   return router;
+}
+
+/**
+ * Extrait les champs "lisibles" d'une ressource pour le log audit.
+ * Évite de stocker des items JSON volumineux ou du PII détaillé.
+ */
+function extractKeyFields(
+  data: unknown,
+  resource: string
+): Record<string, unknown> {
+  if (!data || typeof data !== "object") return {};
+  const d = data as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  // Champs intéressants pour identifier la ressource dans les logs
+  const ALLOW: Record<string, string[]> = {
+    quotes: ["reference", "title", "status", "totalTTC", "clientId"],
+    invoices: ["reference", "title", "status", "type", "totalTTC", "clientId"],
+    clients: ["firstName", "lastName", "companyName", "email", "type"],
+    suppliers: ["companyName", "email", "category"],
+    chantiers: ["reference", "title", "status", "clientId"],
+    expenses: ["label", "amount", "category"],
+    expense_notes: ["label", "amount", "category"],
+    subcontractors: ["companyName", "email"],
+    agenda_events: ["title", "type", "startDate"],
+    invoice_payments: ["invoiceId", "amount", "method"],
+  };
+  const keys = ALLOW[resource] ?? [];
+  for (const k of keys) {
+    if (k in d) out[k] = d[k];
+  }
+  return out;
 }

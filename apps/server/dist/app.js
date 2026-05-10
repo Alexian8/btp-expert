@@ -20,6 +20,7 @@ const auth_1 = require("./routes/auth");
 const backup_1 = require("./routes/backup");
 const microsoft_1 = require("./routes/microsoft");
 const admin_users_1 = require("./routes/admin-users");
+const admin_logs_1 = require("./routes/admin-logs");
 const auth_2 = require("./auth");
 const rate_limit_1 = require("./rate-limit");
 // ─── Listes de colonnes ──────────────────────────────────────────────────
@@ -189,6 +190,8 @@ async function createApp(cfg, db) {
     app.use("/api/auth", (0, auth_1.buildAuthRouter)(pool, cfg));
     // ─── Admin : gestion utilisateurs (admin only) ─────────────────────────
     app.use("/api/admin/users", (0, admin_users_1.buildAdminUsersRouter)(pool, cfg));
+    // ─── Admin : audit logs (admin only) ────────────────────────────────────
+    app.use("/api/admin/logs", (0, admin_logs_1.buildAdminLogsRouter)(pool, cfg));
     const auth = (0, auth_2.requireAuth)(cfg);
     // ─── Clients ───────────────────────────────────────────────────────────
     const clients = new repository_1.MysqlRepository(pool, "clients", {
@@ -200,7 +203,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/clients", auth, (0, crud_1.buildCrudRouter)(clients));
+    app.use("/api/clients", auth, (0, crud_1.buildCrudRouter)(clients, { db: pool, resourceName: "clients" }));
     // ─── Suppliers ─────────────────────────────────────────────────────────
     const suppliers = new repository_1.MysqlRepository(pool, "suppliers", {
         primaryKey: "client",
@@ -211,9 +214,9 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/suppliers", auth, (0, crud_1.buildCrudRouter)(suppliers));
+    app.use("/api/suppliers", auth, (0, crud_1.buildCrudRouter)(suppliers, { db: pool, resourceName: "suppliers" }));
     // Alias rétro-compatible
-    app.use("/api/fournisseurs", auth, (0, crud_1.buildCrudRouter)(suppliers));
+    app.use("/api/fournisseurs", auth, (0, crud_1.buildCrudRouter)(suppliers, { db: pool, resourceName: "suppliers" }));
     // ─── Chantiers ─────────────────────────────────────────────────────────
     const chantiers = new repository_1.MysqlRepository(pool, "chantiers", {
         primaryKey: "client",
@@ -224,7 +227,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/chantiers", auth, (0, crud_1.buildCrudRouter)(chantiers));
+    app.use("/api/chantiers", auth, (0, crud_1.buildCrudRouter)(chantiers, { db: pool, resourceName: "chantiers" }));
     // ─── Quotes ────────────────────────────────────────────────────────────
     const quotes = new repository_1.MysqlRepository(pool, "quotes", {
         primaryKey: "client",
@@ -235,7 +238,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/quotes", auth, (0, crud_1.buildCrudRouter)(quotes));
+    app.use("/api/quotes", auth, (0, crud_1.buildCrudRouter)(quotes, { db: pool, resourceName: "quotes" }));
     // ─── Invoices ──────────────────────────────────────────────────────────
     const invoices = new repository_1.MysqlRepository(pool, "invoices", {
         primaryKey: "client",
@@ -246,7 +249,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices));
+    app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices, { db: pool, resourceName: "invoices" }));
     // ─── Invoice payments ──────────────────────────────────────────────────
     const invoicePayments = new repository_1.MysqlRepository(pool, "invoice_payments", {
         primaryKey: "client",
@@ -255,7 +258,7 @@ async function createApp(cfg, db) {
         writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
         hasAuditColumns: true,
     });
-    app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments));
+    app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments, { db: pool, resourceName: "invoice_payments" }));
     // ─── Expenses ──────────────────────────────────────────────────────────
     const expenses = new repository_1.MysqlRepository(pool, "expenses", {
         primaryKey: "client",
@@ -277,7 +280,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses));
+    app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses, { db: pool, resourceName: "expenses" }));
     // ─── Expense notes ─────────────────────────────────────────────────────
     const expenseNotes = new repository_1.MysqlRepository(pool, "expense_notes", {
         primaryKey: "client",
@@ -300,7 +303,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/expense-notes", auth, (0, crud_1.buildCrudRouter)(expenseNotes));
+    app.use("/api/expense-notes", auth, (0, crud_1.buildCrudRouter)(expenseNotes, { db: pool, resourceName: "expense_notes" }));
     // ─── Subcontractors ────────────────────────────────────────────────────
     const subcontractors = new repository_1.MysqlRepository(pool, "subcontractors", {
         primaryKey: "client",
@@ -333,7 +336,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/subcontractors", auth, (0, crud_1.buildCrudRouter)(subcontractors));
+    app.use("/api/subcontractors", auth, (0, crud_1.buildCrudRouter)(subcontractors, { db: pool, resourceName: "subcontractors" }));
     // ─── Agenda events ─────────────────────────────────────────────────────
     const agendaEvents = new repository_1.MysqlRepository(pool, "agenda_events", {
         primaryKey: "client",
@@ -356,7 +359,7 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
         hasAuditColumns: true,
     });
-    app.use("/api/agenda-events", auth, (0, crud_1.buildCrudRouter)(agendaEvents));
+    app.use("/api/agenda-events", auth, (0, crud_1.buildCrudRouter)(agendaEvents, { db: pool, resourceName: "agenda_events" }));
     // ─── Public route : liste compacte des users (id+nom+role) ────────────
     // Pour afficher "Créé par X" dans les listes Devis/Factures sans donner
     // accès à toute la table users (réservée aux admins via /api/admin/users).

@@ -16,6 +16,7 @@ import { buildAuthRouter } from "./routes/auth";
 import { buildBackupRouter } from "./routes/backup";
 import { buildMicrosoftRouter, buildEmailRouter } from "./routes/microsoft";
 import { buildAdminUsersRouter } from "./routes/admin-users";
+import { buildAdminLogsRouter } from "./routes/admin-logs";
 import { requireAuth } from "./auth";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
 
@@ -208,6 +209,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // ─── Admin : gestion utilisateurs (admin only) ─────────────────────────
   app.use("/api/admin/users", buildAdminUsersRouter(pool, cfg));
 
+  // ─── Admin : audit logs (admin only) ────────────────────────────────────
+  app.use("/api/admin/logs", buildAdminLogsRouter(pool, cfg));
+
   const auth = requireAuth(cfg);
 
   // ─── Clients ───────────────────────────────────────────────────────────
@@ -220,7 +224,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/clients", auth, buildCrudRouter(clients));
+  app.use("/api/clients", auth, buildCrudRouter(clients, { db: pool, resourceName: "clients" }));
 
   // ─── Suppliers ─────────────────────────────────────────────────────────
   const suppliers = new MysqlRepository(pool, "suppliers", {
@@ -232,9 +236,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/suppliers", auth, buildCrudRouter(suppliers));
+  app.use("/api/suppliers", auth, buildCrudRouter(suppliers, { db: pool, resourceName: "suppliers" }));
   // Alias rétro-compatible
-  app.use("/api/fournisseurs", auth, buildCrudRouter(suppliers));
+  app.use("/api/fournisseurs", auth, buildCrudRouter(suppliers, { db: pool, resourceName: "suppliers" }));
 
   // ─── Chantiers ─────────────────────────────────────────────────────────
   const chantiers = new MysqlRepository(pool, "chantiers", {
@@ -246,7 +250,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/chantiers", auth, buildCrudRouter(chantiers));
+  app.use("/api/chantiers", auth, buildCrudRouter(chantiers, { db: pool, resourceName: "chantiers" }));
 
   // ─── Quotes ────────────────────────────────────────────────────────────
   const quotes = new MysqlRepository(pool, "quotes", {
@@ -258,7 +262,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/quotes", auth, buildCrudRouter(quotes));
+  app.use("/api/quotes", auth, buildCrudRouter(quotes, { db: pool, resourceName: "quotes" }));
 
   // ─── Invoices ──────────────────────────────────────────────────────────
   const invoices = new MysqlRepository(pool, "invoices", {
@@ -270,7 +274,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/invoices", auth, buildCrudRouter(invoices));
+  app.use("/api/invoices", auth, buildCrudRouter(invoices, { db: pool, resourceName: "invoices" }));
 
   // ─── Invoice payments ──────────────────────────────────────────────────
   const invoicePayments = new MysqlRepository(pool, "invoice_payments", {
@@ -280,7 +284,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
     hasAuditColumns: true,
   });
-  app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments));
+  app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments, { db: pool, resourceName: "invoice_payments" }));
 
   // ─── Expenses ──────────────────────────────────────────────────────────
   const expenses = new MysqlRepository(pool, "expenses", {
@@ -303,7 +307,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/expenses", auth, buildCrudRouter(expenses));
+  app.use("/api/expenses", auth, buildCrudRouter(expenses, { db: pool, resourceName: "expenses" }));
 
   // ─── Expense notes ─────────────────────────────────────────────────────
   const expenseNotes = new MysqlRepository(pool, "expense_notes", {
@@ -327,7 +331,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/expense-notes", auth, buildCrudRouter(expenseNotes));
+  app.use("/api/expense-notes", auth, buildCrudRouter(expenseNotes, { db: pool, resourceName: "expense_notes" }));
 
   // ─── Subcontractors ────────────────────────────────────────────────────
   const subcontractors = new MysqlRepository(pool, "subcontractors", {
@@ -361,7 +365,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/subcontractors", auth, buildCrudRouter(subcontractors));
+  app.use("/api/subcontractors", auth, buildCrudRouter(subcontractors, { db: pool, resourceName: "subcontractors" }));
 
   // ─── Agenda events ─────────────────────────────────────────────────────
   const agendaEvents = new MysqlRepository(pool, "agenda_events", {
@@ -385,7 +389,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
     hasAuditColumns: true,
   });
-  app.use("/api/agenda-events", auth, buildCrudRouter(agendaEvents));
+  app.use("/api/agenda-events", auth, buildCrudRouter(agendaEvents, { db: pool, resourceName: "agenda_events" }));
 
   // ─── Public route : liste compacte des users (id+nom+role) ────────────
   // Pour afficher "Créé par X" dans les listes Devis/Factures sans donner

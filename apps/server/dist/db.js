@@ -338,6 +338,23 @@ async function runMigrations(db) {
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_subcontractors_siret (siret)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Audit logs ────────────────────────────────────────────────────────
+        `CREATE TABLE IF NOT EXISTS audit_logs (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      userId INT NULL,
+      username VARCHAR(64) DEFAULT '',
+      action VARCHAR(64) NOT NULL,
+      resource VARCHAR(64) DEFAULT '',
+      resourceId VARCHAR(64) DEFAULT '',
+      ip VARCHAR(64) DEFAULT '',
+      userAgent VARCHAR(512) DEFAULT '',
+      meta JSON,
+      INDEX idx_audit_timestamp (timestamp),
+      INDEX idx_audit_userId (userId),
+      INDEX idx_audit_action (action),
+      INDEX idx_audit_resource (resource)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
         // ─── Agenda events ─────────────────────────────────────────────────────
         `CREATE TABLE IF NOT EXISTS agenda_events (
       id VARCHAR(64) PRIMARY KEY,

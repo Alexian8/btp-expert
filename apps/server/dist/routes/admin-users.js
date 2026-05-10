@@ -23,6 +23,7 @@ const zod_1 = require("zod");
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const auth_1 = require("../auth");
 const rbac_1 = require("../rbac");
+const audit_1 = require("../audit");
 const SALT_LEN = 16;
 const KEY_LEN = 64;
 function hashPassword(password) {
@@ -144,6 +145,17 @@ function buildAdminUsersRouter(db, cfg) {
                 createdAt, updatedAt
          FROM users WHERE id = ? LIMIT 1`, [result.insertId]);
         const created = rows[0];
+        void (0, audit_1.writeAudit)(db, {
+            ...(0, audit_1.audited)(req),
+            action: "user_created",
+            resource: "users",
+            resourceId: String(created.id),
+            meta: {
+                username: created.username,
+                role: created.role,
+                tempPasswordGenerated: wasGenerated,
+            },
+        });
         res.status(201).json({
             ...publicUser(created),
             // ⚠️ Le mot de passe temporaire n'est exposé QU'À LA CRÉATION,
@@ -194,6 +206,9 @@ function buildAdminUsersRouter(db, cfg) {
             res.status(400).json({ message: "Aucun champ modifiable fourni" });
             return;
         }
+        // Snapshot avant pour traquer les vrais changements
+        const [beforeRows] = await db.query("SELECT role, disabled, email, firstName, lastName FROM users WHERE id = ? LIMIT 1", [id]);
+        const before = beforeRows[0];
         values.push(id);
         await db.execute(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, values);
         const [rows] = await db.query(`SELECT id, username, email, firstName, lastName, avatarUrl,
@@ -204,6 +219,39 @@ function buildAdminUsersRouter(db, cfg) {
         if (!row) {
             res.status(404).json({ message: "Utilisateur introuvable" });
             return;
+        }
+        // Logs spécifiques selon le type de changement
+        if (before && parsed.data.role && parsed.data.role !== before.role) {
+            void (0, audit_1.writeAudit)(db, {
+                ...(0, audit_1.audited)(req),
+                action: "user_role_changed",
+                resource: "users",
+                resourceId: String(id),
+                meta: {
+                    username: row.username,
+                    oldRole: before.role,
+                    newRole: parsed.data.role,
+                },
+            });
+        }
+        if (before && parsed.data.disabled !== undefined && Boolean(before.disabled) !== parsed.data.disabled) {
+            void (0, audit_1.writeAudit)(db, {
+                ...(0, audit_1.audited)(req),
+                action: parsed.data.disabled ? "user_disabled" : "user_enabled",
+                resource: "users",
+                resourceId: String(id),
+                meta: { username: row.username },
+            });
+        }
+        const otherFieldsChanged = Object.keys(parsed.data).filter((k) => k !== "role" && k !== "disabled");
+        if (otherFieldsChanged.length > 0) {
+            void (0, audit_1.writeAudit)(db, {
+                ...(0, audit_1.audited)(req),
+                action: "user_updated",
+                resource: "users",
+                resourceId: String(id),
+                meta: { username: row.username, changedFields: otherFieldsChanged },
+            });
         }
         res.json(publicUser(row));
     }));
@@ -221,6 +269,15 @@ function buildAdminUsersRouter(db, cfg) {
             res.status(404).json({ message: "Utilisateur introuvable" });
             return;
         }
+        // Récupérer username pour log lisible
+        const [rows] = await db.query("SELECT username FROM users WHERE id = ? LIMIT 1", [id]);
+        void (0, audit_1.writeAudit)(db, {
+            ...(0, audit_1.audited)(req),
+            action: "user_password_reset",
+            resource: "users",
+            resourceId: String(id),
+            meta: { username: rows[0]?.username ?? "" },
+        });
         res.json({ tempPassword });
     }));
     // ─── Soft-delete (désactivation) ──────────────────────────────────────
@@ -236,11 +293,19 @@ function buildAdminUsersRouter(db, cfg) {
                 .json({ message: "Impossible de désactiver votre propre compte" });
             return;
         }
+        const [beforeRows] = await db.query("SELECT username FROM users WHERE id = ? LIMIT 1", [id]);
         const [result] = await db.execute("UPDATE users SET disabled = 1 WHERE id = ?", [id]);
         if (result.affectedRows === 0) {
             res.status(404).json({ message: "Utilisateur introuvable" });
             return;
         }
+        void (0, audit_1.writeAudit)(db, {
+            ...(0, audit_1.audited)(req),
+            action: "user_disabled",
+            resource: "users",
+            resourceId: String(id),
+            meta: { username: beforeRows[0]?.username ?? "" },
+        });
         res.status(204).end();
     }));
     return router;
