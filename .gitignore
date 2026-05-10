@@ -11,6 +11,10 @@ build/
 */dist_electron/
 */build/
 
+# EXCEPTION : on commit le dist/ du serveur (déployé sur o2switch sans tsc)
+!apps/server/dist/
+!apps/server/dist/**
+
 # IDE
 .vscode/
 .idea/
