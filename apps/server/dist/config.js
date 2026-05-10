@@ -15,8 +15,18 @@ const Schema = zod_1.z.object({
         .split(",")
         .map((o) => o.trim())
         .filter(Boolean)),
-    JWT_SECRET: zod_1.z.string().min(16, "JWT_SECRET doit faire ≥ 16 caractères"),
+    JWT_SECRET: zod_1.z
+        .string()
+        .min(32, "JWT_SECRET doit faire ≥ 32 caractères (recommandé : 64 bytes hex)")
+        .refine((s) => !/^(secret|change.?me|password|test)/i.test(s), {
+        message: "JWT_SECRET trop faible (mots interdits)",
+    }),
     JWT_EXPIRES_IN: zod_1.z.string().default("7d"),
+    // ─── Rate limiting ───────────────────────────────────────────────────
+    RATE_LIMIT_LOGIN_MAX: zod_1.z.coerce.number().int().positive().default(5),
+    RATE_LIMIT_LOGIN_WINDOW_MIN: zod_1.z.coerce.number().int().positive().default(15),
+    RATE_LIMIT_API_MAX: zod_1.z.coerce.number().int().positive().default(300),
+    RATE_LIMIT_API_WINDOW_MIN: zod_1.z.coerce.number().int().positive().default(1),
     // ─── MySQL ─────────────────────────────────────────────────────────────
     MYSQL_HOST: zod_1.z.string().default("localhost"),
     MYSQL_PORT: zod_1.z.coerce.number().int().positive().default(3306),

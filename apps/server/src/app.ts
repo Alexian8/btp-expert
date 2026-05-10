@@ -17,6 +17,7 @@ import { buildBackupRouter } from "./routes/backup";
 import { buildMicrosoftRouter, buildEmailRouter } from "./routes/microsoft";
 import { buildAdminUsersRouter } from "./routes/admin-users";
 import { requireAuth } from "./auth";
+import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
 
 export interface AppContext {
   db: DB;
@@ -170,7 +171,20 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   const app = express();
   app.disable("x-powered-by");
-  app.use(helmet());
+
+  // Trust proxy : Passenger/cPanel met l'IP réelle dans X-Forwarded-For.
+  // Sans ça, req.ip serait 127.0.0.1 et le rate-limit serait inutile.
+  app.set("trust proxy", 1);
+
+  // Helmet : headers de sécurité (HSTS, X-Frame-Options, X-Content-Type-Options…)
+  // CSP : on garde le préréglage permissif car le SPA charge ses assets locaux
+  // + des ressources Microsoft pour OAuth. À durcir si besoin.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // SPA + OAuth flow → CSP custom à étudier
+      crossOriginEmbedderPolicy: false,
+    })
+  );
   app.use(
     cors({
       origin: cfg.CORS_ORIGINS,
@@ -179,42 +193,16 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   );
   app.use(express.json({ limit: "10mb" }));
 
-  // ─── Basic Auth (mode dev) ─────────────────────────────────────────────
-  // Active uniquement si DEV_AUTH_USER + DEV_AUTH_PASS sont définis dans
-  // les env vars. Pour désactiver en prod : retirer ces 2 variables.
-  const devAuthUser = process.env.DEV_AUTH_USER;
-  const devAuthPass = process.env.DEV_AUTH_PASS;
-  if (devAuthUser && devAuthPass) {
-    console.log("[basic-auth] active (dev mode) - user:", devAuthUser);
-    app.use((req, res, next) => {
-      // Health check public (utile pour monitoring)
-      if (req.path === "/api/health") return next();
-
-      const auth = req.headers.authorization;
-      if (auth && auth.startsWith("Basic ")) {
-        try {
-          const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
-          const idx = decoded.indexOf(":");
-          if (idx >= 0) {
-            const user = decoded.slice(0, idx);
-            const pass = decoded.slice(idx + 1);
-            if (user === devAuthUser && pass === devAuthPass) {
-              return next();
-            }
-          }
-        } catch {
-          /* fallthrough to 401 */
-        }
-      }
-      res.set("WWW-Authenticate", 'Basic realm="BatiDesk Dev", charset="UTF-8"');
-      res.status(401).type("text/plain").send("Authentification requise (dev)");
-    });
-  }
+  // Rate-limit global API (anti scraper/bot)
+  app.use(buildApiRateLimiter(cfg));
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, version: "0.2.0", time: new Date().toISOString() });
+    // Volontairement minimal : pas de version exposée publiquement (info leak)
+    res.json({ ok: true });
   });
 
+  // Rate-limit STRICT sur le login (anti brute-force)
+  app.use("/api/auth/login", buildLoginRateLimiter(cfg));
   app.use("/api/auth", buildAuthRouter(pool, cfg));
 
   // ─── Admin : gestion utilisateurs (admin only) ─────────────────────────
@@ -529,12 +517,17 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     res.status(404).json({ message: "Route inconnue" });
   });
 
-  // Error handler
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("[express] error:", err);
-    res
-      .status(500)
-      .json({ message: err instanceof Error ? err.message : "Erreur interne" });
+  // Error handler — en prod : pas de leak de stack trace
+  const isProd = cfg.NODE_ENV === "production";
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    console.error(`[express] error on ${req.method} ${req.path}:`, err);
+    res.status(500).json({
+      message: isProd
+        ? "Erreur interne du serveur"
+        : err instanceof Error
+          ? err.message
+          : "Erreur interne",
+    });
   });
 
   return { app, ctx: { db: pool, config: cfg } };

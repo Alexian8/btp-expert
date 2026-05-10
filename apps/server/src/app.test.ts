@@ -33,8 +33,12 @@ const hasMysql = Boolean(HOST && USER && DATABASE);
 const cfg: Config = {
   PORT: 0,
   CORS_ORIGINS: ["http://localhost:5173"],
-  JWT_SECRET: "test-secret-at-least-16-chars",
+  JWT_SECRET: "test-secret-at-least-32-chars-long-for-zod-min",
   JWT_EXPIRES_IN: "1h",
+  RATE_LIMIT_LOGIN_MAX: 1000, // désactivé en test
+  RATE_LIMIT_LOGIN_WINDOW_MIN: 15,
+  RATE_LIMIT_API_MAX: 10000,
+  RATE_LIMIT_API_WINDOW_MIN: 1,
   MYSQL_HOST: HOST ?? "localhost",
   MYSQL_PORT: PORT,
   MYSQL_USER: USER ?? "root",
