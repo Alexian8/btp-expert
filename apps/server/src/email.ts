@@ -330,26 +330,9 @@ export function welcomeEmailHtml(opts: WelcomeEmailInput): string {
   const loginUrl = escapeHtml(opts.loginUrl);
   const companyName = escapeHtml(opts.companyName ?? "BatiDesk");
 
-  // Section optionnelle "Mailbox cPanel"
+  // Section optionnelle "Mailbox cPanel" avec guide Outlook complet
   const mailboxBlock = opts.mailbox
-    ? `
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin:16px 0;">
-                <tr>
-                  <td style="padding:20px;">
-                    <div style="font-size:13px;font-weight:600;color:#1e3a8a;margin-bottom:8px;">📬 Votre boîte mail professionnelle</div>
-                    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px;">Adresse email</div>
-                    <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#0f172a;margin-bottom:12px;">${escapeHtml(opts.mailbox.email)}</div>
-                    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px;">Mot de passe mailbox</div>
-                    <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#0f172a;margin-bottom:12px;">Identique au mot de passe BatiDesk ci-dessus</div>
-                    <div style="font-size:12px;line-height:1.6;color:#475569;margin-top:12px;border-top:1px solid #bfdbfe;padding-top:12px;">
-                      <strong>Webmail :</strong> <a href="${escapeHtml(opts.mailbox.webmailUrl)}" style="color:#2563eb;">${escapeHtml(opts.mailbox.webmailUrl)}</a><br>
-                      <strong>IMAP entrant :</strong> ${escapeHtml(opts.mailbox.imapHost)} · port 993 (SSL)<br>
-                      <strong>SMTP sortant :</strong> ${escapeHtml(opts.mailbox.smtpHost)} · port 465 (SSL)<br>
-                      <strong>Username :</strong> ${escapeHtml(opts.mailbox.email)}
-                    </div>
-                  </td>
-                </tr>
-              </table>`
+    ? buildMailboxBlock(opts.mailbox)
     : "";
 
   return `<!DOCTYPE html>
@@ -430,4 +413,143 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/** Bloc HTML détaillé pour la mailbox : guide pas-à-pas Outlook + Mail.app +
+ *  webmail + paramètres IMAP/SMTP techniques. */
+function buildMailboxBlock(mb: NonNullable<WelcomeEmailInput["mailbox"]>): string {
+  const email = escapeHtml(mb.email);
+  const imap = escapeHtml(mb.imapHost);
+  const smtp = escapeHtml(mb.smtpHost);
+  const webmail = escapeHtml(mb.webmailUrl);
+
+  return `
+              <!-- Mailbox header -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin:24px 0 16px 0;">
+                <tr>
+                  <td style="padding:20px;">
+                    <div style="font-size:14px;font-weight:600;color:#1e3a8a;margin-bottom:12px;">📬 Votre boîte mail professionnelle</div>
+
+                    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px;">Adresse email</div>
+                    <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#0f172a;margin-bottom:14px;">${email}</div>
+
+                    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:4px;">Mot de passe mailbox</div>
+                    <div style="font-size:13px;color:#0f172a;margin-bottom:6px;"><strong>Identique à votre mot de passe BatiDesk</strong></div>
+                    <div style="font-size:12px;color:#1e40af;background:#dbeafe;border-radius:4px;padding:8px 10px;line-height:1.5;">
+                      ✨ <strong>Synchronisation automatique :</strong> quand vous changez votre mot de passe BatiDesk, votre mailbox est mise à jour aussi. Vous gardez un seul mot de passe pour tout.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Guide configuration -->
+              <h3 style="margin:28px 0 8px 0;font-size:16px;font-weight:600;color:#0f172a;">⚙️ Comment configurer votre email</h3>
+              <p style="margin:0 0 18px 0;font-size:13px;color:#64748b;line-height:1.5;">Choisissez la méthode qui correspond à votre appareil. Le webmail est le plus simple si vous voulez juste tester.</p>
+
+              <!-- Webmail -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 12px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px;">🌐 Webmail (sans rien installer)</div>
+                    <p style="margin:0 0 8px 0;font-size:13px;color:#475569;line-height:1.5;">Connectez-vous depuis n'importe quel navigateur :</p>
+                    <a href="${webmail}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:13px;padding:8px 16px;border-radius:6px;">Ouvrir le webmail</a>
+                    <p style="margin:10px 0 0 0;font-size:12px;color:#64748b;">Identifiant : <strong>${email}</strong> · Mot de passe : votre mot de passe BatiDesk</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Outlook Windows -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 12px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:8px;">💻 Outlook sur Windows (PC)</div>
+                    <ol style="margin:0;padding-left:20px;font-size:13px;color:#475569;line-height:1.7;">
+                      <li>Ouvrir <strong>Outlook</strong></li>
+                      <li><strong>Fichier</strong> → <strong>Ajouter un compte</strong></li>
+                      <li>Saisir votre adresse <strong>${email}</strong> → <strong>Connecter</strong></li>
+                      <li>Entrer votre mot de passe BatiDesk → <strong>OK</strong></li>
+                      <li>Si la configuration auto échoue, choisir <strong>"IMAP"</strong> et utiliser les paramètres techniques en bas de cet email</li>
+                    </ol>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Outlook iPhone / Android -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 12px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:8px;">📱 Outlook sur iPhone / Android</div>
+                    <ol style="margin:0;padding-left:20px;font-size:13px;color:#475569;line-height:1.7;">
+                      <li>Télécharger <strong>Outlook</strong> depuis l'App Store ou Google Play</li>
+                      <li>Ouvrir l'app → <strong>Ajouter un compte</strong> → <strong>Compte de courrier</strong></li>
+                      <li>Saisir votre adresse <strong>${email}</strong> → <strong>Continuer</strong></li>
+                      <li>Si demandé, choisir le type <strong>IMAP</strong></li>
+                      <li>Entrer votre mot de passe BatiDesk</li>
+                      <li>Outlook va auto-détecter les serveurs ; si ça échoue, voir paramètres techniques</li>
+                    </ol>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Mail.app iPhone -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 12px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:8px;">📧 App Mail iPhone (Mail.app)</div>
+                    <ol style="margin:0;padding-left:20px;font-size:13px;color:#475569;line-height:1.7;">
+                      <li><strong>Réglages</strong> → <strong>Mail</strong> → <strong>Comptes</strong> → <strong>Ajouter un compte</strong></li>
+                      <li>Choisir <strong>Autre</strong> → <strong>Ajouter un compte Mail</strong></li>
+                      <li>Remplir : Nom, Adresse <strong>${email}</strong>, Mot de passe (BatiDesk), Description "BatiDesk"</li>
+                      <li><strong>Suivant</strong> → choisir <strong>IMAP</strong></li>
+                      <li>Si l'auto-config échoue, utiliser les paramètres techniques en bas</li>
+                    </ol>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Mail.app Mac -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 12px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:8px;">🖥️ App Mail Mac (macOS)</div>
+                    <ol style="margin:0;padding-left:20px;font-size:13px;color:#475569;line-height:1.7;">
+                      <li>Ouvrir <strong>Mail</strong></li>
+                      <li>Menu <strong>Mail</strong> → <strong>Ajouter un compte</strong></li>
+                      <li>Choisir <strong>Autre compte Mail…</strong> → <strong>Continuer</strong></li>
+                      <li>Saisir nom, adresse <strong>${email}</strong>, mot de passe BatiDesk → <strong>Se connecter</strong></li>
+                    </ol>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Paramètres techniques -->
+              <h3 style="margin:24px 0 8px 0;font-size:14px;font-weight:600;color:#0f172a;">📋 Paramètres techniques (si auto-config échoue)</h3>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;color:#e2e8f0;border-radius:8px;margin:0 0 16px 0;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <div style="color:#60a5fa;font-weight:600;margin-bottom:8px;">Serveur entrant (IMAP)</div>
+                    <div style="line-height:1.7;">
+                      Hôte&nbsp;: <span style="color:#fbbf24;">${imap}</span><br>
+                      Port&nbsp;: <span style="color:#fbbf24;">993</span><br>
+                      Sécurité&nbsp;: <span style="color:#fbbf24;">SSL/TLS</span><br>
+                      Username&nbsp;: <span style="color:#fbbf24;">${email}</span><br>
+                      Password&nbsp;: <span style="color:#fbbf24;">votre mot de passe BatiDesk</span>
+                    </div>
+                    <div style="border-top:1px solid #334155;margin:12px 0;"></div>
+                    <div style="color:#60a5fa;font-weight:600;margin-bottom:8px;">Serveur sortant (SMTP)</div>
+                    <div style="line-height:1.7;">
+                      Hôte&nbsp;: <span style="color:#fbbf24;">${smtp}</span><br>
+                      Port&nbsp;: <span style="color:#fbbf24;">465</span><br>
+                      Sécurité&nbsp;: <span style="color:#fbbf24;">SSL/TLS</span><br>
+                      Username&nbsp;: <span style="color:#fbbf24;">${email}</span><br>
+                      Password&nbsp;: <span style="color:#fbbf24;">votre mot de passe BatiDesk</span><br>
+                      Authentification&nbsp;: <span style="color:#fbbf24;">requise</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:16px 0 0 0;font-size:12px;color:#64748b;line-height:1.6;">
+                <strong>💡 Astuce :</strong> mettez votre email pro sur <strong>tous</strong> vos appareils (PC + téléphone). Comme c'est de l'IMAP, les emails sont synchronisés partout : si vous lisez un email sur le téléphone, il apparaît comme lu sur le PC.
+              </p>`;
 }

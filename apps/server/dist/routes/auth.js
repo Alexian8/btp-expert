@@ -14,6 +14,7 @@ const zod_1 = require("zod");
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const auth_1 = require("../auth");
 const audit_1 = require("../audit");
+const cpanel_email_1 = require("../cpanel-email");
 const SALT_LEN = 16;
 const KEY_LEN = 64;
 function hashPassword(password) {
@@ -162,7 +163,9 @@ function buildAuthRouter(db, cfg) {
             res.status(400).json({ message: "Payload invalide" });
             return;
         }
-        const [rows] = await db.query("SELECT id, passwordHash FROM users WHERE id = ? LIMIT 1", [payload.sub]);
+        const [rows] = await db.query(`SELECT id, passwordHash, email,
+          (SELECT 1 FROM users u WHERE u.id = users.id AND u.cpanelEmailCreated = 1) AS hasMailbox
+         FROM users WHERE id = ? LIMIT 1`, [payload.sub]);
         const row = rows[0];
         if (!row || !verifyPassword(parsed.data.oldPassword, row.passwordHash)) {
             res.status(401).json({ message: "Ancien mot de passe incorrect" });
@@ -170,13 +173,36 @@ function buildAuthRouter(db, cfg) {
         }
         const newHash = hashPassword(parsed.data.newPassword);
         await db.execute("UPDATE users SET passwordHash = ?, mustChangePassword = 0 WHERE id = ?", [newHash, row.id]);
+        // ─── Sync : si mailbox cPanel existe, mettre à jour son password ─────
+        // Best-effort : si la sync échoue, on log mais on retourne quand même
+        // 204 (le password BatiDesk a bien changé).
+        let mailboxSynced = false;
+        let mailboxSyncError;
+        if (row.hasMailbox && row.email && (0, cpanel_email_1.isCpanelConfigured)(cfg)) {
+            const r = await (0, cpanel_email_1.changeMailboxPassword)(cfg, row.email, parsed.data.newPassword);
+            mailboxSynced = r.ok;
+            mailboxSyncError = r.error;
+            if (r.ok) {
+                void (0, audit_1.writeAudit)(db, {
+                    userId: payload.sub,
+                    username: payload.username,
+                    action: "cpanel_mailbox_password_synced",
+                    ip: req.ip ?? "",
+                    userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+                    meta: { email: row.email },
+                });
+            }
+            else {
+                console.error(`[auth] mailbox sync FAILED for ${row.email}: ${r.error}`);
+            }
+        }
         void (0, audit_1.writeAudit)(db, {
             userId: payload.sub,
             username: payload.username,
             action: "change_password",
             ip: req.ip ?? "",
             userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
-            meta: null,
+            meta: { mailboxSynced, mailboxSyncError },
         });
         res.status(204).end();
     }));

@@ -51,6 +51,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isCpanelConfigured = isCpanelConfigured;
 exports.createMailbox = createMailbox;
 exports.deleteMailbox = deleteMailbox;
+exports.changeMailboxPassword = changeMailboxPassword;
 exports.listMailboxes = listMailboxes;
 const https = __importStar(require("node:https"));
 /** Vrai si la config cPanel est complète (sinon les méthodes seront no-op). */
@@ -176,6 +177,42 @@ async function deleteMailbox(cfg, email) {
             return { ok: true };
         }
         return { ok: false, error: errMsg, raw: body };
+    }
+    catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+}
+/**
+ * Change le mot de passe d'une mailbox cPanel existante.
+ * Utilisé pour synchroniser avec le password BatiDesk lors d'un change-password.
+ */
+async function changeMailboxPassword(cfg, email, newPassword) {
+    if (!isCpanelConfigured(cfg)) {
+        return { ok: false, error: "cPanel API non configurée" };
+    }
+    const [localPart, domain] = email.split("@");
+    if (!localPart || !domain) {
+        return { ok: false, error: `Email invalide : ${email}` };
+    }
+    if (cfg.CPANEL_EMAIL_DOMAIN && domain !== cfg.CPANEL_EMAIL_DOMAIN) {
+        return {
+            ok: false,
+            error: `Domaine "${domain}" non autorisé`,
+        };
+    }
+    try {
+        const { status, body, raw } = await uapiRequest(cfg, "Email", "passwd_pop", {
+            email: localPart,
+            domain,
+            password: newPassword,
+        });
+        if (status !== 200) {
+            return { ok: false, error: `HTTP ${status}: ${raw.slice(0, 200)}`, raw: body };
+        }
+        const r = body;
+        if (r?.status === 1)
+            return { ok: true };
+        return { ok: false, error: r?.errors?.[0] ?? "Erreur cPanel inconnue", raw: body };
     }
     catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };

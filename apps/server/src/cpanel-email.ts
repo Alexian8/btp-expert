@@ -186,6 +186,45 @@ export async function deleteMailbox(cfg: Config, email: string): Promise<CpanelE
   }
 }
 
+/**
+ * Change le mot de passe d'une mailbox cPanel existante.
+ * Utilisé pour synchroniser avec le password BatiDesk lors d'un change-password.
+ */
+export async function changeMailboxPassword(
+  cfg: Config,
+  email: string,
+  newPassword: string
+): Promise<CpanelEmailResult> {
+  if (!isCpanelConfigured(cfg)) {
+    return { ok: false, error: "cPanel API non configurée" };
+  }
+  const [localPart, domain] = email.split("@");
+  if (!localPart || !domain) {
+    return { ok: false, error: `Email invalide : ${email}` };
+  }
+  if (cfg.CPANEL_EMAIL_DOMAIN && domain !== cfg.CPANEL_EMAIL_DOMAIN) {
+    return {
+      ok: false,
+      error: `Domaine "${domain}" non autorisé`,
+    };
+  }
+  try {
+    const { status, body, raw } = await uapiRequest(cfg, "Email", "passwd_pop", {
+      email: localPart,
+      domain,
+      password: newPassword,
+    });
+    if (status !== 200) {
+      return { ok: false, error: `HTTP ${status}: ${raw.slice(0, 200)}`, raw: body };
+    }
+    const r = body as { status?: number; errors?: string[] | null };
+    if (r?.status === 1) return { ok: true };
+    return { ok: false, error: r?.errors?.[0] ?? "Erreur cPanel inconnue", raw: body };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Liste toutes les mailboxes du domaine (debug / sync). */
 export async function listMailboxes(cfg: Config): Promise<{ emails: string[]; error?: string }> {
   if (!isCpanelConfigured(cfg)) return { emails: [], error: "cPanel non configuré" };
