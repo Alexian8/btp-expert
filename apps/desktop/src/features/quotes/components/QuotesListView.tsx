@@ -11,6 +11,7 @@ import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
+import { UserBadge } from "@/components/UserBadge";
 import { useQuotesStore } from "@/stores/quotesStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, type QuoteStatus } from "@btp/types";
@@ -149,6 +150,7 @@ export function QuotesListView() {
                   <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Client</th>
                   <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Statut</th>
                   <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Émis le</th>
+                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Créé par</th>
                   <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Total HT</th>
                   <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Total TTC</th>
                   <th className="w-10"></th>
@@ -189,6 +191,9 @@ export function QuotesListView() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(q.issueDate)}</td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <UserBadge userId={(q as { createdBy?: number | string }).createdBy} />
+                      </td>
                       <td className="px-4 py-3 text-right font-medium tabular-nums">{formatEuros(q.totalHT, 0)}</td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatEuros(q.totalTTC, 0)}</td>
                       <td className="px-2 py-3 text-right">

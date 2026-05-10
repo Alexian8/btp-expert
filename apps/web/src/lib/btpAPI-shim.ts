@@ -226,6 +226,39 @@ export function installBtpApiShim(): void {
     return normalizeRows(res as never) as T;
   };
 
+  // ─── Filtre data isolation (rôle WORKER) ────────────────────────────────
+  // Décode le JWT (lecture seule, pas de vérif crypto — c'est juste pour
+  // savoir quoi afficher côté UI ; la vérité reste imposée par le serveur).
+  function readJwtPayload(): { sub: number; role: string } | null {
+    const t = getToken();
+    if (!t) return null;
+    try {
+      const parts = t.split(".");
+      if (parts.length < 2) return null;
+      const json = atob(parts[1]!.replace(/-/g, "+").replace(/_/g, "/"));
+      const decoded = JSON.parse(json) as { sub?: number; role?: string };
+      if (typeof decoded.sub !== "number" || typeof decoded.role !== "string") {
+        return null;
+      }
+      return { sub: decoded.sub, role: decoded.role };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Ajoute ?createdBy=ME au path SI le user connecté a le rôle worker.
+   *  Le filtre est whitelisté côté serveur (filterableColumns) sur toutes
+   *  les tables data → un worker ne peut voir que ses propres lignes. */
+  function withWorkerFilter(path: string): string {
+    const u = readJwtPayload();
+    if (!u || u.role !== "worker") return path;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}createdBy=${encodeURIComponent(String(u.sub))}`;
+  }
+
+  /** Wrapper "list" — applique automatiquement le filtre worker. */
+  const httpGetList = async <T>(path: string): Promise<T> => httpGet(withWorkerFilter(path));
+
   // Le code desktop attend `{success, id, error}` pour les actions create/update/
   // updateStatus/delete. Notre serveur REST renvoie l'entité directement (200) ou
   // 204 sur delete. On wrappe pour matcher le format desktop.
@@ -248,7 +281,7 @@ export function installBtpApiShim(): void {
 
   // ─── Clients ───────────────────────────────────────────────────────────
   const clients = {
-    clientsList: () => httpGet("/api/clients").catch(() => []),
+    clientsList: () => httpGetList("/api/clients").catch(() => []),
     clientsGet: (id: string | number) =>
       httpGet(`/api/clients/${encodeURIComponent(String(id))}`).catch(() => null),
     clientsCreate: (data: unknown) => wrapCreate(http("POST", "/api/clients", ensureId(data))),
@@ -268,7 +301,7 @@ export function installBtpApiShim(): void {
 
   // ─── Suppliers ─────────────────────────────────────────────────────────
   const suppliers = {
-    suppliersList: () => httpGet("/api/suppliers").catch(() => []),
+    suppliersList: () => httpGetList("/api/suppliers").catch(() => []),
     suppliersGet: (id: string | number) =>
       httpGet(`/api/suppliers/${encodeURIComponent(String(id))}`).catch(() => null),
     suppliersCreate: (data: unknown) => wrapCreate(http("POST", "/api/suppliers", ensureId(data))),
@@ -297,7 +330,7 @@ export function installBtpApiShim(): void {
 
   // ─── Chantiers ─────────────────────────────────────────────────────────
   const chantiers = {
-    chantiersList: () => httpGet("/api/chantiers").catch(() => []),
+    chantiersList: () => httpGetList("/api/chantiers").catch(() => []),
     chantiersGet: (id: string | number) =>
       httpGet(`/api/chantiers/${encodeURIComponent(String(id))}`).catch(() => null),
     chantiersListByClient: async (clientId: string | number) => {
@@ -331,7 +364,7 @@ export function installBtpApiShim(): void {
 
   // ─── Quotes (devis) ────────────────────────────────────────────────────
   const quotes = {
-    quotesList: () => httpGet("/api/quotes").catch(() => []),
+    quotesList: () => httpGetList("/api/quotes").catch(() => []),
     quotesGet: (id: string | number) =>
       httpGet(`/api/quotes/${encodeURIComponent(String(id))}`).catch(() => null),
     quotesListByClient: async (clientId: string | number) => {
@@ -405,7 +438,7 @@ export function installBtpApiShim(): void {
 
   // ─── Invoices ──────────────────────────────────────────────────────────
   const invoices = {
-    invoicesList: () => httpGet("/api/invoices").catch(() => []),
+    invoicesList: () => httpGetList("/api/invoices").catch(() => []),
     invoicesGet: (id: string | number) =>
       httpGet(`/api/invoices/${encodeURIComponent(String(id))}`).catch(() => null),
     invoicesListByClient: async (clientId: string | number) => {
@@ -731,7 +764,7 @@ export function installBtpApiShim(): void {
 
   // ─── Expenses (dépenses) ───────────────────────────────────────────────
   const expensesAPI = {
-    accountingListExpenses: () => httpGet("/api/expenses").catch(() => []),
+    accountingListExpenses: () => httpGetList("/api/expenses").catch(() => []),
     accountingGetExpenseById: (id: string | number) =>
       httpGet(`/api/expenses/${encodeURIComponent(String(id))}`).catch(() => null),
     accountingCreateExpense: (data: unknown) =>
@@ -760,7 +793,7 @@ export function installBtpApiShim(): void {
 
   // ─── Expense notes (notes de frais) ────────────────────────────────────
   const expenseNotesAPI = {
-    expenseNotesList: () => httpGet("/api/expense-notes").catch(() => []),
+    expenseNotesList: () => httpGetList("/api/expense-notes").catch(() => []),
     expenseNotesGetById: (id: string | number) =>
       httpGet(`/api/expense-notes/${encodeURIComponent(String(id))}`).catch(() => null),
     expenseNotesCreate: (data: unknown) =>
@@ -795,7 +828,7 @@ export function installBtpApiShim(): void {
 
   // ─── Subcontractors (sous-traitants) ───────────────────────────────────
   const subcontractorsAPI = {
-    subcontractorsList: () => httpGet("/api/subcontractors").catch(() => []),
+    subcontractorsList: () => httpGetList("/api/subcontractors").catch(() => []),
     subcontractorsGetById: (id: string | number) =>
       httpGet(`/api/subcontractors/${encodeURIComponent(String(id))}`).catch(() => null),
     subcontractorsCreate: (data: unknown) =>
@@ -808,7 +841,7 @@ export function installBtpApiShim(): void {
 
   // ─── Agenda events ─────────────────────────────────────────────────────
   const agendaAPI = {
-    agendaList: () => httpGet("/api/agenda-events").catch(() => []),
+    agendaList: () => httpGetList("/api/agenda-events").catch(() => []),
     agendaGetById: (id: string | number) =>
       httpGet(`/api/agenda-events/${encodeURIComponent(String(id))}`).catch(() => null),
     agendaCreate: (data: unknown) =>

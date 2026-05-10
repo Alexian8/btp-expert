@@ -8,6 +8,7 @@ import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
+import { UserBadge } from "@/components/UserBadge";
 import { useInvoicesStore } from "@/stores/invoicesStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import {
@@ -193,6 +194,7 @@ export function InvoicesListView() {
                   <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Client</th>
                   <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Statut</th>
                   <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Échéance</th>
+                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Créé par</th>
                   <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">TTC</th>
                   <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Reste dû</th>
                   <th className="w-10"></th>
@@ -258,6 +260,9 @@ export function InvoicesListView() {
                             )}
                           </div>
                         ) : "—"}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <UserBadge userId={(inv as { createdBy?: number | string }).createdBy} />
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         {formatEuros(inv.totalTTC, 0)}

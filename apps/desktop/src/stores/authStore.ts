@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { User } from "@btp/types";
 import { getDataService } from "@/lib/dataService";
+import { useUsersStore } from "@/stores/usersStore";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Auth Store — gère la session utilisateur
@@ -40,6 +41,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       const ds = getDataService();
       const user = await ds.login(username, password);
       set({ user, isLoading: false });
+      // Charge l'annuaire des users en mémoire pour afficher "Créé par"
+      if (user) void useUsersStore.getState().reload();
       return !!user;
     } catch {
       set({ isLoading: false });
@@ -64,5 +67,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     const ds = getDataService();
     await ds.logout();
     set({ user: null });
+    useUsersStore.getState().reset();
   },
 }));
