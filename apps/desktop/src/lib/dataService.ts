@@ -430,6 +430,26 @@ export class ElectronDataService implements IDataService {
 
   // ─── Auth ────────────────────────────────────────────────────────────
   async login(username: string, password: string): Promise<User | null> {
+    // Mode web : login via /api/auth/login (le serveur fait le hash + JWT)
+    const api = this.api as unknown as {
+      isWeb?: boolean;
+      webLogin?: (
+        u: string,
+        p: string
+      ) => Promise<{ id: number; username: string; role: string } | null>;
+    };
+    if (api.isWeb && api.webLogin) {
+      const user = await api.webLogin(username, password);
+      if (!user) return null;
+      this.currentUser = {
+        id: user.id,
+        username: user.username,
+        role: (user.role as "admin" | "user") || "user",
+      };
+      return this.currentUser;
+    }
+
+    // Mode desktop : findUser + verif locale du hash
     const user = await this.api.findUser(username);
     if (!user) return null;
     const hash = await hashPassword(password, username);
