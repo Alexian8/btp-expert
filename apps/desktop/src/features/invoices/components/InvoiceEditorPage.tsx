@@ -24,6 +24,8 @@ import { QuoteTotalsPanel } from "@/features/quotes/components/QuoteTotalsPanel"
 import { PaymentModal } from "./PaymentModal";
 import { PaymentsHistory } from "./PaymentsHistory";
 import { SendInvoiceByEmailModal } from "./SendInvoiceByEmailModal";
+import { PdfActions } from "@/features/pdf/PdfActions";
+import { InvoicePdfDocument } from "@/features/pdf/InvoicePdfDocument";
 import {
   EMPTY_INVOICE,
   INVOICE_STATUS_META,
@@ -321,15 +323,17 @@ ${companyName}`,
           <div className="flex gap-2 shrink-0 flex-wrap">
             {existing && (
               <>
-                {/* PDF */}
-                <Button variant="outline" size="sm" onClick={handlePreviewPdf} loading={generatingPdf}>
-                  <Eye className="w-3.5 h-3.5" />
-                  Aperçu PDF
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
-                  <Download className="w-3.5 h-3.5" />
-                  Télécharger
-                </Button>
+                {/* PDF — généré client-side via @react-pdf/renderer */}
+                <PdfActions
+                  document={
+                    <InvoicePdfDocument
+                      invoice={existing}
+                      client={useClientsStore.getState().clients.find((c) => c.id === existing.clientId)}
+                      company={company as Record<string, unknown>}
+                    />
+                  }
+                  fileName={`${existing.reference || "Facture"}.pdf`}
+                />
                 <Button variant="outline" size="sm" onClick={handleOpenEmailModal}>
                   <Mail className="w-3.5 h-3.5" />
                   Envoyer par email

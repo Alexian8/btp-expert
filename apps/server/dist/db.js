@@ -338,6 +338,74 @@ async function runMigrations(db) {
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_subcontractors_siret (siret)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Vault : dossiers ──────────────────────────────────────────────────
+        `CREATE TABLE IF NOT EXISTS vault_folders (
+      id VARCHAR(64) PRIMARY KEY,
+      companyId INT NOT NULL DEFAULT 1,
+      parentId VARCHAR(64) DEFAULT '',
+      name VARCHAR(255) NOT NULL,
+      iconKey VARCHAR(32) DEFAULT 'folder',
+      colorKey VARCHAR(32) DEFAULT 'default',
+      clientId VARCHAR(64) DEFAULT '',
+      chantierId VARCHAR(64) DEFAULT '',
+      description TEXT,
+      createdBy INT NULL,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_vfolders_company (companyId),
+      INDEX idx_vfolders_parent (parentId),
+      INDEX idx_vfolders_client (clientId),
+      INDEX idx_vfolders_chantier (chantierId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Vault : documents ─────────────────────────────────────────────────
+        `CREATE TABLE IF NOT EXISTS vault_documents (
+      id VARCHAR(64) PRIMARY KEY,
+      companyId INT NOT NULL DEFAULT 1,
+      folderId VARCHAR(64) DEFAULT '',
+      fileName VARCHAR(255) NOT NULL,
+      originalFileName VARCHAR(255) NOT NULL,
+      storagePath VARCHAR(512) NOT NULL,
+      mimeType VARCHAR(128) DEFAULT '',
+      fileSize BIGINT NOT NULL DEFAULT 0,
+      fileHash VARCHAR(128) DEFAULT '',
+      extractedText TEXT,
+      description TEXT,
+      expirationDate VARCHAR(32) DEFAULT '',
+      deletedAt VARCHAR(32) DEFAULT '',
+      category VARCHAR(64) DEFAULT 'upload',
+      chantierId VARCHAR(64) DEFAULT '',
+      clientId VARCHAR(64) DEFAULT '',
+      quoteId VARCHAR(64) DEFAULT '',
+      invoiceId VARCHAR(64) DEFAULT '',
+      createdBy INT NULL,
+      updatedBy INT NULL,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_vdocs_company (companyId),
+      INDEX idx_vdocs_folder (folderId),
+      INDEX idx_vdocs_chantier (chantierId),
+      INDEX idx_vdocs_quote (quoteId),
+      INDEX idx_vdocs_invoice (invoiceId),
+      INDEX idx_vdocs_deleted (deletedAt),
+      INDEX idx_vdocs_category (category)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Vault : tags ──────────────────────────────────────────────────────
+        `CREATE TABLE IF NOT EXISTS vault_tags (
+      id VARCHAR(64) PRIMARY KEY,
+      companyId INT NOT NULL DEFAULT 1,
+      name VARCHAR(128) NOT NULL,
+      colorKey VARCHAR(32) DEFAULT 'default',
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_vtag_name (companyId, name),
+      INDEX idx_vtags_company (companyId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Vault : association document ⇄ tags ──────────────────────────────
+        `CREATE TABLE IF NOT EXISTS vault_document_tags (
+      documentId VARCHAR(64) NOT NULL,
+      tagId VARCHAR(64) NOT NULL,
+      PRIMARY KEY (documentId, tagId),
+      INDEX idx_vdt_tag (tagId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
         // ─── Audit logs ────────────────────────────────────────────────────────
         `CREATE TABLE IF NOT EXISTS audit_logs (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,

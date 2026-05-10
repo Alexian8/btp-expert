@@ -25,6 +25,8 @@ import { QuoteItemsEditor } from "./QuoteItemsEditor";
 import { QuoteTotalsPanel } from "./QuoteTotalsPanel";
 import { SendQuoteByEmailModal } from "./SendQuoteByEmailModal";
 import { ConvertToInvoiceModal } from "@/features/invoices/components/ConvertToInvoiceModal";
+import { PdfActions } from "@/features/pdf/PdfActions";
+import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
 import {
   EMPTY_QUOTE, QUOTE_STATUS_META, QUOTE_STATUS_ORDER,
   type Quote, type QuoteItem, type QuoteStatus, type LineWorkType,
@@ -274,15 +276,17 @@ ${company?.companyName || ""}`;
             <div className="flex gap-2 shrink-0 flex-wrap">
               {existing && (
                 <>
-                  {/* PDF */}
-                  <Button variant="outline" size="sm" onClick={handlePreviewPdf} loading={generatingPdf}>
-                    <Eye className="w-3.5 h-3.5" />
-                    Aperçu PDF
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
-                    <Download className="w-3.5 h-3.5" />
-                    Télécharger
-                  </Button>
+                  {/* PDF — généré client-side via @react-pdf/renderer */}
+                  <PdfActions
+                    document={
+                      <QuotePdfDocument
+                        quote={existing}
+                        client={useClientsStore.getState().clients.find((c) => c.id === existing.clientId)}
+                        company={company as Record<string, unknown>}
+                      />
+                    }
+                    fileName={`${existing.reference || "Devis"}.pdf`}
+                  />
                   <Button variant="outline" size="sm" onClick={handleOpenEmailModal}>
                     <Mail className="w-3.5 h-3.5" />
                     Envoyer par email

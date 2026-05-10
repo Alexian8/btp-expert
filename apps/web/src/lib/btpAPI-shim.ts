@@ -920,6 +920,138 @@ export function installBtpApiShim(): void {
     },
   };
 
+  // ─── Vault : câblage REST ──────────────────────────────────────────────
+  const vaultAPI = {
+    vaultListFolders: () => httpGet("/api/vault/folders").catch(() => []),
+    vaultCreateFolder: async (data: unknown) => {
+      try {
+        const r = (await http<{ id?: string }>("POST", "/api/vault/folders", data)) as { id?: string };
+        return { success: true, id: r?.id };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    vaultUpdateFolder: ({ id, data }: { id: string; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/vault/folders/${encodeURIComponent(id)}`, data)),
+    vaultDeleteFolder: (id: string) =>
+      wrapAction(http("DELETE", `/api/vault/folders/${encodeURIComponent(id)}`)),
+
+    vaultListDocuments: async (params?: {
+      folderId?: string;
+      chantierId?: string;
+      quoteId?: string;
+      invoiceId?: string;
+    }) => {
+      const sp = new URLSearchParams();
+      if (params?.folderId) sp.set("folderId", params.folderId);
+      if (params?.chantierId) sp.set("chantierId", params.chantierId);
+      if (params?.quoteId) sp.set("quoteId", params.quoteId);
+      if (params?.invoiceId) sp.set("invoiceId", params.invoiceId);
+      const q = sp.toString();
+      try {
+        return await httpGet(`/api/vault/documents${q ? "?" + q : ""}`);
+      } catch {
+        return [];
+      }
+    },
+    vaultListTrash: () => httpGet("/api/vault/trash").catch(() => []),
+
+    /** Upload web : prend un objet { folderId, file: Blob, fileName, ... } */
+    vaultUploadDocument: async (params: {
+      folderId?: string;
+      file?: Blob | ArrayBuffer | Uint8Array;
+      fileName?: string;
+      mimeType?: string;
+      description?: string;
+      category?: string;
+      chantierId?: string;
+      clientId?: string;
+      quoteId?: string;
+      invoiceId?: string;
+      // Compat desktop : sourcePath (ignoré en web)
+      sourcePath?: string;
+    }) => {
+      try {
+        if (!params.file) {
+          // Mode desktop legacy non supporté en web
+          return { success: false, error: "Upload via dialog non disponible en web. Sélectionne un fichier directement." };
+        }
+        const sp = new URLSearchParams();
+        sp.set("fileName", params.fileName ?? "document");
+        if (params.folderId) sp.set("folderId", params.folderId);
+        if (params.mimeType) sp.set("mimeType", params.mimeType);
+        if (params.description) sp.set("description", params.description);
+        if (params.category) sp.set("category", params.category);
+        if (params.chantierId) sp.set("chantierId", params.chantierId);
+        if (params.clientId) sp.set("clientId", params.clientId);
+        if (params.quoteId) sp.set("quoteId", params.quoteId);
+        if (params.invoiceId) sp.set("invoiceId", params.invoiceId);
+        const token = getToken();
+        const res = await fetch(`/api/vault/upload?${sp.toString()}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": params.mimeType ?? "application/octet-stream",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: params.file as BodyInit,
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          return { success: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+        }
+        const json = (await res.json()) as { id?: string };
+        return { success: true, id: json?.id };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+
+    vaultUpdateDocument: ({ id, data }: { id: string; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/vault/documents/${encodeURIComponent(id)}`, data)),
+    vaultTrashDocument: (id: string) =>
+      wrapAction(http("POST", `/api/vault/documents/${encodeURIComponent(id)}/trash`)),
+    vaultRestoreDocument: (id: string) =>
+      wrapAction(http("POST", `/api/vault/documents/${encodeURIComponent(id)}/restore`)),
+    vaultDeleteDocumentForever: (id: string) =>
+      wrapAction(http("DELETE", `/api/vault/documents/${encodeURIComponent(id)}`)),
+
+    /** Téléchargement : ouvre un nouvel onglet vers la route download
+     *  (le serveur gère l'auth via Bearer; on passe par fetch + blob). */
+    vaultDownloadDocument: async (id: string) => {
+      try {
+        const token = getToken();
+        const res = await fetch(`/api/vault/documents/${encodeURIComponent(id)}/download`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+        const blob = await res.blob();
+        const cd = res.headers.get("Content-Disposition") ?? "";
+        const m = /filename="?([^"]+)"?/.exec(cd);
+        const fileName = m?.[1] ?? "document";
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = decodeURIComponent(fileName);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+
+    vaultGetStats: () =>
+      httpGet("/api/vault/stats").catch(() => ({
+        totalDocuments: 0,
+        totalFolders: 0,
+        totalSize: 0,
+        trashCount: 0,
+        expiringIn30Days: 0,
+      })),
+  };
+
   // ─── Toutes les autres méthodes du preload (vault, etc.) ──────────────
   // On les expose comme stubs doux pour ne pas crasher l'app.
   const allOtherStubs = createStubsFor([
@@ -962,31 +1094,19 @@ export function installBtpApiShim(): void {
     "libraryUpdate",
     "libraryDelete",
     "libraryIncrementUsage",
-    // Vault
-    "vaultListFolders",
-    "vaultCreateFolder",
-    "vaultUpdateFolder",
-    "vaultDeleteFolder",
-    "vaultListDocuments",
-    "vaultListTrash",
-    "vaultUploadDocument",
-    "vaultUpdateDocument",
-    "vaultTrashDocument",
-    "vaultRestoreDocument",
-    "vaultDeleteDocumentForever",
-    "vaultGetDocumentPreviewPath",
-    "vaultDownloadDocument",
-    "vaultOpenDocumentExternal",
+    // Vault — câblés via vaultAPI ci-dessous, pas de stub ici
+    // Restent stubés : tags + search + pickFiles + ensureFolder (UI Electron-only)
     "vaultListTags",
     "vaultCreateTag",
     "vaultUpdateTag",
     "vaultDeleteTag",
     "vaultSetDocumentTags",
     "vaultSearch",
-    "vaultGetStats",
     "vaultEnsureClientFolder",
     "vaultEnsureChantierFolder",
     "vaultPickFiles",
+    "vaultGetDocumentPreviewPath",
+    "vaultOpenDocumentExternal",
     // Agenda : sync Outlook + stats uniquement (CRUD/list câblés au-dessus)
     "agendaSyncAllToOutlook",
     "agendaSyncOne",
@@ -1077,6 +1197,7 @@ export function installBtpApiShim(): void {
     ...expenseNotesAPI,
     ...subcontractorsAPI,
     ...agendaAPI,
+    ...vaultAPI,
     ...backup,
     ...microsoft,
     ...allOtherStubs,

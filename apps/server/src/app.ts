@@ -18,6 +18,7 @@ import { buildMicrosoftRouter, buildEmailRouter } from "./routes/microsoft";
 import { buildAdminUsersRouter } from "./routes/admin-users";
 import { buildAdminLogsRouter } from "./routes/admin-logs";
 import { buildSuperAdminRouter } from "./routes/super-admin";
+import { buildVaultRouter } from "./routes/vault";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
@@ -569,6 +570,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // ─── Backup serveur ────────────────────────────────────────────────────
   app.use("/api/backup", auth, buildBackupRouter(pool, cfg));
+
+  // ─── Vault (coffre-fort documents) ─────────────────────────────────────
+  app.use("/api/vault", buildVaultRouter(pool, cfg));
 
   // ─── Static SPA ────────────────────────────────────────────────────────
   const publicDir = path.resolve(process.cwd(), "public");
