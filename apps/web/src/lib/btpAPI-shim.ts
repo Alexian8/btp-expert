@@ -184,34 +184,63 @@ export function installBtpApiShim(): void {
     return obj;
   };
 
+  // Le code desktop attend `{success, id, error}` pour les actions create/update/
+  // updateStatus/delete. Notre serveur REST renvoie l'entité directement (200) ou
+  // 204 sur delete. On wrappe pour matcher le format desktop.
+  const wrapCreate = async <T>(promise: Promise<T>): Promise<{ success: boolean; id?: string; error?: string }> => {
+    try {
+      const r = (await promise) as { id?: string };
+      return { success: true, id: r?.id };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+    }
+  };
+  const wrapAction = async (promise: Promise<unknown>): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await promise;
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+    }
+  };
+
   // ─── Clients ───────────────────────────────────────────────────────────
   const clients = {
-    clientsList: () => http("GET", "/api/clients"),
-    clientsGet: (id: string | number) => http("GET", `/api/clients/${encodeURIComponent(String(id))}`),
-    clientsCreate: (data: unknown) => http("POST", "/api/clients", ensureId(data)),
+    clientsList: () => http("GET", "/api/clients").catch(() => []),
+    clientsGet: (id: string | number) =>
+      http("GET", `/api/clients/${encodeURIComponent(String(id))}`).catch(() => null),
+    clientsCreate: (data: unknown) => wrapCreate(http("POST", "/api/clients", ensureId(data))),
     clientsUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
-      http("PATCH", `/api/clients/${encodeURIComponent(String(id))}`, data),
+      wrapAction(http("PATCH", `/api/clients/${encodeURIComponent(String(id))}`, data)),
     clientsDelete: (id: string | number) =>
-      http("DELETE", `/api/clients/${encodeURIComponent(String(id))}`),
+      wrapAction(http("DELETE", `/api/clients/${encodeURIComponent(String(id))}`)),
     clientsCount: async (): Promise<number> => {
-      const r = await http<{ count: number }>("GET", "/api/clients/count");
-      return r.count;
+      try {
+        const r = await http<{ count: number }>("GET", "/api/clients/count");
+        return r.count;
+      } catch {
+        return 0;
+      }
     },
   };
 
   // ─── Suppliers ─────────────────────────────────────────────────────────
   const suppliers = {
-    suppliersList: () => http("GET", "/api/suppliers"),
+    suppliersList: () => http("GET", "/api/suppliers").catch(() => []),
     suppliersGet: (id: string | number) =>
-      http("GET", `/api/suppliers/${encodeURIComponent(String(id))}`),
-    suppliersCreate: (data: unknown) => http("POST", "/api/suppliers", ensureId(data)),
+      http("GET", `/api/suppliers/${encodeURIComponent(String(id))}`).catch(() => null),
+    suppliersCreate: (data: unknown) => wrapCreate(http("POST", "/api/suppliers", ensureId(data))),
     suppliersUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
-      http("PATCH", `/api/suppliers/${encodeURIComponent(String(id))}`, data),
+      wrapAction(http("PATCH", `/api/suppliers/${encodeURIComponent(String(id))}`, data)),
     suppliersDelete: (id: string | number) =>
-      http("DELETE", `/api/suppliers/${encodeURIComponent(String(id))}`),
+      wrapAction(http("DELETE", `/api/suppliers/${encodeURIComponent(String(id))}`)),
     suppliersCount: async (): Promise<number> => {
-      const r = await http<{ count: number }>("GET", "/api/suppliers/count");
-      return r.count;
+      try {
+        const r = await http<{ count: number }>("GET", "/api/suppliers/count");
+        return r.count;
+      } catch {
+        return 0;
+      }
     },
   };
 
@@ -226,23 +255,31 @@ export function installBtpApiShim(): void {
 
   // ─── Chantiers ─────────────────────────────────────────────────────────
   const chantiers = {
-    chantiersList: () => http("GET", "/api/chantiers"),
+    chantiersList: () => http("GET", "/api/chantiers").catch(() => []),
     chantiersGet: (id: string | number) =>
-      http("GET", `/api/chantiers/${encodeURIComponent(String(id))}`),
+      http("GET", `/api/chantiers/${encodeURIComponent(String(id))}`).catch(() => null),
     chantiersListByClient: async (clientId: string | number) => {
-      const all = (await http<unknown[]>("GET", "/api/chantiers")) as Array<{ clientId: unknown }>;
-      return all.filter((c) => String(c.clientId) === String(clientId));
+      try {
+        const all = (await http<unknown[]>("GET", "/api/chantiers")) as Array<{ clientId: unknown }>;
+        return all.filter((c) => String(c.clientId) === String(clientId));
+      } catch {
+        return [];
+      }
     },
-    chantiersCreate: (data: unknown) => http("POST", "/api/chantiers", ensureId(data)),
+    chantiersCreate: (data: unknown) => wrapCreate(http("POST", "/api/chantiers", ensureId(data))),
     chantiersUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
-      http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, data),
+      wrapAction(http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, data)),
     chantiersUpdateStatus: ({ id, status }: { id: string | number; status: string }) =>
-      http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, { status }),
+      wrapAction(http("PATCH", `/api/chantiers/${encodeURIComponent(String(id))}`, { status })),
     chantiersDelete: (id: string | number) =>
-      http("DELETE", `/api/chantiers/${encodeURIComponent(String(id))}`),
+      wrapAction(http("DELETE", `/api/chantiers/${encodeURIComponent(String(id))}`)),
     chantiersCount: async (): Promise<number> => {
-      const r = await http<{ count: number }>("GET", "/api/chantiers/count");
-      return r.count;
+      try {
+        const r = await http<{ count: number }>("GET", "/api/chantiers/count");
+        return r.count;
+      } catch {
+        return 0;
+      }
     },
     chantiersCountByStatus: stub("chantiersCountByStatus", {} as Record<string, number>),
     chantiersUploadPhoto: stub("chantiersUploadPhoto", { success: false }),
@@ -252,28 +289,41 @@ export function installBtpApiShim(): void {
 
   // ─── Quotes (devis) ────────────────────────────────────────────────────
   const quotes = {
-    quotesList: () => http("GET", "/api/quotes"),
-    quotesGet: (id: string | number) => http("GET", `/api/quotes/${encodeURIComponent(String(id))}`),
+    quotesList: () => http("GET", "/api/quotes").catch(() => []),
+    quotesGet: (id: string | number) =>
+      http("GET", `/api/quotes/${encodeURIComponent(String(id))}`).catch(() => null),
     quotesListByClient: async (clientId: string | number) => {
-      const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ clientId: unknown }>;
-      return all.filter((c) => String(c.clientId) === String(clientId));
+      try {
+        const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ clientId: unknown }>;
+        return all.filter((c) => String(c.clientId) === String(clientId));
+      } catch {
+        return [];
+      }
     },
     quotesListByChantier: async (chantierId: string | number) => {
-      const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ chantierId: unknown }>;
-      return all.filter((c) => String(c.chantierId) === String(chantierId));
+      try {
+        const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ chantierId: unknown }>;
+        return all.filter((c) => String(c.chantierId) === String(chantierId));
+      } catch {
+        return [];
+      }
     },
-    quotesCreate: (data: unknown) => http("POST", "/api/quotes", ensureId(data)),
+    quotesCreate: (data: unknown) => wrapCreate(http("POST", "/api/quotes", ensureId(data))),
     quotesUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
-      http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, data),
+      wrapAction(http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, data)),
     quotesUpdateStatus: ({ id, status }: { id: string | number; status: string }) =>
-      http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, { status }),
+      wrapAction(http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, { status })),
     quotesDelete: (id: string | number) =>
-      http("DELETE", `/api/quotes/${encodeURIComponent(String(id))}`),
-    quotesDuplicate: stub("quotesDuplicate", null),
-    quotesConvertToPo: stub("quotesConvertToPo", null),
+      wrapAction(http("DELETE", `/api/quotes/${encodeURIComponent(String(id))}`)),
+    quotesDuplicate: stub("quotesDuplicate", { success: false }),
+    quotesConvertToPo: stub("quotesConvertToPo", { success: false }),
     quotesCount: async (): Promise<number> => {
-      const r = await http<{ count: number }>("GET", "/api/quotes/count");
-      return r.count;
+      try {
+        const r = await http<{ count: number }>("GET", "/api/quotes/count");
+        return r.count;
+      } catch {
+        return 0;
+      }
     },
     quotesCountByStatus: stub("quotesCountByStatus", {} as Record<string, number>),
     quotesExportPdfPreview: stub("quotesExportPdfPreview", { success: false, error: "PDF web pas encore implémenté" }),
@@ -285,45 +335,66 @@ export function installBtpApiShim(): void {
 
   // ─── Invoices ──────────────────────────────────────────────────────────
   const invoices = {
-    invoicesList: () => http("GET", "/api/invoices"),
+    invoicesList: () => http("GET", "/api/invoices").catch(() => []),
     invoicesGet: (id: string | number) =>
-      http("GET", `/api/invoices/${encodeURIComponent(String(id))}`),
+      http("GET", `/api/invoices/${encodeURIComponent(String(id))}`).catch(() => null),
     invoicesListByClient: async (clientId: string | number) => {
-      const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ clientId: unknown }>;
-      return all.filter((i) => String(i.clientId) === String(clientId));
+      try {
+        const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ clientId: unknown }>;
+        return all.filter((i) => String(i.clientId) === String(clientId));
+      } catch {
+        return [];
+      }
     },
     invoicesListByChantier: async (chantierId: string | number) => {
-      const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ chantierId: unknown }>;
-      return all.filter((i) => String(i.chantierId) === String(chantierId));
+      try {
+        const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ chantierId: unknown }>;
+        return all.filter((i) => String(i.chantierId) === String(chantierId));
+      } catch {
+        return [];
+      }
     },
     invoicesListByQuote: async (quoteId: string | number) => {
-      const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ fromQuoteId: unknown }>;
-      return all.filter((i) => String(i.fromQuoteId) === String(quoteId));
+      try {
+        const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ fromQuoteId: unknown }>;
+        return all.filter((i) => String(i.fromQuoteId) === String(quoteId));
+      } catch {
+        return [];
+      }
     },
-    invoicesCreate: (data: unknown) => http("POST", "/api/invoices", ensureId(data)),
+    invoicesCreate: (data: unknown) => wrapCreate(http("POST", "/api/invoices", ensureId(data))),
     invoicesUpdate: (id: string | number, data: unknown) =>
-      http("PATCH", `/api/invoices/${encodeURIComponent(String(id))}`, data),
+      wrapAction(http("PATCH", `/api/invoices/${encodeURIComponent(String(id))}`, data)),
     invoicesUpdateStatus: (id: string | number, status: string) =>
-      http("PATCH", `/api/invoices/${encodeURIComponent(String(id))}`, { status }),
+      wrapAction(http("PATCH", `/api/invoices/${encodeURIComponent(String(id))}`, { status })),
     invoicesDelete: (id: string | number) =>
-      http("DELETE", `/api/invoices/${encodeURIComponent(String(id))}`),
-    invoicesDuplicate: stub("invoicesDuplicate", null),
+      wrapAction(http("DELETE", `/api/invoices/${encodeURIComponent(String(id))}`)),
+    invoicesDuplicate: stub("invoicesDuplicate", { success: false }),
     invoicesCount: async (): Promise<number> => {
-      const r = await http<{ count: number }>("GET", "/api/invoices/count");
-      return r.count;
+      try {
+        const r = await http<{ count: number }>("GET", "/api/invoices/count");
+        return r.count;
+      } catch {
+        return 0;
+      }
     },
     invoicesCountByStatus: stub("invoicesCountByStatus", {} as Record<string, number>),
-    invoicesConvertFromQuote: stub("invoicesConvertFromQuote", null),
+    invoicesConvertFromQuote: stub("invoicesConvertFromQuote", { success: false }),
     invoicesListPayments: async (invoiceId: string | number) => {
-      const all = (await http<unknown[]>(
-        "GET",
-        `/api/invoice-payments?invoiceId=${encodeURIComponent(String(invoiceId))}`
-      )) as Array<{ invoiceId: unknown }>;
-      return all.filter((p) => String(p.invoiceId) === String(invoiceId));
+      try {
+        const all = (await http<unknown[]>(
+          "GET",
+          `/api/invoice-payments?invoiceId=${encodeURIComponent(String(invoiceId))}`
+        )) as Array<{ invoiceId: unknown }>;
+        return all.filter((p) => String(p.invoiceId) === String(invoiceId));
+      } catch {
+        return [];
+      }
     },
-    invoicesAddPayment: (payment: unknown) => http("POST", "/api/invoice-payments", ensureId(payment)),
+    invoicesAddPayment: (payment: unknown) =>
+      wrapCreate(http("POST", "/api/invoice-payments", ensureId(payment))),
     invoicesDeletePayment: (paymentId: string | number) =>
-      http("DELETE", `/api/invoice-payments/${encodeURIComponent(String(paymentId))}`),
+      wrapAction(http("DELETE", `/api/invoice-payments/${encodeURIComponent(String(paymentId))}`)),
     invoicesMarkReminderSent: stub("invoicesMarkReminderSent", { success: true }),
     invoicesExportPdfPreview: stub("invoicesExportPdfPreview", { success: false, error: "PDF web pas encore implémenté" }),
     invoicesExportPdfSaveAs: stub("invoicesExportPdfSaveAs", { success: false }),
