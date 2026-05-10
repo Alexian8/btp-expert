@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // app.js — Entry point Phusion Passenger (cPanel Setup Node.js App)
 //
-// Pointer Setup Node.js App → Application startup file = apps/server/app.js
-// (au lieu d'un app.js proxy à la racine — supprimé pour simplifier).
+// IMPORTANT cPanel/o2switch :
+//   - Passenger fournit un PORT via env, on doit faire app.listen(port)
+//   - On exporte le handler pour les Phusion Passenger Apache classiques aussi
 // ═══════════════════════════════════════════════════════════════════════════
 
 const fs = require("node:fs");
@@ -15,12 +16,20 @@ function log(msg) {
   } catch {}
 }
 
+process.on("uncaughtException", (e) => {
+  log(`uncaughtException: ${e && e.message}\n${e && e.stack}`);
+});
+process.on("unhandledRejection", (e) => {
+  log(`unhandledRejection: ${e && e.message ? e.message : e}\n${e && e.stack ? e.stack : ""}`);
+});
+
 log("== app.js START ==");
 log(`__dirname=${__dirname}`);
 log(`cwd=${process.cwd()}`);
+log(`PORT env=${process.env.PORT || "(not set)"}`);
+log(`PASSENGER_PORT env=${process.env.PASSENGER_PORT || "(not set)"}`);
 
 try {
-  // Charge .env depuis 3 emplacements possibles (cwd, racine doc, dossier app)
   const dotenv = require("dotenv");
   for (const candidate of [
     path.resolve(__dirname, "..", "..", ".env"),
@@ -49,7 +58,6 @@ proxy.use((req, res, next) => {
     res.status(500).json({
       message: "Server init failed",
       error: initError.message || String(initError),
-      stack: initError.stack || null,
     });
     return;
   }
@@ -74,5 +82,13 @@ proxy.use((req, res, next) => {
     log(e && e.stack ? e.stack : "");
   }
 })();
+
+// Sur cPanel/Passenger Node, on DOIT faire listen() sur le port fourni par
+// le hosting (Passenger reverse-proxy vers ce port).
+const port = Number(process.env.PORT || process.env.PASSENGER_PORT || 3000);
+const server = proxy.listen(port, () => {
+  log(`listening on port ${port}`);
+});
+server.on("error", (e) => log(`server error: ${e.message}`));
 
 module.exports = proxy;
