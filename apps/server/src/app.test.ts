@@ -41,6 +41,11 @@ const cfg: Config = {
   MYSQL_PASSWORD: PASSWORD,
   MYSQL_DATABASE: DATABASE ?? "btp_test",
   MYSQL_CONNECTION_LIMIT: 5,
+  MS_CLIENT_ID: "",
+  MS_CLIENT_SECRET: "",
+  MS_TENANT: "common",
+  MS_REDIRECT_URI: "http://localhost/api/auth/microsoft/callback",
+  MS_SCOPES: "offline_access User.Read",
   NODE_ENV: "test",
 };
 

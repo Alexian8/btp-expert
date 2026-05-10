@@ -14,6 +14,7 @@ import { MysqlRepository } from "./repository";
 import { buildCrudRouter } from "./routes/crud";
 import { buildAuthRouter } from "./routes/auth";
 import { buildBackupRouter } from "./routes/backup";
+import { buildMicrosoftRouter, buildEmailRouter } from "./routes/microsoft";
 import { requireAuth } from "./auth";
 
 export interface AppContext {
@@ -133,6 +134,132 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
   });
   app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments));
+
+  // ─── Devis ─────────────────────────────────────────────────────────────
+  const quotes = new MysqlRepository(pool, "quotes", {
+    primaryKey: "client",
+    filterableColumns: ["status", "clientId", "chantierId", "reference"],
+    sortableColumns: ["createdAt", "issueDate", "reference", "totalTTC"],
+    writableColumns: [
+      "reference",
+      "status",
+      "title",
+      "clientId",
+      "chantierId",
+      "issueDate",
+      "validUntilDate",
+      "acceptedAt",
+      "sentAt",
+      "items",
+      "globalDiscountMode",
+      "globalDiscountPercent",
+      "globalDiscountAmount",
+      "introText",
+      "conditionsText",
+      "footerText",
+      "internalNotes",
+      "companySnapshot",
+      "totalHT",
+      "totalTTC",
+    ],
+    jsonColumns: ["items", "companySnapshot"],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/quotes", auth, buildCrudRouter(quotes));
+
+  // ─── Dépenses ──────────────────────────────────────────────────────────
+  const expenses = new MysqlRepository(pool, "expenses", {
+    filterableColumns: ["category", "supplierId", "chantierId", "isPaid"],
+    sortableColumns: ["date", "amount", "createdAt"],
+    writableColumns: [
+      "label",
+      "amount",
+      "date",
+      "category",
+      "supplierId",
+      "chantierId",
+      "paymentMethod",
+      "paidDate",
+      "isPaid",
+      "notes",
+      "attachmentPath",
+    ],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/expenses", auth, buildCrudRouter(expenses));
+
+  // ─── Notes de frais ────────────────────────────────────────────────────
+  const expenseNotes = new MysqlRepository(pool, "expense_notes", {
+    filterableColumns: ["category", "chantierId", "isReimbursed", "isValidated"],
+    sortableColumns: ["date", "amount", "createdAt"],
+    writableColumns: [
+      "label",
+      "amount",
+      "date",
+      "category",
+      "chantierId",
+      "isReimbursable",
+      "isReimbursed",
+      "reimbursedDate",
+      "isValidated",
+      "validatedAt",
+      "attachmentPath",
+      "notes",
+    ],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/expense-notes", auth, buildCrudRouter(expenseNotes));
+
+  // ─── Sous-traitants ────────────────────────────────────────────────────
+  const subcontractors = new MysqlRepository(pool, "subcontractors", {
+    filterableColumns: ["activity", "siret"],
+    sortableColumns: ["nom", "createdAt"],
+    writableColumns: [
+      "nom",
+      "siret",
+      "email",
+      "telephone",
+      "adresse",
+      "contactPerson",
+      "activity",
+      "retentionRate",
+      "vatRate",
+      "isVatExempt",
+      "notes",
+    ],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/subcontractors", auth, buildCrudRouter(subcontractors));
+
+  // ─── Agenda events ─────────────────────────────────────────────────────
+  const agendaEvents = new MysqlRepository(pool, "agenda_events", {
+    filterableColumns: ["type", "clientId", "chantierId"],
+    sortableColumns: ["startDate", "createdAt"],
+    writableColumns: [
+      "title",
+      "description",
+      "type",
+      "startDate",
+      "endDate",
+      "isAllDay",
+      "location",
+      "clientId",
+      "chantierId",
+      "reminderMinutes",
+      "outlookEventId",
+      "lastSyncedAt",
+    ],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/agenda-events", auth, buildCrudRouter(agendaEvents));
+
+  // ─── Microsoft OAuth (Outlook + Graph) ─────────────────────────────────
+  // Les routes /login et /callback sont publiques (le user JWT est passé
+  // en query parce que les redirects ne portent pas l'header Authorization).
+  app.use("/api/auth/microsoft", buildMicrosoftRouter(pool, cfg));
+
+  // ─── Email via Graph API (nécessite que le user soit connecté) ─────────
+  app.use("/api/email", auth, buildEmailRouter(pool, cfg));
 
   // ─── Backup serveur ────────────────────────────────────────────────────
   app.use("/api/backup", auth, buildBackupRouter(pool, cfg));

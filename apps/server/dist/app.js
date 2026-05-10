@@ -18,6 +18,7 @@ const repository_1 = require("./repository");
 const crud_1 = require("./routes/crud");
 const auth_1 = require("./routes/auth");
 const backup_1 = require("./routes/backup");
+const microsoft_1 = require("./routes/microsoft");
 const auth_2 = require("./auth");
 async function createApp(cfg, db) {
     const pool = db ?? (0, db_1.createPool)(cfg);
@@ -120,6 +121,125 @@ async function createApp(cfg, db) {
         writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
     });
     app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments));
+    // ─── Devis ─────────────────────────────────────────────────────────────
+    const quotes = new repository_1.MysqlRepository(pool, "quotes", {
+        primaryKey: "client",
+        filterableColumns: ["status", "clientId", "chantierId", "reference"],
+        sortableColumns: ["createdAt", "issueDate", "reference", "totalTTC"],
+        writableColumns: [
+            "reference",
+            "status",
+            "title",
+            "clientId",
+            "chantierId",
+            "issueDate",
+            "validUntilDate",
+            "acceptedAt",
+            "sentAt",
+            "items",
+            "globalDiscountMode",
+            "globalDiscountPercent",
+            "globalDiscountAmount",
+            "introText",
+            "conditionsText",
+            "footerText",
+            "internalNotes",
+            "companySnapshot",
+            "totalHT",
+            "totalTTC",
+        ],
+        jsonColumns: ["items", "companySnapshot"],
+        hasUpdatedAt: true,
+    });
+    app.use("/api/quotes", auth, (0, crud_1.buildCrudRouter)(quotes));
+    // ─── Dépenses ──────────────────────────────────────────────────────────
+    const expenses = new repository_1.MysqlRepository(pool, "expenses", {
+        filterableColumns: ["category", "supplierId", "chantierId", "isPaid"],
+        sortableColumns: ["date", "amount", "createdAt"],
+        writableColumns: [
+            "label",
+            "amount",
+            "date",
+            "category",
+            "supplierId",
+            "chantierId",
+            "paymentMethod",
+            "paidDate",
+            "isPaid",
+            "notes",
+            "attachmentPath",
+        ],
+        hasUpdatedAt: true,
+    });
+    app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses));
+    // ─── Notes de frais ────────────────────────────────────────────────────
+    const expenseNotes = new repository_1.MysqlRepository(pool, "expense_notes", {
+        filterableColumns: ["category", "chantierId", "isReimbursed", "isValidated"],
+        sortableColumns: ["date", "amount", "createdAt"],
+        writableColumns: [
+            "label",
+            "amount",
+            "date",
+            "category",
+            "chantierId",
+            "isReimbursable",
+            "isReimbursed",
+            "reimbursedDate",
+            "isValidated",
+            "validatedAt",
+            "attachmentPath",
+            "notes",
+        ],
+        hasUpdatedAt: true,
+    });
+    app.use("/api/expense-notes", auth, (0, crud_1.buildCrudRouter)(expenseNotes));
+    // ─── Sous-traitants ────────────────────────────────────────────────────
+    const subcontractors = new repository_1.MysqlRepository(pool, "subcontractors", {
+        filterableColumns: ["activity", "siret"],
+        sortableColumns: ["nom", "createdAt"],
+        writableColumns: [
+            "nom",
+            "siret",
+            "email",
+            "telephone",
+            "adresse",
+            "contactPerson",
+            "activity",
+            "retentionRate",
+            "vatRate",
+            "isVatExempt",
+            "notes",
+        ],
+        hasUpdatedAt: true,
+    });
+    app.use("/api/subcontractors", auth, (0, crud_1.buildCrudRouter)(subcontractors));
+    // ─── Agenda events ─────────────────────────────────────────────────────
+    const agendaEvents = new repository_1.MysqlRepository(pool, "agenda_events", {
+        filterableColumns: ["type", "clientId", "chantierId"],
+        sortableColumns: ["startDate", "createdAt"],
+        writableColumns: [
+            "title",
+            "description",
+            "type",
+            "startDate",
+            "endDate",
+            "isAllDay",
+            "location",
+            "clientId",
+            "chantierId",
+            "reminderMinutes",
+            "outlookEventId",
+            "lastSyncedAt",
+        ],
+        hasUpdatedAt: true,
+    });
+    app.use("/api/agenda-events", auth, (0, crud_1.buildCrudRouter)(agendaEvents));
+    // ─── Microsoft OAuth (Outlook + Graph) ─────────────────────────────────
+    // Les routes /login et /callback sont publiques (le user JWT est passé
+    // en query parce que les redirects ne portent pas l'header Authorization).
+    app.use("/api/auth/microsoft", (0, microsoft_1.buildMicrosoftRouter)(pool, cfg));
+    // ─── Email via Graph API (nécessite que le user soit connecté) ─────────
+    app.use("/api/email", auth, (0, microsoft_1.buildEmailRouter)(pool, cfg));
     // ─── Backup serveur ────────────────────────────────────────────────────
     app.use("/api/backup", auth, (0, backup_1.buildBackupRouter)(pool, cfg));
     // ─── Settings (key/value JSON) ─────────────────────────────────────────

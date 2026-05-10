@@ -27,6 +27,16 @@ const Schema = z.object({
   MYSQL_DATABASE: z.string().min(1, "MYSQL_DATABASE requis"),
   MYSQL_CONNECTION_LIMIT: z.coerce.number().int().positive().default(10),
 
+  // ─── Microsoft OAuth (Outlook / Graph API) ───────────────────────────
+  // App Registration sur https://portal.azure.com
+  MS_CLIENT_ID: z.string().default(""),
+  MS_CLIENT_SECRET: z.string().default(""),
+  MS_TENANT: z.string().default("common"),
+  MS_REDIRECT_URI: z.string().default("https://intranet.jacobhabitat-dev.fr/api/auth/microsoft/callback"),
+  MS_SCOPES: z
+    .string()
+    .default("offline_access User.Read Mail.Send Calendars.ReadWrite Files.ReadWrite.AppFolder"),
+
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 
