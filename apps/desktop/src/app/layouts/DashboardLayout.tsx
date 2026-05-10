@@ -29,6 +29,7 @@ import {
   HardHat,
   Activity,
   FileSignature,
+  Menu,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
