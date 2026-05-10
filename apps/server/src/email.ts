@@ -234,8 +234,18 @@ function buildMimeMessage(input: SmtpSendInput, messageId: string): string {
   const date = new Date().toUTCString();
   const boundary = `bd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-  // Le `.` au début d'une ligne dans le body doit être doublé (dot stuffing RFC 5321)
-  const dotStuff = (s: string): string => s.replace(/(^|\r?\n)\./g, "$1..");
+  // Encoding base64 : auto-wrap à 76 chars/ligne (max RFC 5322 = 998 mais
+  // base64 est conventionnellement à 76). Évite l'erreur Exim
+  // "lines too long for transport" sur les emails HTML volumineux.
+  const b64 = (s: string): string => {
+    const encoded = Buffer.from(s, "utf8").toString("base64");
+    // Wrap à 76 chars
+    const chunks: string[] = [];
+    for (let i = 0; i < encoded.length; i += 76) {
+      chunks.push(encoded.slice(i, i + 76));
+    }
+    return chunks.join("\r\n");
+  };
 
   const headers = [
     `From: ${input.from}`,
@@ -251,15 +261,15 @@ function buildMimeMessage(input: SmtpSendInput, messageId: string): string {
     "",
     `--${boundary}`,
     `Content-Type: text/plain; charset=utf-8`,
-    `Content-Transfer-Encoding: 8bit`,
+    `Content-Transfer-Encoding: base64`,
     "",
-    dotStuff(input.text),
+    b64(input.text),
     "",
     `--${boundary}`,
     `Content-Type: text/html; charset=utf-8`,
-    `Content-Transfer-Encoding: 8bit`,
+    `Content-Transfer-Encoding: base64`,
     "",
-    dotStuff(input.html),
+    b64(input.html),
     "",
     `--${boundary}--`,
     "",
