@@ -23,6 +23,12 @@ deployment:
     # 3) Build du serveur TypeScript → JavaScript
     - cd $DEPLOYPATH && /usr/local/bin/npm run build -w @btp/server
 
-    # 4) Restart de l'app Node.js (touche restart.txt = signal Passenger)
+    # 4) Déploie le build Vite du front (apps/web/dist) vers public/.
+    #    Le serveur Express sert ce dossier comme SPA. Le dist est committé
+    #    dans Git (généré localement via `npm run build -w @btp/web`).
+    - /bin/mkdir -p $DEPLOYPATH/public
+    - /bin/rsync -av --delete $DEPLOYPATH/apps/web/dist/ $DEPLOYPATH/public/
+
+    # 5) Restart de l'app Node.js (touche restart.txt = signal Passenger)
     - /bin/mkdir -p $DEPLOYPATH/tmp
     - /bin/touch $DEPLOYPATH/tmp/restart.txt
