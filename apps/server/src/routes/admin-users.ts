@@ -61,6 +61,10 @@ const CreateUserSchema = z.object({
   /** Si true, crée aussi une mailbox cPanel (utilise data.email). Le domaine
    *  doit matcher CPANEL_EMAIL_DOMAIN configuré côté serveur. */
   createMailbox: z.boolean().optional().default(false),
+  /** Adresse alternative où envoyer le welcome email avec les credentials.
+   *  Utile si on crée une mailbox pro mais que l'utilisateur n'y a pas
+   *  encore accès — on envoie alors les accès à son email perso (Gmail). */
+  notificationEmail: z.string().email().max(255).optional(),
 });
 
 const UpdateUserSchema = z.object({
@@ -255,11 +259,15 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       }
 
       // ─── Envoi email de bienvenue (best-effort, async) ─────────────────
-      // Si SMTP est configuré, on envoie. Sinon le tempPassword est juste
-      // affiché dans la modal admin (comme avant).
+      // Destination : notificationEmail si fournie (perso), sinon l'email
+      // pro. Logique : si on crée une mailbox cPanel pour l'utilisateur, il
+      // ne peut pas encore checker son email pro -> on envoie souvent à son
+      // adresse perso. L'admin choisit dans la modal.
+      const notifyTo = data.notificationEmail || created.email || "";
       let emailSent = false;
       let emailError: string | undefined;
-      if (created.email) {
+      let emailSentTo: string | undefined;
+      if (notifyTo) {
         const [companyRows] = await db.query<RowDataPacket[]>(
           "SELECT name FROM company WHERE id = ? LIMIT 1",
           [tenantId]
@@ -281,12 +289,13 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
             : undefined,
         });
         const result = await sendMail(cfg, {
-          to: created.email,
+          to: notifyTo,
           subject: `[${companyName}] Vos accès BatiDesk`,
           html,
         });
         emailSent = result.ok;
         emailError = result.skipped ? "SMTP non configuré" : result.error;
+        emailSentTo = notifyTo;
       }
 
       res.status(201).json({
@@ -296,6 +305,7 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         tempPassword: wasGenerated ? tempPassword : undefined,
         emailSent,
         emailError,
+        emailSentTo,
         mailboxCreated,
         mailboxError,
         mailboxAlreadyExists,

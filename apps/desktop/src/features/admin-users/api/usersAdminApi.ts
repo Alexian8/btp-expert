@@ -33,6 +33,10 @@ export interface CreateUserPayload {
   password?: string; // si absent, le serveur génère un temp password
   /** Si true, crée aussi une mailbox cPanel pour cet utilisateur. */
   createMailbox?: boolean;
+  /** Adresse alternative où envoyer le welcome email avec les credentials.
+   *  Utile si la mailbox pro vient d'être créée et n'est pas encore
+   *  utilisable — on envoie alors à l'email perso (Gmail). */
+  notificationEmail?: string;
 }
 
 export interface CreatedUser extends AdminUser {
@@ -40,6 +44,8 @@ export interface CreatedUser extends AdminUser {
   tempPassword?: string;
   emailSent?: boolean;
   emailError?: string;
+  /** Adresse à laquelle l'email a été envoyé (pro ou perso selon notificationEmail). */
+  emailSentTo?: string;
   /** True si une mailbox cPanel a été créée avec succès. */
   mailboxCreated?: boolean;
   /** Raison si mailboxCreated === false (ex: "domaine non autorisé"). */

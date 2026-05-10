@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UserPlus, Copy, Check, AlertCircle, Mail, MailX, Inbox } from "lucide-react";
+import { X, UserPlus, Copy, Check, AlertCircle, Mail, MailX, Inbox, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@btp/ui";
 
 import { usersAdminApi, type Role, type CreatedUser } from "../api/usersAdminApi";
+import { deriveProEmail } from "../lib/nameToEmail";
+
+// Domaine pro où sont créées les mailboxes cPanel.
+// (idéalement viendrait du serveur, mais on peut hardcoder ici pour l'instant
+//  car c'est la valeur de CPANEL_EMAIL_DOMAIN côté server.)
+const PRO_EMAIL_DOMAIN = "intranet.jacobhabitat-dev.fr";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CreateUserModal — Provisioning Admin Only d'un nouvel utilisateur
@@ -34,23 +40,43 @@ const ROLES: Array<{ value: Role; label: string; description: string }> = [
 
 export function CreateUserModal({ open, onClose, onCreated }: Props) {
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [emailManual, setEmailManual] = useState<string | null>(null); // null = auto
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [role, setRole] = useState<Role>("worker");
-  const [createMailbox, setCreateMailbox] = useState(false);
+  const [createMailbox, setCreateMailbox] = useState(true); // coché par défaut
+  // Choix de destination du welcome email
+  const [notifyMode, setNotifyMode] = useState<"pro" | "personal">("personal");
+  const [personalEmail, setPersonalEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdUser, setCreatedUser] = useState<CreatedUser | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Email pro auto-généré : nom.prenom@domaine
+  const autoEmail = useMemo(
+    () => deriveProEmail(firstName, lastName, PRO_EMAIL_DOMAIN),
+    [firstName, lastName]
+  );
+  const email = emailManual ?? autoEmail;
+
+  // Si on crée pas de mailbox, on bascule sur "pro" par défaut (l'utilisateur
+  // a déjà accès à son email perso = email pro)
+  useEffect(() => {
+    if (!createMailbox && notifyMode === "personal" && !personalEmail) {
+      setNotifyMode("pro");
+    }
+  }, [createMailbox, notifyMode, personalEmail]);
+
   function reset() {
     setUsername("");
-    setEmail("");
+    setEmailManual(null);
     setFirstName("");
     setLastName("");
     setRole("worker");
-    setCreateMailbox(false);
+    setCreateMailbox(true);
+    setNotifyMode("personal");
+    setPersonalEmail("");
     setError(null);
     setLoading(false);
     setCreatedUser(null);
@@ -60,6 +86,10 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (notifyMode === "personal" && !personalEmail.trim()) {
+      setError("Renseigne l'email de destination, ou choisis 'Adresse pro'.");
+      return;
+    }
     setLoading(true);
     try {
       const created = await usersAdminApi.create({
@@ -69,7 +99,10 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
         lastName: lastName.trim() || undefined,
         role,
         createMailbox: createMailbox && Boolean(email.trim()),
-        // pas de password fourni → le serveur en génère un
+        notificationEmail:
+          notifyMode === "personal" && personalEmail.trim()
+            ? personalEmail.trim()
+            : undefined, // serveur fallback sur created.email (pro)
       });
       setCreatedUser(created);
       onCreated(created);
@@ -149,8 +182,9 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
                           <strong>Email envoyé automatiquement</strong>
                           <p className="mt-0.5 opacity-90">
                             Un email avec les identifiants a été envoyé à{" "}
-                            <strong>{createdUser.email}</strong>. Tu peux quand même
-                            copier le mot de passe ci-dessous au cas où.
+                            <strong>{createdUser.emailSentTo ?? createdUser.email}</strong>
+                            . Tu peux quand même copier le mot de passe ci-dessous au cas
+                            où.
                           </p>
                         </div>
                       </div>
@@ -303,14 +337,30 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
                   </div>
 
                   <div>
-                    <Label htmlFor="email">Email</Label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <Label htmlFor="email">Email professionnel</Label>
+                      {emailManual !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setEmailManual(null)}
+                          className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                        >
+                          Auto-générer depuis Nom.Prénom
+                        </button>
+                      )}
+                    </div>
                     <Input
                       id="email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="jdupont@jacobhabitat.fr"
+                      onChange={(e) => setEmailManual(e.target.value)}
+                      placeholder={`nom.prenom@${PRO_EMAIL_DOMAIN}`}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {emailManual === null && autoEmail
+                        ? `Auto-généré depuis Nom.Prénom (${autoEmail}) — modifiable`
+                        : `Format : nom.prenom@${PRO_EMAIL_DOMAIN}`}
+                    </p>
                   </div>
 
                   {/* Création mailbox cPanel — visible uniquement si email rempli */}
@@ -336,11 +386,74 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
                             {email.trim()}
                           </code>
                           . Le mot de passe sera identique à celui de BatiDesk au
-                          départ. <em>Nécessite la config CPANEL_API_TOKEN côté
-                          serveur, sinon l'option est ignorée.</em>
+                          départ.
                         </p>
                       </div>
                     </label>
+                  )}
+
+                  {/* Destination du welcome email */}
+                  {email.trim() && (
+                    <div className="border border-border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Send className="w-4 h-4 text-primary" />
+                        <Label className="text-sm font-medium">
+                          Envoyer les accès par email à
+                        </Label>
+                      </div>
+
+                      <label className="flex items-start gap-3 p-2 rounded hover:bg-accent/30 cursor-pointer transition-colors">
+                        <input
+                          type="radio"
+                          name="notify-mode"
+                          checked={notifyMode === "pro"}
+                          onChange={() => setNotifyMode("pro")}
+                          className="mt-1 shrink-0 accent-primary"
+                          disabled={createMailbox}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">
+                            L'adresse pro
+                          </p>
+                          <p className="text-xs text-muted-foreground break-all">
+                            {email.trim() || "(aucune)"}
+                          </p>
+                          {createMailbox && (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                              ⚠️ Désactivé : la mailbox vient d'être créée, l'utilisateur
+                              n'y a pas encore accès. Préfère une adresse perso.
+                            </p>
+                          )}
+                        </div>
+                      </label>
+
+                      <label className="flex items-start gap-3 p-2 rounded hover:bg-accent/30 cursor-pointer transition-colors">
+                        <input
+                          type="radio"
+                          name="notify-mode"
+                          checked={notifyMode === "personal"}
+                          onChange={() => setNotifyMode("personal")}
+                          className="mt-1 shrink-0 accent-primary"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">Une autre adresse</p>
+                          <p className="text-xs text-muted-foreground mb-1.5">
+                            Email perso de l'utilisateur (Gmail, Outlook…)
+                          </p>
+                          {notifyMode === "personal" && (
+                            <Input
+                              type="email"
+                              value={personalEmail}
+                              onChange={(e) => setPersonalEmail(e.target.value)}
+                              placeholder="jean.dupont@gmail.com"
+                              className="mt-1"
+                              required={notifyMode === "personal"}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          )}
+                        </div>
+                      </label>
+                    </div>
                   )}
 
                   <div>

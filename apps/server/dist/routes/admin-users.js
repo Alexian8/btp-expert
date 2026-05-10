@@ -58,6 +58,10 @@ const CreateUserSchema = zod_1.z.object({
     /** Si true, crée aussi une mailbox cPanel (utilise data.email). Le domaine
      *  doit matcher CPANEL_EMAIL_DOMAIN configuré côté serveur. */
     createMailbox: zod_1.z.boolean().optional().default(false),
+    /** Adresse alternative où envoyer le welcome email avec les credentials.
+     *  Utile si on crée une mailbox pro mais que l'utilisateur n'y a pas
+     *  encore accès — on envoie alors les accès à son email perso (Gmail). */
+    notificationEmail: zod_1.z.string().email().max(255).optional(),
 });
 const UpdateUserSchema = zod_1.z.object({
     email: zod_1.z.string().email().max(255).optional(),
@@ -196,11 +200,15 @@ function buildAdminUsersRouter(db, cfg) {
             }
         }
         // ─── Envoi email de bienvenue (best-effort, async) ─────────────────
-        // Si SMTP est configuré, on envoie. Sinon le tempPassword est juste
-        // affiché dans la modal admin (comme avant).
+        // Destination : notificationEmail si fournie (perso), sinon l'email
+        // pro. Logique : si on crée une mailbox cPanel pour l'utilisateur, il
+        // ne peut pas encore checker son email pro -> on envoie souvent à son
+        // adresse perso. L'admin choisit dans la modal.
+        const notifyTo = data.notificationEmail || created.email || "";
         let emailSent = false;
         let emailError;
-        if (created.email) {
+        let emailSentTo;
+        if (notifyTo) {
             const [companyRows] = await db.query("SELECT name FROM company WHERE id = ? LIMIT 1", [tenantId]);
             const companyName = companyRows[0]?.name ?? "BatiDesk";
             const html = (0, email_1.welcomeEmailHtml)({
@@ -219,12 +227,13 @@ function buildAdminUsersRouter(db, cfg) {
                     : undefined,
             });
             const result = await (0, email_1.sendMail)(cfg, {
-                to: created.email,
+                to: notifyTo,
                 subject: `[${companyName}] Vos accès BatiDesk`,
                 html,
             });
             emailSent = result.ok;
             emailError = result.skipped ? "SMTP non configuré" : result.error;
+            emailSentTo = notifyTo;
         }
         res.status(201).json({
             ...publicUser(created),
@@ -233,6 +242,7 @@ function buildAdminUsersRouter(db, cfg) {
             tempPassword: wasGenerated ? tempPassword : undefined,
             emailSent,
             emailError,
+            emailSentTo,
             mailboxCreated,
             mailboxError,
             mailboxAlreadyExists,
