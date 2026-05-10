@@ -183,7 +183,101 @@ export function InvoicesListView() {
           <p className="text-sm text-muted-foreground">Aucune facture ne correspond aux filtres</p>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <>
+          {/* ─── Cartes mobile (< md) ──────────────────────────────────── */}
+          <div className="md:hidden space-y-2">
+            {filtered.map((inv, idx) => {
+              const meta = INVOICE_STATUS_META[inv.status];
+              const typeMeta = INVOICE_TYPE_META[inv.type];
+              const client = getClient(inv.clientId);
+              const clientName = client
+                ? client.type === "pro" && client.companyName
+                  ? client.companyName
+                  : `${client.firstName} ${client.lastName}`.trim() || "—"
+                : "—";
+              const remaining = (inv.totalTTC || 0) - (inv.totalPaid || 0);
+              const overdue = isInvoiceOverdue(inv);
+              const daysLate = daysOverdue(inv);
+              return (
+                <motion.div
+                  key={inv.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+                  onClick={() => navigate(`/invoices/${inv.id}`)}
+                  className="bg-card border border-border rounded-lg p-3 active:bg-accent/40 cursor-pointer flex items-start gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {inv.reference}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[9px] uppercase font-semibold px-1 py-0.5 rounded",
+                          inv.type === "standard" && "bg-slate-500/15 text-slate-500",
+                          inv.type === "acompte" && "bg-amber-500/15 text-amber-500",
+                          inv.type === "avoir" && "bg-rose-500/15 text-rose-500"
+                        )}
+                      >
+                        {typeMeta.shortLabel}
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded",
+                          meta.color === "slate" && "bg-slate-500/15 text-slate-500",
+                          meta.color === "blue" && "bg-blue-500/15 text-blue-500",
+                          meta.color === "amber" && "bg-amber-500/15 text-amber-500",
+                          meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
+                          meta.color === "rose" && "bg-rose-500/15 text-rose-500"
+                        )}
+                      >
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="font-medium text-sm leading-tight truncate">
+                      {inv.title || "Sans titre"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {clientName}
+                    </p>
+                    <div className="flex items-center justify-between mt-2 text-xs">
+                      <span
+                        className={cn(
+                          "text-muted-foreground",
+                          overdue && "text-rose-500 font-medium"
+                        )}
+                      >
+                        {inv.dueDate ? (
+                          overdue ? `Retard +${daysLate}j` : `Échéance ${formatDateFR(inv.dueDate)}`
+                        ) : "—"}
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {inv.status === "payee" ? (
+                          <span className="text-emerald-500">✓ {formatEuros(inv.totalTTC, 0)}</span>
+                        ) : (
+                          <>
+                            {formatEuros(inv.totalTTC, 0)}
+                            {remaining > 0 && remaining < inv.totalTTC && (
+                              <span className="text-primary ml-1.5">
+                                (reste {formatEuros(remaining, 0)})
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <InvoiceRowMenu invoiceId={inv.id} reference={inv.reference} />
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          {/* ─── Tableau desktop (≥ md) ────────────────────────────────── */}
+          <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
@@ -285,7 +379,8 @@ export function InvoicesListView() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

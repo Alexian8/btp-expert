@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, Save, Trash2, Send, Eye, Download, Mail, Bell,
-  CreditCard, FileText, AlertCircle,
+  CreditCard, FileText, AlertCircle, MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +28,13 @@ import { PdfActions } from "@/features/pdf/PdfActions";
 import { InvoicePdfDocument } from "@/features/pdf/InvoicePdfDocument";
 import { InvoicePdfMinimal } from "@/features/pdf/InvoicePdfMinimal";
 import { InvoicePdfClassique } from "@/features/pdf/InvoicePdfClassique";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   EMPTY_INVOICE,
   INVOICE_STATUS_META,
@@ -322,10 +329,9 @@ ${companyName}`,
               </p>
             </div>
           </div>
-          <div className="flex gap-2 shrink-0 flex-wrap">
+          <div className="flex gap-2 shrink-0 flex-wrap items-center">
             {existing && (
               <>
-                {/* PDF — 2 templates au choix, persisté en localStorage */}
                 {(() => {
                   const c = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
                   const co = company as Record<string, unknown>;
@@ -342,45 +348,105 @@ ${companyName}`,
                     />
                   );
                 })()}
-                <Button variant="outline" size="sm" onClick={handleOpenEmailModal}>
+
+                {/* Actions desktop visibles, cachées sur mobile */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenEmailModal}
+                  className="hidden md:inline-flex"
+                >
                   <Mail className="w-3.5 h-3.5" />
                   Envoyer par email
                 </Button>
-
-                {/* Paiement */}
                 {(existing.status === "envoyee" || existing.status === "partiellement-payee") && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setPaymentModalOpen(true)}
+                    className="hidden md:inline-flex"
                   >
                     <CreditCard className="w-3.5 h-3.5" />
                     Enregistrer un paiement
                   </Button>
                 )}
-
-                {/* Relance : facture impayée et en retard */}
                 {overdue && (
-                  <Button variant="outline" size="sm" onClick={handleOpenReminderModal}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenReminderModal}
+                    className="hidden md:inline-flex"
+                  >
                     <Bell className="w-3.5 h-3.5 text-amber-500" />
                     Envoyer une relance
                   </Button>
                 )}
-
                 {existing.status === "brouillon" && (
-                  <Button variant="outline" size="sm" onClick={() => handleStatusChange("envoyee")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleStatusChange("envoyee")}
+                    className="hidden md:inline-flex"
+                  >
                     <Send className="w-3.5 h-3.5" />
                     Marquer envoyée
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmDelete(true)}
+                  className="hidden md:inline-flex"
+                >
                   <Trash2 className="w-3.5 h-3.5 text-destructive" />
                 </Button>
+
+                {/* Mobile : dropdown "..." */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="md:hidden h-9 w-9">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-56">
+                    <DropdownMenuItem onClick={handleOpenEmailModal}>
+                      <Mail className="w-4 h-4" />
+                      <span>Envoyer par email</span>
+                    </DropdownMenuItem>
+                    {(existing.status === "envoyee" ||
+                      existing.status === "partiellement-payee") && (
+                      <DropdownMenuItem onClick={() => setPaymentModalOpen(true)}>
+                        <CreditCard className="w-4 h-4" />
+                        <span>Enregistrer un paiement</span>
+                      </DropdownMenuItem>
+                    )}
+                    {overdue && (
+                      <DropdownMenuItem onClick={handleOpenReminderModal}>
+                        <Bell className="w-4 h-4 text-amber-500" />
+                        <span>Envoyer une relance</span>
+                      </DropdownMenuItem>
+                    )}
+                    {existing.status === "brouillon" && (
+                      <DropdownMenuItem onClick={() => handleStatusChange("envoyee")}>
+                        <Send className="w-4 h-4" />
+                        <span>Marquer envoyée</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setConfirmDelete(true)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Supprimer</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             )}
             <Button onClick={handleSave} loading={saving} size="sm">
               <Save className="w-4 h-4" />
-              Enregistrer
+              <span className="hidden sm:inline">Enregistrer</span>
             </Button>
           </div>
         </div>

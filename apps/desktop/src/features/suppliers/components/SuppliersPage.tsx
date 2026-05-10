@@ -162,7 +162,52 @@ function SuppliersTable({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
+    <>
+      {/* ─── Cartes mobile (< md) ─────────────────────────────────────── */}
+      <div className="md:hidden space-y-2">
+        {suppliers.map((s, idx) => (
+          <motion.div
+            key={s.id}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+            onClick={() => onView(s)}
+            className="bg-card border border-border rounded-lg p-3 active:bg-accent/40 cursor-pointer flex items-center gap-3"
+          >
+            <div className="w-10 h-10 rounded-md bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-sm truncate">{s.companyName || "—"}</p>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                {s.category && (
+                  <span className="px-1.5 py-0.5 rounded bg-muted">{s.category}</span>
+                )}
+                {s.city && <span>{s.city}</span>}
+                {(s.phoneMobile || s.phoneFixed) && (
+                  <span className="font-mono">{s.phoneMobile || s.phoneFixed}</span>
+                )}
+              </div>
+            </div>
+            <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center gap-0.5">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(s)}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onDelete(s.id)}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* ─── Tableau desktop (≥ md) ───────────────────────────────────── */}
+      <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 border-b border-border">
@@ -222,7 +267,8 @@ function SuppliersTable({
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

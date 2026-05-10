@@ -140,72 +140,134 @@ export function QuotesListView() {
           <p className="text-sm text-muted-foreground">Aucun devis ne correspond aux filtres</p>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 border-b border-border">
-                <tr>
-                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Réf.</th>
-                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Titre</th>
-                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Client</th>
-                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Statut</th>
-                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Émis le</th>
-                  <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Créé par</th>
-                  <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Total HT</th>
-                  <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Total TTC</th>
-                  <th className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((q, idx) => {
-                  const meta = QUOTE_STATUS_META[q.status];
-                  const client = getClient(q.clientId);
-                  const clientName = client
-                    ? (client.type === "pro" && client.companyName
-                      ? client.companyName
-                      : `${client.firstName} ${client.lastName}`.trim() || "—")
-                    : "—";
-                  return (
-                    <motion.tr
-                      key={q.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: Math.min(idx * 0.015, 0.3) }}
-                      onClick={() => navigate(`/quotes/${q.id}`)}
-                      className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group"
-                    >
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{q.reference}</td>
-                      <td className="px-4 py-3 min-w-[200px]">
-                        <p className="font-medium truncate">{q.title || "Sans titre"}</p>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]">{clientName}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn(
-                          "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded",
-                          meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
-                          meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+        <>
+          {/* ─── Cartes mobile (< md) ──────────────────────────────────── */}
+          <div className="md:hidden space-y-2">
+            {filtered.map((q, idx) => {
+              const meta = QUOTE_STATUS_META[q.status];
+              const client = getClient(q.clientId);
+              const clientName = client
+                ? client.type === "pro" && client.companyName
+                  ? client.companyName
+                  : `${client.firstName} ${client.lastName}`.trim() || "—"
+                : "—";
+              return (
+                <motion.div
+                  key={q.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+                  onClick={() => navigate(`/quotes/${q.id}`)}
+                  className="bg-card border border-border rounded-lg p-3 active:bg-accent/40 cursor-pointer flex items-start gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {q.reference}
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0",
+                          meta.color === "slate" && "bg-slate-500/15 text-slate-500",
+                          meta.color === "blue" && "bg-blue-500/15 text-blue-500",
                           meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
-                          meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
-                        )}>
-                          {meta.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDate(q.issueDate)}</td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <UserBadge userId={(q as { createdBy?: number | string }).createdBy} />
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium tabular-nums">{formatEuros(q.totalHT, 0)}</td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatEuros(q.totalTTC, 0)}</td>
-                      <td className="px-2 py-3 text-right">
-                        <RowMenu quoteId={q.id} reference={q.reference} />
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          meta.color === "rose" && "bg-rose-500/15 text-rose-500"
+                        )}
+                      >
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="font-medium text-sm leading-tight truncate">
+                      {q.title || "Sans titre"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {clientName}
+                    </p>
+                    <div className="flex items-center justify-between mt-2 text-xs">
+                      <span className="text-muted-foreground">
+                        {formatDate(q.issueDate)}
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {formatEuros(q.totalTTC, 0)}
+                      </span>
+                    </div>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <RowMenu quoteId={q.id} reference={q.reference} />
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
-        </div>
+
+          {/* ─── Tableau desktop (≥ md) ────────────────────────────────── */}
+          <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 border-b border-border">
+                  <tr>
+                    <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Réf.</th>
+                    <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Titre</th>
+                    <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Client</th>
+                    <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Statut</th>
+                    <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Émis le</th>
+                    <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Créé par</th>
+                    <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Total HT</th>
+                    <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wider text-muted-foreground">Total TTC</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((q, idx) => {
+                    const meta = QUOTE_STATUS_META[q.status];
+                    const client = getClient(q.clientId);
+                    const clientName = client
+                      ? (client.type === "pro" && client.companyName
+                        ? client.companyName
+                        : `${client.firstName} ${client.lastName}`.trim() || "—")
+                      : "—";
+                    return (
+                      <motion.tr
+                        key={q.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: Math.min(idx * 0.015, 0.3) }}
+                        onClick={() => navigate(`/quotes/${q.id}`)}
+                        className="border-b border-border last:border-0 hover:bg-accent/40 cursor-pointer transition-colors group"
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{q.reference}</td>
+                        <td className="px-4 py-3 min-w-[200px]">
+                          <p className="font-medium truncate">{q.title || "Sans titre"}</p>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]">{clientName}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn(
+                            "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded",
+                            meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                            meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                            meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
+                            meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
+                          )}>
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{formatDate(q.issueDate)}</td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <UserBadge userId={(q as { createdBy?: number | string }).createdBy} />
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium tabular-nums">{formatEuros(q.totalHT, 0)}</td>
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatEuros(q.totalTTC, 0)}</td>
+                        <td className="px-2 py-3 text-right">
+                          <RowMenu quoteId={q.id} reference={q.reference} />
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

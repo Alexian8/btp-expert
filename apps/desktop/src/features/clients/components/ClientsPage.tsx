@@ -273,7 +273,64 @@ function ClientsTable({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
+    <>
+      {/* ─── Cartes mobile (< md) ─────────────────────────────────────── */}
+      <div className="md:hidden space-y-2">
+        {clients.map((c, idx) => (
+          <motion.div
+            key={c.id}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+            onClick={() => onView(c)}
+            className="bg-card border border-border rounded-lg p-3 active:bg-accent/40 cursor-pointer flex items-center gap-3"
+          >
+            <div
+              className={cn(
+                "w-10 h-10 rounded-md flex items-center justify-center shrink-0",
+                c.type === "pro"
+                  ? "bg-blue-500/15 text-blue-500"
+                  : "bg-violet-500/15 text-violet-500"
+              )}
+            >
+              {c.type === "pro" ? (
+                <Building2 className="w-4 h-4" />
+              ) : (
+                <UserIcon className="w-4 h-4" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-sm truncate">
+                {c.type === "pro" && c.companyName
+                  ? c.companyName
+                  : `${c.firstName} ${c.lastName}`.trim() || "—"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {[c.city, c.phoneMobile || c.phoneFixed, c.email]
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .join(" · ") || "—"}
+              </p>
+            </div>
+            <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center gap-0.5">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(c)}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onDelete(c.id)}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* ─── Tableau desktop (≥ md) ───────────────────────────────────── */}
+      <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 border-b border-border">
@@ -342,7 +399,8 @@ function ClientsTable({
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

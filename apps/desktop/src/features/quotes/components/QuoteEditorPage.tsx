@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft, Save, Trash2, Send, Check, X as XIcon, Info,
   Calendar, FileText, Receipt, Pencil, Eye, Download, Mail,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +26,13 @@ import { QuoteItemsEditor } from "./QuoteItemsEditor";
 import { QuoteTotalsPanel } from "./QuoteTotalsPanel";
 import { SendQuoteByEmailModal } from "./SendQuoteByEmailModal";
 import { ConvertToInvoiceModal } from "@/features/invoices/components/ConvertToInvoiceModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PdfActions } from "@/features/pdf/PdfActions";
 import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
 import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
@@ -275,10 +283,10 @@ ${company?.companyName || ""}`;
                 </div>
               )}
             </div>
-            <div className="flex gap-2 shrink-0 flex-wrap">
+            <div className="flex gap-2 shrink-0 flex-wrap items-center">
               {existing && (
                 <>
-                  {/* PDF — 2 templates au choix, persisté en localStorage */}
+                  {/* PDF — visible partout (PdfActions est compact) */}
                   {(() => {
                     const c = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
                     const co = company as Record<string, unknown>;
@@ -295,43 +303,118 @@ ${company?.companyName || ""}`;
                       />
                     );
                   })()}
-                  <Button variant="outline" size="sm" onClick={handleOpenEmailModal}>
+
+                  {/* Actions secondaires : visibles en md+, cachées sur mobile */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenEmailModal}
+                    className="hidden md:inline-flex"
+                  >
                     <Mail className="w-3.5 h-3.5" />
                     Envoyer par email
                   </Button>
-
-                  {/* Session 10 — Convertir en facture */}
-                  <Button variant="outline" size="sm" onClick={() => setConvertModalOpen(true)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConvertModalOpen(true)}
+                    className="hidden md:inline-flex"
+                  >
                     <Receipt className="w-3.5 h-3.5" />
                     Convertir en facture
                   </Button>
-
                   {existing.status === "brouillon" && (
-                    <Button variant="outline" size="sm" onClick={() => handleStatusChange("envoye")}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleStatusChange("envoye")}
+                      className="hidden md:inline-flex"
+                    >
                       <Send className="w-3.5 h-3.5" />
                       Marquer envoyé
                     </Button>
                   )}
                   {existing.status === "envoye" && (
                     <>
-                      <Button variant="outline" size="sm" onClick={() => handleStatusChange("accepte")}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleStatusChange("accepte")}
+                        className="hidden md:inline-flex"
+                      >
                         <Check className="w-3.5 h-3.5" />
                         Accepté
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleStatusChange("refuse")}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleStatusChange("refuse")}
+                        className="hidden md:inline-flex"
+                      >
                         <XIcon className="w-3.5 h-3.5" />
                         Refusé
                       </Button>
                     </>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmDelete(true)}
+                    className="hidden md:inline-flex"
+                  >
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
+
+                  {/* Mobile : dropdown "..." regroupe toutes les actions secondaires */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="md:hidden h-9 w-9">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-56">
+                      <DropdownMenuItem onClick={handleOpenEmailModal}>
+                        <Mail className="w-4 h-4" />
+                        <span>Envoyer par email</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setConvertModalOpen(true)}>
+                        <Receipt className="w-4 h-4" />
+                        <span>Convertir en facture</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {existing.status === "brouillon" && (
+                        <DropdownMenuItem onClick={() => handleStatusChange("envoye")}>
+                          <Send className="w-4 h-4" />
+                          <span>Marquer envoyé</span>
+                        </DropdownMenuItem>
+                      )}
+                      {existing.status === "envoye" && (
+                        <>
+                          <DropdownMenuItem onClick={() => handleStatusChange("accepte")}>
+                            <Check className="w-4 h-4" />
+                            <span>Marquer accepté</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange("refuse")}>
+                            <XIcon className="w-4 h-4" />
+                            <span>Marquer refusé</span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setConfirmDelete(true)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Supprimer</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
               <Button onClick={handleSave} loading={saving} size="sm">
                 <Save className="w-4 h-4" />
-                Enregistrer
+                <span className="hidden sm:inline">Enregistrer</span>
               </Button>
             </div>
           </div>
