@@ -1,46 +1,52 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // App — assemblage Express. Séparé de index.ts pour pouvoir être importé
 // par les tests (supertest) sans démarrer un serveur HTTP réel.
 // ═══════════════════════════════════════════════════════════════════════════
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import { createPool, runMigrations } from "./db";
-import { MysqlRepository } from "./repository";
-import { buildCrudRouter } from "./routes/crud";
-import { buildAuthRouter } from "./routes/auth";
-import { requireAuth } from "./auth";
-export async function createApp(cfg, db) {
-    const pool = db ?? createPool(cfg);
-    await runMigrations(pool);
-    const app = express();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createApp = createApp;
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const helmet_1 = __importDefault(require("helmet"));
+const db_1 = require("./db");
+const repository_1 = require("./repository");
+const crud_1 = require("./routes/crud");
+const auth_1 = require("./routes/auth");
+const auth_2 = require("./auth");
+async function createApp(cfg, db) {
+    const pool = db ?? (0, db_1.createPool)(cfg);
+    await (0, db_1.runMigrations)(pool);
+    const app = (0, express_1.default)();
     app.disable("x-powered-by");
-    app.use(helmet());
-    app.use(cors({
+    app.use((0, helmet_1.default)());
+    app.use((0, cors_1.default)({
         origin: cfg.CORS_ORIGINS,
         credentials: true,
     }));
-    app.use(express.json({ limit: "10mb" }));
+    app.use(express_1.default.json({ limit: "10mb" }));
     app.get("/api/health", (_req, res) => {
         res.json({ ok: true, version: "0.1.0", time: new Date().toISOString() });
     });
-    app.use("/api/auth", buildAuthRouter(pool, cfg));
-    const auth = requireAuth(cfg);
-    const clients = new MysqlRepository(pool, "clients", {
+    app.use("/api/auth", (0, auth_1.buildAuthRouter)(pool, cfg));
+    const auth = (0, auth_2.requireAuth)(cfg);
+    const clients = new repository_1.MysqlRepository(pool, "clients", {
         filterableColumns: ["nom", "email", "siret"],
         sortableColumns: ["id", "nom", "createdAt"],
         writableColumns: ["nom", "email", "telephone", "adresse", "siret", "notes"],
         hasUpdatedAt: true,
     });
-    app.use("/api/clients", auth, buildCrudRouter(clients));
-    const fournisseurs = new MysqlRepository(pool, "fournisseurs", {
+    app.use("/api/clients", auth, (0, crud_1.buildCrudRouter)(clients));
+    const fournisseurs = new repository_1.MysqlRepository(pool, "fournisseurs", {
         filterableColumns: ["nom", "email", "siret"],
         sortableColumns: ["id", "nom", "createdAt"],
         writableColumns: ["nom", "email", "telephone", "adresse", "siret", "notes"],
         hasUpdatedAt: true,
     });
-    app.use("/api/fournisseurs", auth, buildCrudRouter(fournisseurs));
-    const chantiers = new MysqlRepository(pool, "chantiers", {
+    app.use("/api/fournisseurs", auth, (0, crud_1.buildCrudRouter)(fournisseurs));
+    const chantiers = new repository_1.MysqlRepository(pool, "chantiers", {
         filterableColumns: ["clientId", "statut", "priorite"],
         sortableColumns: ["id", "nom", "dateDebut", "createdAt"],
         writableColumns: [
@@ -55,7 +61,7 @@ export async function createApp(cfg, db) {
         ],
         hasUpdatedAt: true,
     });
-    app.use("/api/chantiers", auth, buildCrudRouter(chantiers));
+    app.use("/api/chantiers", auth, (0, crud_1.buildCrudRouter)(chantiers));
     // ─── Settings (key/value JSON) ─────────────────────────────────────────
     app.get("/api/settings", auth, asyncHandler(async (_req, res) => {
         const [rows] = await pool.query("SELECT `key`, value FROM settings");

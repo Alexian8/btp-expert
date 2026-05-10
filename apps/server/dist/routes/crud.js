@@ -1,3 +1,4 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // Router CRUD générique — branche un MysqlRepository sur une route REST
 //
@@ -9,12 +10,14 @@
 //   PATCH  /:id         → update
 //   DELETE /:id         → delete
 // ═══════════════════════════════════════════════════════════════════════════
-import { Router } from "express";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.buildCrudRouter = buildCrudRouter;
+const express_1 = require("express");
 const wrap = (handler) => (req, res, next) => {
     handler(req, res).catch(next);
 };
-export function buildCrudRouter(repo) {
-    const router = Router();
+function buildCrudRouter(repo) {
+    const router = (0, express_1.Router)();
     router.get("/count", wrap(async (req, res) => {
         res.json({ count: await repo.count(req.query) });
     }));

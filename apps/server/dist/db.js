@@ -1,3 +1,4 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // DB — pool MySQL (mysql2/promise) + migrations
 //
@@ -6,8 +7,15 @@
 //
 // Le pool est partagé entre toutes les routes — pas de connexion par requête.
 // ═══════════════════════════════════════════════════════════════════════════
-import mysql from "mysql2/promise";
-export function createPool(cfg) {
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createPool = createPool;
+exports.pingPool = pingPool;
+exports.runMigrations = runMigrations;
+const promise_1 = __importDefault(require("mysql2/promise"));
+function createPool(cfg) {
     const opts = {
         host: cfg.MYSQL_HOST,
         port: cfg.MYSQL_PORT,
@@ -21,9 +29,9 @@ export function createPool(cfg) {
         timezone: "Z",
         charset: "utf8mb4",
     };
-    return mysql.createPool(opts);
+    return promise_1.default.createPool(opts);
 }
-export async function pingPool(db) {
+async function pingPool(db) {
     const conn = await db.getConnection();
     try {
         await conn.ping();
@@ -35,7 +43,7 @@ export async function pingPool(db) {
 // ─── Migrations ──────────────────────────────────────────────────────────
 // CREATE TABLE IF NOT EXISTS — idempotent. Les schémas sont volontairement
 // proches de la version SQLite desktop pour permettre une migration facile.
-export async function runMigrations(db) {
+async function runMigrations(db) {
     const statements = [
         `CREATE TABLE IF NOT EXISTS users (
       id INT PRIMARY KEY AUTO_INCREMENT,

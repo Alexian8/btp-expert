@@ -1,16 +1,23 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // Routes Auth — login / logout / me / bootstrap
 // Hash des mots de passe : scrypt (Node natif).
 // ═══════════════════════════════════════════════════════════════════════════
-import { Router } from "express";
-import { z } from "zod";
-import crypto from "node:crypto";
-import { signToken, verifyToken } from "../auth";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.__testHelpers = void 0;
+exports.buildAuthRouter = buildAuthRouter;
+const express_1 = require("express");
+const zod_1 = require("zod");
+const node_crypto_1 = __importDefault(require("node:crypto"));
+const auth_1 = require("../auth");
 const SALT_LEN = 16;
 const KEY_LEN = 64;
 function hashPassword(password) {
-    const salt = crypto.randomBytes(SALT_LEN);
-    const hash = crypto.scryptSync(password, salt, KEY_LEN);
+    const salt = node_crypto_1.default.randomBytes(SALT_LEN);
+    const hash = node_crypto_1.default.scryptSync(password, salt, KEY_LEN);
     return `${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 function verifyPassword(password, stored) {
@@ -19,18 +26,18 @@ function verifyPassword(password, stored) {
         return false;
     const salt = Buffer.from(saltHex, "hex");
     const expected = Buffer.from(hashHex, "hex");
-    const actual = crypto.scryptSync(password, salt, expected.length);
-    return crypto.timingSafeEqual(expected, actual);
+    const actual = node_crypto_1.default.scryptSync(password, salt, expected.length);
+    return node_crypto_1.default.timingSafeEqual(expected, actual);
 }
-const LoginSchema = z.object({
-    username: z.string().min(1).max(64),
-    password: z.string().min(1).max(256),
+const LoginSchema = zod_1.z.object({
+    username: zod_1.z.string().min(1).max(64),
+    password: zod_1.z.string().min(1).max(256),
 });
 const wrap = (handler) => (req, res, next) => {
     handler(req, res).catch(next);
 };
-export function buildAuthRouter(db, cfg) {
-    const router = Router();
+function buildAuthRouter(db, cfg) {
+    const router = (0, express_1.Router)();
     router.post("/login", wrap(async (req, res) => {
         const parsed = LoginSchema.safeParse(req.body);
         if (!parsed.success) {
@@ -44,7 +51,7 @@ export function buildAuthRouter(db, cfg) {
             return;
         }
         const payload = { sub: row.id, username: row.username, role: row.role };
-        const token = signToken(payload, cfg);
+        const token = (0, auth_1.signToken)(payload, cfg);
         res.json({ id: row.id, username: row.username, role: row.role, token });
     }));
     router.post("/logout", (_req, res) => {
@@ -56,7 +63,7 @@ export function buildAuthRouter(db, cfg) {
             res.status(401).json({ message: "Token manquant" });
             return;
         }
-        const payload = verifyToken(header.slice(7), cfg);
+        const payload = (0, auth_1.verifyToken)(header.slice(7), cfg);
         if (!payload) {
             res.status(401).json({ message: "Token invalide" });
             return;
@@ -88,5 +95,5 @@ export function buildAuthRouter(db, cfg) {
     }));
     return router;
 }
-export const __testHelpers = { hashPassword, verifyPassword };
+exports.__testHelpers = { hashPassword, verifyPassword };
 //# sourceMappingURL=auth.js.map

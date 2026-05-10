@@ -1,3 +1,4 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // Tests d'intégration — nécessitent un MySQL accessible.
 //
@@ -14,10 +15,14 @@
 //
 // Si ces variables ne sont pas définies, les tests sont skippés (pas en échec).
 // ═══════════════════════════════════════════════════════════════════════════
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
-import request from "supertest";
-import mysql from "mysql2/promise";
-import { createApp } from "./app";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const vitest_1 = require("vitest");
+const supertest_1 = __importDefault(require("supertest"));
+const promise_1 = __importDefault(require("mysql2/promise"));
+const app_1 = require("./app");
 const HOST = process.env.MYSQL_TEST_HOST;
 const PORT = Number(process.env.MYSQL_TEST_PORT ?? 3306);
 const USER = process.env.MYSQL_TEST_USER;
@@ -38,10 +43,10 @@ const cfg = {
     NODE_ENV: "test",
 };
 let handle = null;
-const describeIfMysql = hasMysql ? describe : describe.skip;
+const describeIfMysql = hasMysql ? vitest_1.describe : vitest_1.describe.skip;
 describeIfMysql("Server (MySQL integration)", () => {
-    beforeAll(async () => {
-        const pool = mysql.createPool({
+    (0, vitest_1.beforeAll)(async () => {
+        const pool = promise_1.default.createPool({
             host: cfg.MYSQL_HOST,
             port: cfg.MYSQL_PORT,
             user: cfg.MYSQL_USER,
@@ -49,15 +54,15 @@ describeIfMysql("Server (MySQL integration)", () => {
             database: cfg.MYSQL_DATABASE,
             connectionLimit: cfg.MYSQL_CONNECTION_LIMIT,
         });
-        const { app } = await createApp(cfg, pool);
+        const { app } = await (0, app_1.createApp)(cfg, pool);
         handle = { app, pool };
     });
-    afterAll(async () => {
+    (0, vitest_1.afterAll)(async () => {
         if (handle)
             await handle.pool.end();
         handle = null;
     });
-    beforeEach(async () => {
+    (0, vitest_1.beforeEach)(async () => {
         if (!handle)
             return;
         // Wipe data in dependency order to satisfy FK
@@ -70,128 +75,128 @@ describeIfMysql("Server (MySQL integration)", () => {
     async function bootstrapAndLogin() {
         if (!handle)
             throw new Error("no handle");
-        await request(handle.app)
+        await (0, supertest_1.default)(handle.app)
             .post("/api/auth/bootstrap")
             .send({ username: "admin", password: "secret123" });
-        const res = await request(handle.app)
+        const res = await (0, supertest_1.default)(handle.app)
             .post("/api/auth/login")
             .send({ username: "admin", password: "secret123" });
         return res.body.token;
     }
-    describe("health", () => {
-        it("GET /api/health → ok=true", async () => {
-            const res = await request(handle.app).get("/api/health");
-            expect(res.status).toBe(200);
-            expect(res.body.ok).toBe(true);
+    (0, vitest_1.describe)("health", () => {
+        (0, vitest_1.it)("GET /api/health → ok=true", async () => {
+            const res = await (0, supertest_1.default)(handle.app).get("/api/health");
+            (0, vitest_1.expect)(res.status).toBe(200);
+            (0, vitest_1.expect)(res.body.ok).toBe(true);
         });
     });
-    describe("auth", () => {
-        it("bootstrap → login → token JWT valide", async () => {
-            const bootstrap = await request(handle.app)
+    (0, vitest_1.describe)("auth", () => {
+        (0, vitest_1.it)("bootstrap → login → token JWT valide", async () => {
+            const bootstrap = await (0, supertest_1.default)(handle.app)
                 .post("/api/auth/bootstrap")
                 .send({ username: "admin", password: "secret123" });
-            expect(bootstrap.status).toBe(201);
-            const login = await request(handle.app)
+            (0, vitest_1.expect)(bootstrap.status).toBe(201);
+            const login = await (0, supertest_1.default)(handle.app)
                 .post("/api/auth/login")
                 .send({ username: "admin", password: "secret123" });
-            expect(login.status).toBe(200);
-            expect(typeof login.body.token).toBe("string");
+            (0, vitest_1.expect)(login.status).toBe(200);
+            (0, vitest_1.expect)(typeof login.body.token).toBe("string");
         });
-        it("bootstrap refusé en 409 si déjà fait", async () => {
-            await request(handle.app)
+        (0, vitest_1.it)("bootstrap refusé en 409 si déjà fait", async () => {
+            await (0, supertest_1.default)(handle.app)
                 .post("/api/auth/bootstrap")
                 .send({ username: "a", password: "12345678" });
-            const res = await request(handle.app)
+            const res = await (0, supertest_1.default)(handle.app)
                 .post("/api/auth/bootstrap")
                 .send({ username: "b", password: "12345678" });
-            expect(res.status).toBe(409);
+            (0, vitest_1.expect)(res.status).toBe(409);
         });
-        it("login mauvais mot de passe → 401", async () => {
-            await request(handle.app)
+        (0, vitest_1.it)("login mauvais mot de passe → 401", async () => {
+            await (0, supertest_1.default)(handle.app)
                 .post("/api/auth/bootstrap")
                 .send({ username: "a", password: "good-pass" });
-            const res = await request(handle.app)
+            const res = await (0, supertest_1.default)(handle.app)
                 .post("/api/auth/login")
                 .send({ username: "a", password: "wrong-pass" });
-            expect(res.status).toBe(401);
+            (0, vitest_1.expect)(res.status).toBe(401);
         });
-        it("/me sans token → 401", async () => {
-            const res = await request(handle.app).get("/api/auth/me");
-            expect(res.status).toBe(401);
+        (0, vitest_1.it)("/me sans token → 401", async () => {
+            const res = await (0, supertest_1.default)(handle.app).get("/api/auth/me");
+            (0, vitest_1.expect)(res.status).toBe(401);
         });
-        it("/me avec token valide retourne le user", async () => {
+        (0, vitest_1.it)("/me avec token valide retourne le user", async () => {
             const token = await bootstrapAndLogin();
-            const res = await request(handle.app)
+            const res = await (0, supertest_1.default)(handle.app)
                 .get("/api/auth/me")
                 .set("Authorization", `Bearer ${token}`);
-            expect(res.status).toBe(200);
-            expect(res.body.username).toBe("admin");
+            (0, vitest_1.expect)(res.status).toBe(200);
+            (0, vitest_1.expect)(res.body.username).toBe("admin");
         });
     });
-    describe("CRUD clients", () => {
-        it("rejette les requêtes non authentifiées", async () => {
-            const res = await request(handle.app).get("/api/clients");
-            expect(res.status).toBe(401);
+    (0, vitest_1.describe)("CRUD clients", () => {
+        (0, vitest_1.it)("rejette les requêtes non authentifiées", async () => {
+            const res = await (0, supertest_1.default)(handle.app).get("/api/clients");
+            (0, vitest_1.expect)(res.status).toBe(401);
         });
-        it("flow complet : create → list → findById → update → delete", async () => {
+        (0, vitest_1.it)("flow complet : create → list → findById → update → delete", async () => {
             const token = await bootstrapAndLogin();
             const auth = `Bearer ${token}`;
-            const created = await request(handle.app)
+            const created = await (0, supertest_1.default)(handle.app)
                 .post("/api/clients")
                 .set("Authorization", auth)
                 .send({ nom: "Acme SARL", email: "contact@acme.fr" });
-            expect(created.status).toBe(201);
-            expect(created.body.id).toBeGreaterThan(0);
-            const list = await request(handle.app).get("/api/clients").set("Authorization", auth);
-            expect(list.status).toBe(200);
-            expect(list.body).toHaveLength(1);
-            const updated = await request(handle.app)
+            (0, vitest_1.expect)(created.status).toBe(201);
+            (0, vitest_1.expect)(created.body.id).toBeGreaterThan(0);
+            const list = await (0, supertest_1.default)(handle.app).get("/api/clients").set("Authorization", auth);
+            (0, vitest_1.expect)(list.status).toBe(200);
+            (0, vitest_1.expect)(list.body).toHaveLength(1);
+            const updated = await (0, supertest_1.default)(handle.app)
                 .patch(`/api/clients/${created.body.id}`)
                 .set("Authorization", auth)
                 .send({ nom: "Acme SAS" });
-            expect(updated.body.nom).toBe("Acme SAS");
-            const count = await request(handle.app).get("/api/clients/count").set("Authorization", auth);
-            expect(count.body.count).toBe(1);
-            const del = await request(handle.app)
+            (0, vitest_1.expect)(updated.body.nom).toBe("Acme SAS");
+            const count = await (0, supertest_1.default)(handle.app).get("/api/clients/count").set("Authorization", auth);
+            (0, vitest_1.expect)(count.body.count).toBe(1);
+            const del = await (0, supertest_1.default)(handle.app)
                 .delete(`/api/clients/${created.body.id}`)
                 .set("Authorization", auth);
-            expect(del.status).toBe(204);
+            (0, vitest_1.expect)(del.status).toBe(204);
         });
-        it("findById renvoie 404 si inconnu", async () => {
+        (0, vitest_1.it)("findById renvoie 404 si inconnu", async () => {
             const token = await bootstrapAndLogin();
-            const res = await request(handle.app)
+            const res = await (0, supertest_1.default)(handle.app)
                 .get("/api/clients/99999")
                 .set("Authorization", `Bearer ${token}`);
-            expect(res.status).toBe(404);
+            (0, vitest_1.expect)(res.status).toBe(404);
         });
-        it("colonne non whitelisted en filter est ignorée (anti-injection)", async () => {
+        (0, vitest_1.it)("colonne non whitelisted en filter est ignorée (anti-injection)", async () => {
             const token = await bootstrapAndLogin();
             const auth = `Bearer ${token}`;
-            await request(handle.app).post("/api/clients").set("Authorization", auth).send({ nom: "A" });
-            const res = await request(handle.app)
+            await (0, supertest_1.default)(handle.app).post("/api/clients").set("Authorization", auth).send({ nom: "A" });
+            const res = await (0, supertest_1.default)(handle.app)
                 .get("/api/clients?passwordHash=anything")
                 .set("Authorization", auth);
-            expect(res.status).toBe(200);
-            expect(res.body).toHaveLength(1);
+            (0, vitest_1.expect)(res.status).toBe(200);
+            (0, vitest_1.expect)(res.body).toHaveLength(1);
         });
     });
-    describe("settings", () => {
-        it("PATCH puis GET round-trip avec types JSON préservés", async () => {
+    (0, vitest_1.describe)("settings", () => {
+        (0, vitest_1.it)("PATCH puis GET round-trip avec types JSON préservés", async () => {
             const token = await bootstrapAndLogin();
             const auth = `Bearer ${token}`;
-            await request(handle.app)
+            await (0, supertest_1.default)(handle.app)
                 .patch("/api/settings")
                 .set("Authorization", auth)
                 .send({ theme: "dark", maxItems: 42, notif: { email: true } });
-            const res = await request(handle.app).get("/api/settings").set("Authorization", auth);
-            expect(res.body).toEqual({ theme: "dark", maxItems: 42, notif: { email: true } });
+            const res = await (0, supertest_1.default)(handle.app).get("/api/settings").set("Authorization", auth);
+            (0, vitest_1.expect)(res.body).toEqual({ theme: "dark", maxItems: 42, notif: { email: true } });
         });
     });
 });
 // ─── Test fallback si MySQL absent : signale juste le skip ──────────────
 if (!hasMysql) {
-    describe("Server (MySQL integration)", () => {
-        it.skip("tests skippés (MYSQL_TEST_* non défini)", () => { });
+    (0, vitest_1.describe)("Server (MySQL integration)", () => {
+        vitest_1.it.skip("tests skippés (MYSQL_TEST_* non défini)", () => { });
     });
 }
 //# sourceMappingURL=app.test.js.map

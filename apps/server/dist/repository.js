@@ -1,3 +1,4 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // MysqlRepository — implémentation CRUD générique sur une table MySQL
 //
@@ -5,8 +6,10 @@
 // La whitelist `filterable/sortable/writableColumns` protège contre l'injection
 // SQL : seuls les noms de colonnes connus sont insérés dans le SQL final.
 // ═══════════════════════════════════════════════════════════════════════════
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MysqlRepository = void 0;
 const ident = (s) => "`" + s.replace(/`/g, "``") + "`";
-export class MysqlRepository {
+class MysqlRepository {
     db;
     table;
     opts;
@@ -107,4 +110,5 @@ export class MysqlRepository {
         return Number(rows[0].n);
     }
 }
+exports.MysqlRepository = MysqlRepository;
 //# sourceMappingURL=repository.js.map

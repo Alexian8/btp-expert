@@ -1,16 +1,18 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // Entry point — lit la config, ouvre le pool MySQL, démarre Express.
 // Utilisé en local (`npm run dev`). Sur cPanel/Passenger, c'est `app.js`
 // qui est chargé (cf racine du dossier apps/server/).
 // ═══════════════════════════════════════════════════════════════════════════
-import { loadConfig } from "./config";
-import { createApp } from "./app";
-import { pingPool } from "./db";
+Object.defineProperty(exports, "__esModule", { value: true });
+const config_1 = require("./config");
+const app_1 = require("./app");
+const db_1 = require("./db");
 async function main() {
-    const cfg = loadConfig();
-    const { app, ctx } = await createApp(cfg);
+    const cfg = (0, config_1.loadConfig)();
+    const { app, ctx } = await (0, app_1.createApp)(cfg);
     try {
-        await pingPool(ctx.db);
+        await (0, db_1.pingPool)(ctx.db);
         console.log(`✅ MySQL connection OK (${cfg.MYSQL_HOST}:${cfg.MYSQL_PORT}/${cfg.MYSQL_DATABASE})`);
     }
     catch (e) {

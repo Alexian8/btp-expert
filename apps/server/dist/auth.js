@@ -1,20 +1,28 @@
+"use strict";
 // ═══════════════════════════════════════════════════════════════════════════
 // Auth — JWT helpers + middleware Express
 // ═══════════════════════════════════════════════════════════════════════════
-import jwt from "jsonwebtoken";
-export function signToken(payload, cfg) {
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.signToken = signToken;
+exports.verifyToken = verifyToken;
+exports.requireAuth = requireAuth;
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+function signToken(payload, cfg) {
     const options = { expiresIn: cfg.JWT_EXPIRES_IN };
-    return jwt.sign(payload, cfg.JWT_SECRET, options);
+    return jsonwebtoken_1.default.sign(payload, cfg.JWT_SECRET, options);
 }
-export function verifyToken(token, cfg) {
+function verifyToken(token, cfg) {
     try {
-        return jwt.verify(token, cfg.JWT_SECRET);
+        return jsonwebtoken_1.default.verify(token, cfg.JWT_SECRET);
     }
     catch {
         return null;
     }
 }
-export function requireAuth(cfg) {
+function requireAuth(cfg) {
     return (req, res, next) => {
         const header = req.headers.authorization;
         if (!header || !header.startsWith("Bearer ")) {
