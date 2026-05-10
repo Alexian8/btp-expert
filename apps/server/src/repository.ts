@@ -14,6 +14,14 @@ export interface RepositoryOptions {
   writableColumns: readonly string[];
   /** Si true, met à jour `updatedAt` automatiquement à chaque UPDATE. */
   hasUpdatedAt?: boolean;
+  /**
+   * Stratégie de PK :
+   *  - "auto" (défaut) : INT AUTO_INCREMENT, lit `result.insertId`
+   *  - "client" : la PK (string ex: UUID) vient dans le payload de create
+   */
+  primaryKey?: "auto" | "client";
+  /** Colonnes JSON — sérialisées en JSON.stringify avant insert/update. */
+  jsonColumns?: readonly string[];
 }
 
 const ident = (s: string): string => "`" + s.replace(/`/g, "``") + "`";
@@ -67,31 +75,53 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
   }
 
   async create(data: Record<string, unknown>): Promise<T> {
+    const useClientPk = this.opts.primaryKey === "client";
     const cols: string[] = [];
     const placeholders: string[] = [];
     const values: unknown[] = [];
+
+    if (useClientPk) {
+      const id = (data as { id?: unknown }).id;
+      if (!id || typeof id !== "string") {
+        throw new Error("PK string requise dans le payload (champ `id`)");
+      }
+      cols.push(ident("id"));
+      placeholders.push("?");
+      values.push(id);
+    }
+
     for (const [key, value] of Object.entries(data)) {
+      if (key === "id") continue; // déjà ajouté en mode client-pk, ignoré en mode auto
       if (!this.opts.writableColumns.includes(key)) continue;
       cols.push(ident(key));
       placeholders.push("?");
-      values.push(value);
+      values.push(this.serializeValue(key, value));
     }
     if (!cols.length) throw new Error("Aucune colonne valide à insérer");
 
     const sql = `INSERT INTO ${ident(this.table)} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`;
     const [result] = await this.db.execute<ResultSetHeader>(sql, values as never[]);
-    const created = await this.findById(result.insertId);
+    const insertedId = useClientPk ? (data as { id: string }).id : result.insertId;
+    const created = await this.findById(insertedId);
     if (!created) throw new Error("Insertion failed: row not found after insert");
     return created;
+  }
+
+  private serializeValue(column: string, value: unknown): unknown {
+    if (this.opts.jsonColumns?.includes(column) && value != null && typeof value !== "string") {
+      return JSON.stringify(value);
+    }
+    return value;
   }
 
   async update(id: number | string, data: Record<string, unknown>): Promise<T | null> {
     const sets: string[] = [];
     const values: unknown[] = [];
     for (const [key, value] of Object.entries(data)) {
+      if (key === "id") continue; // PK ne s'update pas
       if (!this.opts.writableColumns.includes(key)) continue;
       sets.push(`${ident(key)} = ?`);
-      values.push(value);
+      values.push(this.serializeValue(key, value));
     }
     if (!sets.length) return this.findById(id);
 

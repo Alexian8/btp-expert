@@ -3,6 +3,7 @@ import type {
   Supplier,
   Chantier,
   LegacyInvoice as Invoice,
+  InvoicePayment,
   LegacyVaultDocument as VaultDocument,
   CGVClause,
   ChantierClause,
@@ -62,6 +63,7 @@ export interface IDataService {
   fournisseurs: IRepository<Supplier>;
   chantiers: IRepository<Chantier>;
   invoices: IRepository<Invoice>;
+  invoicePayments: IRepository<InvoicePayment>;
   vault: IRepository<VaultDocument>;
   cgvClauses: IRepository<CGVClause>;
   chantierClauses: IRepository<ChantierClause>;

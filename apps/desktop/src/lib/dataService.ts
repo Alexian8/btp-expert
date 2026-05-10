@@ -5,6 +5,7 @@ import type {
   Supplier,
   Chantier,
   LegacyInvoice as Invoice,
+  InvoicePayment,
   LegacyVaultDocument as VaultDocument,
   CGVClause,
   ChantierClause,
@@ -413,6 +414,7 @@ export class ElectronDataService implements IDataService {
   fournisseurs: IRepository<Supplier> = new MockRepository<Supplier>();
   chantiers: IRepository<Chantier> = new MockRepository<Chantier>();
   invoices: IRepository<Invoice> = new MockRepository<Invoice>();
+  invoicePayments: IRepository<InvoicePayment> = new MockRepository<InvoicePayment>();
   vault: IRepository<VaultDocument> = new MockRepository<VaultDocument>();
   cgvClauses: IRepository<CGVClause> = new MockRepository<CGVClause>();
   chantierClauses: IRepository<ChantierClause> = new MockRepository<ChantierClause>();

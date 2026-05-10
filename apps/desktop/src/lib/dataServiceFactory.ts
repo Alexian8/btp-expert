@@ -69,7 +69,7 @@ export function getDataService(): IDataService {
   } else {
     cached = getElectronDataService();
   }
-  return cached;
+  return cached as IDataService;
 }
 
 /** Pour les tests — réinitialise le cache singleton. */

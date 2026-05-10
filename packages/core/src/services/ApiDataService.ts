@@ -24,6 +24,7 @@ import type {
   Supplier,
   Chantier,
   LegacyInvoice as Invoice,
+  InvoicePayment,
   LegacyVaultDocument as VaultDocument,
   CGVClause,
   ChantierClause,
@@ -220,6 +221,7 @@ export class ApiDataService implements IDataService {
   readonly fournisseurs: IRepository<Supplier>;
   readonly chantiers: IRepository<Chantier>;
   readonly invoices: IRepository<Invoice>;
+  readonly invoicePayments: IRepository<InvoicePayment>;
   readonly vault: IRepository<VaultDocument>;
   readonly cgvClauses: IRepository<CGVClause>;
   readonly chantierClauses: IRepository<ChantierClause>;
@@ -230,6 +232,7 @@ export class ApiDataService implements IDataService {
     this.fournisseurs = new HttpRepository<Supplier>(this.http, "fournisseurs");
     this.chantiers = new HttpRepository<Chantier>(this.http, "chantiers");
     this.invoices = new HttpRepository<Invoice>(this.http, "invoices");
+    this.invoicePayments = new HttpRepository<InvoicePayment>(this.http, "invoice-payments");
     this.vault = new HttpRepository<VaultDocument>(this.http, "vault");
     this.cgvClauses = new HttpRepository<CGVClause>(this.http, "cgv-clauses");
     this.chantierClauses = new HttpRepository<ChantierClause>(this.http, "chantier-clauses");

@@ -11,6 +11,7 @@ import { type DB, createPool, runMigrations } from "./db";
 import { MysqlRepository } from "./repository";
 import { buildCrudRouter } from "./routes/crud";
 import { buildAuthRouter } from "./routes/auth";
+import { buildBackupRouter } from "./routes/backup";
 import { requireAuth } from "./auth";
 
 export interface AppContext {
@@ -73,6 +74,66 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasUpdatedAt: true,
   });
   app.use("/api/chantiers", auth, buildCrudRouter(chantiers));
+
+  // ─── Factures (PK string UUID, items JSON) ─────────────────────────────
+  const invoices = new MysqlRepository(pool, "invoices", {
+    primaryKey: "client",
+    filterableColumns: [
+      "status",
+      "type",
+      "clientId",
+      "chantierId",
+      "fromQuoteId",
+      "reference",
+    ],
+    sortableColumns: ["createdAt", "issueDate", "dueDate", "reference", "totalTTC"],
+    writableColumns: [
+      "reference",
+      "status",
+      "type",
+      "title",
+      "clientId",
+      "chantierId",
+      "fromQuoteId",
+      "issueDate",
+      "dueDate",
+      "paymentTermsDays",
+      "sentAt",
+      "paidAt",
+      "items",
+      "globalDiscountMode",
+      "globalDiscountPercent",
+      "globalDiscountAmount",
+      "acompteBasedOnQuoteId",
+      "acomptePercent",
+      "avoirReferenceInvoiceId",
+      "introText",
+      "conditionsText",
+      "footerText",
+      "internalNotes",
+      "companySnapshot",
+      "totalHT",
+      "totalTTC",
+      "totalPaid",
+      "lastReminderSentAt",
+      "remindersCount",
+    ],
+    jsonColumns: ["items", "companySnapshot"],
+    hasUpdatedAt: true,
+  });
+  app.use("/api/invoices", auth, buildCrudRouter(invoices));
+
+  // ─── Paiements (sub-resource des factures) ─────────────────────────────
+  const invoicePayments = new MysqlRepository(pool, "invoice_payments", {
+    primaryKey: "client",
+    filterableColumns: ["invoiceId", "method"],
+    sortableColumns: ["createdAt", "date", "amount"],
+    writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
+  });
+  app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments));
+
+  // ─── Backup serveur ────────────────────────────────────────────────────
+  app.use("/api/backup", auth, buildBackupRouter(pool, cfg));
 
   // ─── Settings (key/value JSON) ─────────────────────────────────────────
   app.get(

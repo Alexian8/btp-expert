@@ -15,6 +15,7 @@ const db_1 = require("./db");
 const repository_1 = require("./repository");
 const crud_1 = require("./routes/crud");
 const auth_1 = require("./routes/auth");
+const backup_1 = require("./routes/backup");
 const auth_2 = require("./auth");
 async function createApp(cfg, db) {
     const pool = db ?? (0, db_1.createPool)(cfg);
@@ -62,6 +63,63 @@ async function createApp(cfg, db) {
         hasUpdatedAt: true,
     });
     app.use("/api/chantiers", auth, (0, crud_1.buildCrudRouter)(chantiers));
+    // ─── Factures (PK string UUID, items JSON) ─────────────────────────────
+    const invoices = new repository_1.MysqlRepository(pool, "invoices", {
+        primaryKey: "client",
+        filterableColumns: [
+            "status",
+            "type",
+            "clientId",
+            "chantierId",
+            "fromQuoteId",
+            "reference",
+        ],
+        sortableColumns: ["createdAt", "issueDate", "dueDate", "reference", "totalTTC"],
+        writableColumns: [
+            "reference",
+            "status",
+            "type",
+            "title",
+            "clientId",
+            "chantierId",
+            "fromQuoteId",
+            "issueDate",
+            "dueDate",
+            "paymentTermsDays",
+            "sentAt",
+            "paidAt",
+            "items",
+            "globalDiscountMode",
+            "globalDiscountPercent",
+            "globalDiscountAmount",
+            "acompteBasedOnQuoteId",
+            "acomptePercent",
+            "avoirReferenceInvoiceId",
+            "introText",
+            "conditionsText",
+            "footerText",
+            "internalNotes",
+            "companySnapshot",
+            "totalHT",
+            "totalTTC",
+            "totalPaid",
+            "lastReminderSentAt",
+            "remindersCount",
+        ],
+        jsonColumns: ["items", "companySnapshot"],
+        hasUpdatedAt: true,
+    });
+    app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices));
+    // ─── Paiements (sub-resource des factures) ─────────────────────────────
+    const invoicePayments = new repository_1.MysqlRepository(pool, "invoice_payments", {
+        primaryKey: "client",
+        filterableColumns: ["invoiceId", "method"],
+        sortableColumns: ["createdAt", "date", "amount"],
+        writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
+    });
+    app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments));
+    // ─── Backup serveur ────────────────────────────────────────────────────
+    app.use("/api/backup", auth, (0, backup_1.buildBackupRouter)(pool, cfg));
     // ─── Settings (key/value JSON) ─────────────────────────────────────────
     app.get("/api/settings", auth, asyncHandler(async (_req, res) => {
         const [rows] = await pool.query("SELECT `key`, value FROM settings");

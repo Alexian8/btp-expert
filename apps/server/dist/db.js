@@ -98,6 +98,62 @@ async function runMigrations(db) {
       value LONGTEXT NOT NULL,
       updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Invoices (factures) ──────────────────────────────────────────────
+        // PK est un UUID string (compat schéma desktop), pas un AUTO_INCREMENT.
+        `CREATE TABLE IF NOT EXISTS invoices (
+      id VARCHAR(64) PRIMARY KEY,
+      reference VARCHAR(64) DEFAULT '',
+      status VARCHAR(32) DEFAULT 'brouillon',
+      type VARCHAR(32) DEFAULT 'standard',
+      title VARCHAR(255) DEFAULT '',
+      clientId VARCHAR(64) DEFAULT '',
+      chantierId VARCHAR(64) DEFAULT '',
+      fromQuoteId VARCHAR(64) DEFAULT '',
+      issueDate DATE NULL,
+      dueDate DATE NULL,
+      paymentTermsDays INT DEFAULT 30,
+      sentAt DATETIME NULL,
+      paidAt DATETIME NULL,
+      items JSON NOT NULL,
+      globalDiscountMode VARCHAR(16) DEFAULT 'none',
+      globalDiscountPercent DECIMAL(5,2) DEFAULT 0,
+      globalDiscountAmount DECIMAL(15,2) DEFAULT 0,
+      acompteBasedOnQuoteId VARCHAR(64) DEFAULT '',
+      acomptePercent DECIMAL(5,2) DEFAULT 0,
+      avoirReferenceInvoiceId VARCHAR(64) DEFAULT '',
+      introText TEXT,
+      conditionsText TEXT,
+      footerText TEXT,
+      internalNotes TEXT,
+      companySnapshot JSON,
+      totalHT DECIMAL(15,2) DEFAULT 0,
+      totalTTC DECIMAL(15,2) DEFAULT 0,
+      totalPaid DECIMAL(15,2) DEFAULT 0,
+      lastReminderSentAt DATETIME NULL,
+      remindersCount INT DEFAULT 0,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_invoices_status (status),
+      INDEX idx_invoices_client (clientId),
+      INDEX idx_invoices_chantier (chantierId),
+      INDEX idx_invoices_fromQuote (fromQuoteId),
+      INDEX idx_invoices_reference (reference),
+      INDEX idx_invoices_dueDate (dueDate)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+        // ─── Paiements (table jointe avec FK cascade) ─────────────────────────
+        `CREATE TABLE IF NOT EXISTS invoice_payments (
+      id VARCHAR(64) PRIMARY KEY,
+      invoiceId VARCHAR(64) NOT NULL,
+      amount DECIMAL(15,2) NOT NULL,
+      \`date\` DATE NOT NULL,
+      method VARCHAR(32) DEFAULT 'virement',
+      reference VARCHAR(255) DEFAULT '',
+      notes TEXT,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_payments_invoice (invoiceId),
+      CONSTRAINT fk_payments_invoice FOREIGN KEY (invoiceId)
+        REFERENCES invoices(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     ];
     for (const sql of statements) {
         await db.query(sql);

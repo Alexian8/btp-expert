@@ -53,33 +53,54 @@ class MysqlRepository {
         return rows[0] ?? null;
     }
     async create(data) {
+        const useClientPk = this.opts.primaryKey === "client";
         const cols = [];
         const placeholders = [];
         const values = [];
+        if (useClientPk) {
+            const id = data.id;
+            if (!id || typeof id !== "string") {
+                throw new Error("PK string requise dans le payload (champ `id`)");
+            }
+            cols.push(ident("id"));
+            placeholders.push("?");
+            values.push(id);
+        }
         for (const [key, value] of Object.entries(data)) {
+            if (key === "id")
+                continue; // déjà ajouté en mode client-pk, ignoré en mode auto
             if (!this.opts.writableColumns.includes(key))
                 continue;
             cols.push(ident(key));
             placeholders.push("?");
-            values.push(value);
+            values.push(this.serializeValue(key, value));
         }
         if (!cols.length)
             throw new Error("Aucune colonne valide à insérer");
         const sql = `INSERT INTO ${ident(this.table)} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`;
         const [result] = await this.db.execute(sql, values);
-        const created = await this.findById(result.insertId);
+        const insertedId = useClientPk ? data.id : result.insertId;
+        const created = await this.findById(insertedId);
         if (!created)
             throw new Error("Insertion failed: row not found after insert");
         return created;
+    }
+    serializeValue(column, value) {
+        if (this.opts.jsonColumns?.includes(column) && value != null && typeof value !== "string") {
+            return JSON.stringify(value);
+        }
+        return value;
     }
     async update(id, data) {
         const sets = [];
         const values = [];
         for (const [key, value] of Object.entries(data)) {
+            if (key === "id")
+                continue; // PK ne s'update pas
             if (!this.opts.writableColumns.includes(key))
                 continue;
             sets.push(`${ident(key)} = ?`);
-            values.push(value);
+            values.push(this.serializeValue(key, value));
         }
         if (!sets.length)
             return this.findById(id);
