@@ -324,21 +324,99 @@ export function installBtpApiShim(): void {
     getLocalDbHash: stub("getLocalDbHash", null),
   };
 
-  // ─── Microsoft (Outlook + OneDrive) — stub pour l'instant ─────────────
+  // ─── Microsoft (Outlook via /api/auth/microsoft/* + /api/email/*) ─────
   const microsoft = {
-    msLogin: stub("msLogin", { success: false, error: "Microsoft web pas encore branché" }),
-    msLogout: stub("msLogout", { success: true }),
-    msGetAccount: stub("msGetAccount", { account: null, isLoggedIn: false }),
+    // Démarre le flow OAuth web : redirige vers Microsoft.
+    // ⚠️ Cette fonction NE retourne jamais (la page change).
+    msLogin: async (): Promise<{ success: boolean; account?: unknown }> => {
+      const token = getToken();
+      if (!token) {
+        return { success: false } as { success: boolean; error?: string; account?: unknown } & {
+          error: string;
+        };
+      }
+      window.location.href = `/api/auth/microsoft/login?token=${encodeURIComponent(token)}`;
+      // Promise qui ne se résout pas — la page va se recharger
+      return new Promise(() => {});
+    },
+
+    msLogout: async (): Promise<{ success: boolean }> => {
+      try {
+        await http<void>("POST", "/api/auth/microsoft/logout");
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    },
+
+    msGetAccount: async (): Promise<{
+      account: { username?: string; mail?: string } | null;
+      isLoggedIn: boolean;
+    }> => {
+      try {
+        const res = await http<{
+          connected: boolean;
+          accountEmail?: string;
+        }>("GET", "/api/auth/microsoft/account");
+        if (res.connected) {
+          return {
+            account: { username: res.accountEmail, mail: res.accountEmail },
+            isLoggedIn: true,
+          };
+        }
+        return { account: null, isLoggedIn: false };
+      } catch {
+        return { account: null, isLoggedIn: false };
+      }
+    },
+
     msGetQuota: stub("msGetQuota", { used: 0, total: 0 }),
+
+    // OneDrive backups : pas implémenté côté serveur (intentionnel — on a les
+    // backups locaux via /api/backup/*). Les méthodes restent stubbées.
     msOneDriveUpload: stub("msOneDriveUpload", { success: false }),
     msOneDriveList: stub("msOneDriveList", [] as unknown[]),
     msOneDriveDelete: stub("msOneDriveDelete", { success: false }),
     msOneDriveApplyRetention: stub("msOneDriveApplyRetention", { success: true }),
     msOneDriveCheckLatest: stub("msOneDriveCheckLatest", { hasNewer: false, latest: null }),
     msOneDriveRestore: stub("msOneDriveRestore", { success: false }),
-    emailPrepareQuoteMail: stub("emailPrepareQuoteMail", { success: false, error: "Email web pas branché" }),
-    emailPrepareInvoiceMail: stub("emailPrepareInvoiceMail", { success: false, error: "Email web pas branché" }),
-    emailSendDocument: stub("emailSendDocument", { success: false, error: "Outlook web pas encore branché" }),
+
+    // Email via Graph API : route serveur /api/email/send branchée.
+    emailPrepareQuoteMail: stub("emailPrepareQuoteMail", {
+      success: true,
+      data: { to: [], subject: "", body: "" },
+    }),
+    emailPrepareInvoiceMail: stub("emailPrepareInvoiceMail", {
+      success: true,
+      data: { to: [], subject: "", body: "" },
+    }),
+    emailSendDocument: async (args: {
+      to: string[] | string;
+      cc?: string[] | string;
+      subject: string;
+      body: string;
+      isHtml?: boolean;
+      attachmentPath?: string;
+      attachmentName?: string;
+    }): Promise<{ success: boolean; error?: string }> => {
+      try {
+        // Normalise to/cc en tableaux
+        const toArr = Array.isArray(args.to) ? args.to : [args.to];
+        const ccArr = args.cc ? (Array.isArray(args.cc) ? args.cc : [args.cc]) : undefined;
+        // L'attachment path vient du desktop (chemin local) — pas exploitable en
+        // web. À adapter quand on aura un endpoint d'upload pour pièces jointes.
+        await http<void>("POST", "/api/email/send", {
+          to: toArr,
+          cc: ccArr,
+          subject: args.subject,
+          body: args.body,
+          isHtml: args.isHtml ?? true,
+        });
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
   };
 
   // ─── Toutes les autres méthodes du preload (vault, agenda, etc.) ──────
