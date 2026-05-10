@@ -109,6 +109,34 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         res.status(403).json({ message: "Compte désactivé. Contactez un administrateur." });
         return;
       }
+      // Multi-tenant : si la company est désactivée par super_admin → refuser
+      // Le super_admin lui-même n'a pas de companyId → bypass.
+      if (row.companyId != null && row.role !== "super_admin") {
+        const [activeRows] = await db.query<RowDataPacket[]>(
+          "SELECT isActive FROM company WHERE id = ? LIMIT 1",
+          [row.companyId]
+        );
+        const companyActive = activeRows[0]
+          ? Boolean((activeRows[0] as { isActive?: number }).isActive ?? 1)
+          : true;
+        if (!companyActive) {
+          console.warn(
+            `[auth] LOGIN BLOCKED company disabled companyId=${row.companyId} username=${parsed.data.username}`
+          );
+          void writeAudit(db, {
+            userId: row.id,
+            username: row.username,
+            action: "login_blocked",
+            ip,
+            userAgent,
+            meta: { reason: "company_disabled", companyId: row.companyId },
+          });
+          res.status(403).json({
+            message: "Cette entreprise est désactivée. Contactez le support BatiDesk.",
+          });
+          return;
+        }
+      }
       console.log(`[auth] LOGIN OK ip=${ip} username=${row.username} role=${row.role}`);
       void writeAudit(db, {
         userId: row.id,

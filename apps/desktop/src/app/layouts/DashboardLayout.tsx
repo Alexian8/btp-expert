@@ -355,6 +355,15 @@ export function DashboardLayout() {
                     </DropdownMenuItem>
                   </>
                 )}
+                {user?.role === "super_admin" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/super-admin/companies")}>
+                      <Building2 className="w-4 h-4" />
+                      <span>Entreprises clientes</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => logout()}

@@ -21,6 +21,7 @@ const backup_1 = require("./routes/backup");
 const microsoft_1 = require("./routes/microsoft");
 const admin_users_1 = require("./routes/admin-users");
 const admin_logs_1 = require("./routes/admin-logs");
+const super_admin_1 = require("./routes/super-admin");
 const auth_2 = require("./auth");
 const rbac_1 = require("./rbac");
 const rate_limit_1 = require("./rate-limit");
@@ -193,6 +194,8 @@ async function createApp(cfg, db) {
     app.use("/api/admin/users", (0, admin_users_1.buildAdminUsersRouter)(pool, cfg));
     // ─── Admin : audit logs (admin only) ────────────────────────────────────
     app.use("/api/admin/logs", (0, admin_logs_1.buildAdminLogsRouter)(pool, cfg));
+    // ─── Super-admin : gestion des entreprises clientes (super_admin only) ──
+    app.use("/api/super-admin", (0, super_admin_1.buildSuperAdminRouter)(pool, cfg));
     const auth = (0, auth_2.requireAuth)(cfg);
     // ─── Clients ───────────────────────────────────────────────────────────
     const clients = new repository_1.MysqlRepository(pool, "clients", {

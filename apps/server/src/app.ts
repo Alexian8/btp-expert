@@ -17,6 +17,7 @@ import { buildBackupRouter } from "./routes/backup";
 import { buildMicrosoftRouter, buildEmailRouter } from "./routes/microsoft";
 import { buildAdminUsersRouter } from "./routes/admin-users";
 import { buildAdminLogsRouter } from "./routes/admin-logs";
+import { buildSuperAdminRouter } from "./routes/super-admin";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
@@ -212,6 +213,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // ─── Admin : audit logs (admin only) ────────────────────────────────────
   app.use("/api/admin/logs", buildAdminLogsRouter(pool, cfg));
+
+  // ─── Super-admin : gestion des entreprises clientes (super_admin only) ──
+  app.use("/api/super-admin", buildSuperAdminRouter(pool, cfg));
 
   const auth = requireAuth(cfg);
 

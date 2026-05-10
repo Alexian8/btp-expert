@@ -26,6 +26,7 @@ import { StatisticsPage } from "@/features/stats/components/StatisticsPage";
 import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
 import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
 import { LogsPage } from "@/features/admin-logs/components/LogsPage";
+import { CompaniesAdminPage } from "@/features/super-admin/components/CompaniesAdminPage";
 import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -51,8 +52,30 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user) as { role?: string } | null;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "admin") return <Navigate to="/" replace />;
+  // super_admin n'est pas un admin de company, mais on lui laisse l'accès
+  // (il peut tout voir cross-tenant si besoin)
+  if (user.role !== "admin" && user.role !== "super_admin") {
+    return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
+}
+
+// Guard : route réservée au super_admin (éditeur SaaS BatiDesk)
+function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "super_admin") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+// Si super_admin atterrit sur "/", le rediriger vers /super-admin/companies
+// (il n'a pas de company, le dashboard normal lui afficherait du vide)
+function SuperAdminLanding() {
+  const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  if (user?.role === "super_admin") {
+    return <Navigate to="/super-admin/companies" replace />;
+  }
+  return <DashboardPage />;
 }
 
 const router = createBrowserRouter(
@@ -74,7 +97,10 @@ const router = createBrowserRouter(
         </ProtectedRoute>
       ),
       children: [
-        { index: true, element: <DashboardPage /> },
+        {
+          index: true,
+          element: <SuperAdminLanding />,
+        },
         {
           path: "invoices",
           element: <QuotesAndInvoicesPage />,
@@ -181,6 +207,14 @@ const router = createBrowserRouter(
             <AdminOnlyRoute>
               <LogsPage />
             </AdminOnlyRoute>
+          ),
+        },
+        {
+          path: "super-admin/companies",
+          element: (
+            <SuperAdminOnlyRoute>
+              <CompaniesAdminPage />
+            </SuperAdminOnlyRoute>
           ),
         },
         {

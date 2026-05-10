@@ -422,7 +422,22 @@ async function runEnterpriseMigrations(db) {
     // ajouter d'autres rows à terme.
     await addColumnIfNotExists(db, "company", "name", "VARCHAR(255) DEFAULT ''");
     await addColumnIfNotExists(db, "company", "isSetupComplete", "TINYINT(1) NOT NULL DEFAULT 0");
+    await addColumnIfNotExists(db, "company", "isActive", "TINYINT(1) NOT NULL DEFAULT 1");
     await addColumnIfNotExists(db, "company", "createdAt", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+    // Le PK doit être AUTO_INCREMENT pour que le super_admin puisse créer de
+    // nouvelles companies (id=2, 3, ...). On modifie la colonne id si elle est
+    // encore en "DEFAULT 1" (singleton).
+    try {
+        const [pkRows] = await db.query(`SELECT EXTRA FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'company' AND column_name = 'id'`);
+        const extra = String(pkRows[0]?.EXTRA ?? "");
+        if (!/auto_increment/i.test(extra)) {
+            await db.query("ALTER TABLE company MODIFY COLUMN id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
+    catch (e) {
+        console.warn("[migrations] cannot upgrade company.id to AUTO_INCREMENT:", e);
+    }
     // Si la company id=1 existe déjà avec des data populées (companyName défini
     // dans le JSON), on marque isSetupComplete=1 — sinon on laisse à 0.
     await db.query(`
@@ -443,7 +458,20 @@ async function runEnterpriseMigrations(db) {
     await addColumnIfNotExists(db, "users", "lastLoginAt", "DATETIME NULL");
     await addColumnIfNotExists(db, "users", "updatedAt", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
     // Multi-tenant : companyId sur users (default 1 = tenant existant)
-    await addColumnIfNotExists(db, "users", "companyId", "INT NOT NULL DEFAULT 1");
+    // NULL = super_admin (pas rattaché à une company)
+    await addColumnIfNotExists(db, "users", "companyId", "INT NULL DEFAULT 1");
+    // Si la colonne existait avec NOT NULL, on la rend nullable pour super_admin
+    try {
+        const [colRows] = await db.query(`SELECT IS_NULLABLE FROM information_schema.columns
+       WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'companyId'`);
+        const nullable = String(colRows[0]?.IS_NULLABLE ?? "YES");
+        if (nullable === "NO") {
+            await db.query("ALTER TABLE users MODIFY COLUMN companyId INT NULL DEFAULT 1");
+        }
+    }
+    catch {
+        /* best-effort */
+    }
     await addIndexIfNotExists(db, "users", "idx_users_email", "email");
     await addIndexIfNotExists(db, "users", "idx_users_role", "role");
     await addIndexIfNotExists(db, "users", "idx_users_companyId", "companyId");
