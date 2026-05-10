@@ -46,6 +46,7 @@ const ACTION_META: Record<string, { label: string; color: string; icon?: string 
   user_enabled: { label: "Utilisateur réactivé", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   user_role_changed: { label: "Rôle modifié", color: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
   user_password_reset: { label: "MdP régénéré", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  user_deleted_permanent: { label: "Utilisateur supprimé", color: "bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold" },
   create: { label: "Création", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   update: { label: "Modification", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
   delete: { label: "Suppression", color: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
@@ -118,6 +119,8 @@ function describeAction(log: AuditLog): string {
       return `a changé le rôle de ${meta.username ?? log.resourceId} : ${meta.oldRole} → ${meta.newRole}`;
     case "user_password_reset":
       return `a régénéré le mot de passe de ${meta.username ?? log.resourceId}`;
+    case "user_deleted_permanent":
+      return `a SUPPRIMÉ DÉFINITIVEMENT ${meta.username ?? log.resourceId} (${meta.role ?? "?"})`;
     case "user_updated":
       return `a modifié ${meta.username ?? log.resourceId} (${(meta.changedFields as string[] | undefined)?.join(", ") ?? "?"})`;
     case "create": {

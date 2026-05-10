@@ -105,4 +105,9 @@ export const usersAdminApi = {
     request<{ tempPassword: string }>("POST", `/api/admin/users/${id}/reset-password`),
 
   disable: (id: number) => request<void>("DELETE", `/api/admin/users/${id}`),
+
+  /** Suppression définitive (hard delete). Garde-fous serveur :
+   *  pas de self-delete, pas de delete du dernier admin. */
+  deletePermanent: (id: number) =>
+    request<void>("DELETE", `/api/admin/users/${id}/permanent`),
 };

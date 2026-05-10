@@ -349,6 +349,66 @@ function buildAdminUsersRouter(db, cfg) {
         });
         res.status(204).end();
     }));
+    // ─── Hard delete (suppression définitive) ─────────────────────────────
+    // Différent du soft-delete (DELETE /:id qui désactive). Ici on supprime
+    // physiquement la row de la table users.
+    // Garde-fous :
+    //   • impossible de se supprimer soi-même (sinon plus personne pour gérer)
+    //   • impossible de supprimer le dernier admin actif d'une company
+    // Les rows de données qui ont createdBy = ce user seront orphelines (FK
+    // soft, pas de contrainte ON DELETE CASCADE) → la colonne pointera vers
+    // un ID inexistant et l'UI affichera "—" via UserBadge.
+    router.delete("/:id/permanent", wrap(async (req, res) => {
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id)) {
+            res.status(400).json({ message: "ID invalide" });
+            return;
+        }
+        if (req.user?.sub === id) {
+            res
+                .status(400)
+                .json({ message: "Impossible de supprimer votre propre compte" });
+            return;
+        }
+        const tenantId = req.user?.companyId ?? 1;
+        // Récupère l'utilisateur cible (scopé tenant)
+        const [targetRows] = await db.query("SELECT id, username, role, email FROM users WHERE id = ? AND companyId = ? LIMIT 1", [id, tenantId]);
+        const target = targetRows[0];
+        if (!target) {
+            res.status(404).json({ message: "Utilisateur introuvable" });
+            return;
+        }
+        // Garde-fou : pas de suppression du dernier admin actif
+        if (target.role === "admin") {
+            const [adminCount] = await db.query(`SELECT COUNT(*) AS n FROM users
+           WHERE role = 'admin' AND disabled = 0 AND companyId = ?`, [tenantId]);
+            const n = Number(adminCount[0].n);
+            if (n <= 1) {
+                res.status(400).json({
+                    message: "Impossible de supprimer le dernier administrateur. Promouvez d'abord un autre utilisateur en admin.",
+                });
+                return;
+            }
+        }
+        // Hard delete
+        const [result] = await db.execute("DELETE FROM users WHERE id = ? AND companyId = ?", [id, tenantId]);
+        if (result.affectedRows === 0) {
+            res.status(404).json({ message: "Utilisateur introuvable" });
+            return;
+        }
+        void (0, audit_1.writeAudit)(db, {
+            ...(0, audit_1.audited)(req),
+            action: "user_deleted_permanent",
+            resource: "users",
+            resourceId: String(id),
+            meta: {
+                username: target.username,
+                role: target.role,
+                email: target.email ?? "",
+            },
+        });
+        res.status(204).end();
+    }));
     return router;
 }
 // Pour qu'un autre service (login) puisse vérifier qu'un user n'est pas disabled

@@ -8,15 +8,19 @@ import {
   KeyRound,
   Power,
   PowerOff,
+  Trash2,
   Mail,
   AlertCircle,
+  AlertTriangle,
   Copy,
   Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@btp/ui";
 
 import { CreateUserModal } from "./CreateUserModal";
@@ -247,6 +251,8 @@ function UserRow({
   const [busy, setBusy] = useState(false);
   const [resetPassword, setResetPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   async function handleReset() {
     if (busy) return;
@@ -305,6 +311,26 @@ function UserRow({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Impossible de copier");
+    }
+  }
+
+  async function handleHardDelete() {
+    if (busy) return;
+    if (confirmText !== user.username) {
+      toast.error("La confirmation ne correspond pas au nom d'utilisateur");
+      return;
+    }
+    setBusy(true);
+    try {
+      await usersAdminApi.deletePermanent(user.id);
+      toast.success(`Utilisateur ${user.username} supprimé définitivement`);
+      setConfirmDeleteOpen(false);
+      setConfirmText("");
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -405,6 +431,19 @@ function UserRow({
               <PowerOff className="w-3.5 h-3.5 text-destructive" />
             )}
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            title="Supprimer définitivement"
+            onClick={() => {
+              setConfirmText("");
+              setConfirmDeleteOpen(true);
+            }}
+            disabled={busy}
+            className="hover:bg-destructive/10 hover:border-destructive/40"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+          </Button>
         </div>
       </div>
 
@@ -434,6 +473,92 @@ function UserRow({
             </div>
             <div className="flex justify-end">
               <Button onClick={() => setResetPassword(null)}>Fermer</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal hard-delete : confirmation par saisie du username */}
+      {confirmDeleteOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg shadow-soft-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-destructive/15 text-destructive flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Suppression définitive</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Cette action est <strong>irréversible</strong>
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setConfirmDeleteOpen(false);
+                  setConfirmText("");
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  <p>
+                    L'utilisateur{" "}
+                    <strong>{fullName(user)}</strong> (@{user.username}) sera{" "}
+                    <strong>supprimé de la base</strong>.
+                  </p>
+                  <p className="mt-1.5 opacity-90">
+                    Ses devis/factures/clients existants resteront mais leur "Créé par"
+                    affichera "—". Si tu veux juste l'empêcher de se connecter, utilise
+                    plutôt <strong>Désactiver</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="confirm-input" className="text-xs">
+                  Pour confirmer, tape{" "}
+                  <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">
+                    {user.username}
+                  </code>
+                </Label>
+                <Input
+                  id="confirm-input"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder={user.username}
+                  className="mt-1.5 font-mono"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setConfirmDeleteOpen(false);
+                  setConfirmText("");
+                }}
+                disabled={busy}
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleHardDelete}
+                disabled={busy || confirmText !== user.username}
+                loading={busy}
+              >
+                <Trash2 className="w-4 h-4" />
+                Supprimer définitivement
+              </Button>
             </div>
           </div>
         </div>
