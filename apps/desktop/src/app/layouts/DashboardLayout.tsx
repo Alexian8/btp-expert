@@ -342,6 +342,15 @@ export function DashboardLayout() {
                   <Settings className="w-4 h-4" />
                   <span>Paramètres</span>
                 </DropdownMenuItem>
+                {user?.role === "admin" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/admin/users")}>
+                      <UserIcon className="w-4 h-4" />
+                      <span>Gestion utilisateurs</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => logout()}

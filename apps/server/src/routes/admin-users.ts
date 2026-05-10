@@ -1,0 +1,327 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// Routes admin /api/admin/users — gestion des utilisateurs (admin only)
+//
+// Endpoints :
+//   GET    /api/admin/users                — liste tous les users
+//   GET    /api/admin/users/:id            — détail d'un user
+//   POST   /api/admin/users                — créer un user (génère temp password)
+//   PATCH  /api/admin/users/:id            — modifier (role, profil, disabled)
+//   POST   /api/admin/users/:id/reset-password — regénère un password temporaire
+//   DELETE /api/admin/users/:id            — soft-delete (disabled = 1)
+//
+// Toutes ces routes sont gardées par requireAuth + requireRole("admin").
+// ═══════════════════════════════════════════════════════════════════════════
+
+import { Router, type Request, type Response, type NextFunction } from "express";
+import { z } from "zod";
+import crypto from "node:crypto";
+import type { DB, RowDataPacket, ResultSetHeader } from "../db";
+import { requireAuth } from "../auth";
+import { requireRole, ROLES, isValidRole } from "../rbac";
+import type { Config } from "../config";
+
+const SALT_LEN = 16;
+const KEY_LEN = 64;
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(SALT_LEN);
+  const hash = crypto.scryptSync(password, salt, KEY_LEN);
+  return `${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+/** Génère un mot de passe temporaire aléatoire (16 caractères ASCII safe). */
+function generateTempPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = crypto.randomBytes(16);
+  let out = "";
+  for (let i = 0; i < 16; i++) {
+    out += chars[bytes[i]! % chars.length];
+  }
+  return out;
+}
+
+const wrap =
+  (handler: (req: Request, res: Response) => Promise<void>) =>
+  (req: Request, res: Response, next: NextFunction): void => {
+    handler(req, res).catch(next);
+  };
+
+const CreateUserSchema = z.object({
+  username: z.string().min(2).max(64).regex(/^[a-zA-Z0-9._-]+$/, {
+    message: "Username : lettres, chiffres, points, tirets uniquement",
+  }),
+  email: z.string().email().max(255).optional().default(""),
+  firstName: z.string().max(128).optional().default(""),
+  lastName: z.string().max(128).optional().default(""),
+  role: z.enum(ROLES),
+  password: z.string().min(8).max(256).optional(), // si absent, on génère
+});
+
+const UpdateUserSchema = z.object({
+  email: z.string().email().max(255).optional(),
+  firstName: z.string().max(128).optional(),
+  lastName: z.string().max(128).optional(),
+  avatarUrl: z.string().url().max(512).optional().or(z.literal("")),
+  role: z.enum(ROLES).optional(),
+  disabled: z.boolean().optional(),
+});
+
+interface UserRow extends RowDataPacket {
+  id: number;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string;
+  role: string;
+  disabled: number;
+  mustChangePassword: number;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Convertit une row MySQL en réponse JSON publique (pas de hash). */
+function publicUser(row: UserRow) {
+  return {
+    id: row.id,
+    username: row.username,
+    email: row.email ?? "",
+    firstName: row.firstName ?? "",
+    lastName: row.lastName ?? "",
+    avatarUrl: row.avatarUrl ?? "",
+    role: row.role,
+    disabled: Boolean(row.disabled),
+    mustChangePassword: Boolean(row.mustChangePassword),
+    lastLoginAt: row.lastLoginAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
+  const router = Router();
+
+  // Toutes les routes ici exigent admin
+  router.use(requireAuth(cfg), requireRole("admin"));
+
+  // ─── Liste ────────────────────────────────────────────────────────────
+  router.get(
+    "/",
+    wrap(async (_req, res) => {
+      const [rows] = await db.query<UserRow[]>(
+        `SELECT id, username, email, firstName, lastName, avatarUrl,
+                role, disabled, mustChangePassword, lastLoginAt,
+                createdAt, updatedAt
+         FROM users ORDER BY createdAt DESC`
+      );
+      res.json(rows.map(publicUser));
+    })
+  );
+
+  // ─── Détail ───────────────────────────────────────────────────────────
+  router.get(
+    "/:id",
+    wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ message: "ID invalide" });
+        return;
+      }
+      const [rows] = await db.query<UserRow[]>(
+        `SELECT id, username, email, firstName, lastName, avatarUrl,
+                role, disabled, mustChangePassword, lastLoginAt,
+                createdAt, updatedAt
+         FROM users WHERE id = ? LIMIT 1`,
+        [id]
+      );
+      const row = rows[0];
+      if (!row) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
+      res.json(publicUser(row));
+    })
+  );
+
+  // ─── Création ─────────────────────────────────────────────────────────
+  router.post(
+    "/",
+    wrap(async (req, res) => {
+      const parsed = CreateUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          message: "Payload invalide",
+          errors: parsed.error.flatten().fieldErrors,
+        });
+        return;
+      }
+      const data = parsed.data;
+
+      // Unicité username
+      const [dup] = await db.query<RowDataPacket[]>(
+        "SELECT id FROM users WHERE username = ? LIMIT 1",
+        [data.username]
+      );
+      if (dup.length > 0) {
+        res.status(409).json({ message: "Username déjà utilisé" });
+        return;
+      }
+
+      // Génération du temp password si pas fourni
+      const tempPassword = data.password ?? generateTempPassword();
+      const wasGenerated = data.password === undefined;
+      const hash = hashPassword(tempPassword);
+
+      const [result] = await db.execute<ResultSetHeader>(
+        `INSERT INTO users
+           (username, passwordHash, email, firstName, lastName, role, mustChangePassword)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        [
+          data.username,
+          hash,
+          data.email,
+          data.firstName,
+          data.lastName,
+          data.role,
+        ]
+      );
+      const [rows] = await db.query<UserRow[]>(
+        `SELECT id, username, email, firstName, lastName, avatarUrl,
+                role, disabled, mustChangePassword, lastLoginAt,
+                createdAt, updatedAt
+         FROM users WHERE id = ? LIMIT 1`,
+        [result.insertId]
+      );
+      const created = rows[0]!;
+      res.status(201).json({
+        ...publicUser(created),
+        // ⚠️ Le mot de passe temporaire n'est exposé QU'À LA CRÉATION,
+        // jamais relisible ensuite. L'admin doit le copier maintenant.
+        tempPassword: wasGenerated ? tempPassword : undefined,
+      });
+    })
+  );
+
+  // ─── Modification ─────────────────────────────────────────────────────
+  router.patch(
+    "/:id",
+    wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ message: "ID invalide" });
+        return;
+      }
+      const parsed = UpdateUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          message: "Payload invalide",
+          errors: parsed.error.flatten().fieldErrors,
+        });
+        return;
+      }
+
+      // Garde-fou : l'admin ne peut pas désactiver SON PROPRE compte
+      // (sinon il se locke out)
+      if (
+        req.user?.sub === id &&
+        parsed.data.disabled === true
+      ) {
+        res
+          .status(400)
+          .json({ message: "Impossible de désactiver votre propre compte" });
+        return;
+      }
+      // Garde-fou : un admin ne peut pas se downgrader lui-même
+      if (req.user?.sub === id && parsed.data.role && parsed.data.role !== "admin") {
+        res.status(400).json({
+          message: "Impossible de changer votre propre rôle (demandez à un autre admin)",
+        });
+        return;
+      }
+
+      const sets: string[] = [];
+      const values: unknown[] = [];
+      for (const [k, v] of Object.entries(parsed.data)) {
+        if (v === undefined) continue;
+        sets.push(`\`${k}\` = ?`);
+        values.push(typeof v === "boolean" ? (v ? 1 : 0) : v);
+      }
+      if (!sets.length) {
+        res.status(400).json({ message: "Aucun champ modifiable fourni" });
+        return;
+      }
+      values.push(id);
+      await db.execute(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, values as never[]);
+
+      const [rows] = await db.query<UserRow[]>(
+        `SELECT id, username, email, firstName, lastName, avatarUrl,
+                role, disabled, mustChangePassword, lastLoginAt,
+                createdAt, updatedAt
+         FROM users WHERE id = ? LIMIT 1`,
+        [id]
+      );
+      const row = rows[0];
+      if (!row) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
+      res.json(publicUser(row));
+    })
+  );
+
+  // ─── Reset password ───────────────────────────────────────────────────
+  router.post(
+    "/:id/reset-password",
+    wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ message: "ID invalide" });
+        return;
+      }
+      const tempPassword = generateTempPassword();
+      const hash = hashPassword(tempPassword);
+      const [result] = await db.execute<ResultSetHeader>(
+        "UPDATE users SET passwordHash = ?, mustChangePassword = 1 WHERE id = ?",
+        [hash, id]
+      );
+      if (result.affectedRows === 0) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
+      res.json({ tempPassword });
+    })
+  );
+
+  // ─── Soft-delete (désactivation) ──────────────────────────────────────
+  router.delete(
+    "/:id",
+    wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ message: "ID invalide" });
+        return;
+      }
+      if (req.user?.sub === id) {
+        res
+          .status(400)
+          .json({ message: "Impossible de désactiver votre propre compte" });
+        return;
+      }
+      const [result] = await db.execute<ResultSetHeader>(
+        "UPDATE users SET disabled = 1 WHERE id = ?",
+        [id]
+      );
+      if (result.affectedRows === 0) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
+      res.status(204).end();
+    })
+  );
+
+  return router;
+}
+
+// Pour qu'un autre service (login) puisse vérifier qu'un user n'est pas disabled
+export const __helpers = { hashPassword, generateTempPassword, isValidRole };

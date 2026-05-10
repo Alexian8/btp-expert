@@ -44,15 +44,64 @@ function buildAuthRouter(db, cfg) {
             res.status(400).json({ message: "Payload invalide" });
             return;
         }
-        const [rows] = await db.query("SELECT id, username, passwordHash, role FROM users WHERE username = ? LIMIT 1", [parsed.data.username]);
+        const [rows] = await db.query(`SELECT id, username, passwordHash, role, disabled, mustChangePassword,
+                email, firstName, lastName
+         FROM users WHERE username = ? LIMIT 1`, [parsed.data.username]);
         const row = rows[0];
         if (!row || !verifyPassword(parsed.data.password, row.passwordHash)) {
             res.status(401).json({ message: "Identifiants invalides" });
             return;
         }
+        // Compte désactivé : refuser même si le password est correct
+        if (row.disabled) {
+            res.status(403).json({ message: "Compte désactivé. Contactez un administrateur." });
+            return;
+        }
+        // Met à jour lastLoginAt (best-effort, ne bloque pas la réponse)
+        db.execute("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?", [row.id]).catch((e) => console.warn("[auth] update lastLoginAt failed:", e));
         const payload = { sub: row.id, username: row.username, role: row.role };
         const token = (0, auth_1.signToken)(payload, cfg);
-        res.json({ id: row.id, username: row.username, role: row.role, token });
+        res.json({
+            id: row.id,
+            username: row.username,
+            role: row.role,
+            email: row.email ?? "",
+            firstName: row.firstName ?? "",
+            lastName: row.lastName ?? "",
+            mustChangePassword: Boolean(row.mustChangePassword),
+            token,
+        });
+    }));
+    // ─── Changement de mot de passe (user authentifié) ────────────────────
+    router.post("/change-password", wrap(async (req, res) => {
+        const header = req.headers.authorization;
+        if (!header?.startsWith("Bearer ")) {
+            res.status(401).json({ message: "Token manquant" });
+            return;
+        }
+        const payload = (0, auth_1.verifyToken)(header.slice(7), cfg);
+        if (!payload) {
+            res.status(401).json({ message: "Token invalide" });
+            return;
+        }
+        const schema = zod_1.z.object({
+            oldPassword: zod_1.z.string().min(1).max(256),
+            newPassword: zod_1.z.string().min(8).max(256),
+        });
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ message: "Payload invalide" });
+            return;
+        }
+        const [rows] = await db.query("SELECT id, passwordHash FROM users WHERE id = ? LIMIT 1", [payload.sub]);
+        const row = rows[0];
+        if (!row || !verifyPassword(parsed.data.oldPassword, row.passwordHash)) {
+            res.status(401).json({ message: "Ancien mot de passe incorrect" });
+            return;
+        }
+        const newHash = hashPassword(parsed.data.newPassword);
+        await db.execute("UPDATE users SET passwordHash = ?, mustChangePassword = 0 WHERE id = ?", [newHash, row.id]);
+        res.status(204).end();
     }));
     router.post("/logout", (_req, res) => {
         res.status(204).end();
@@ -68,13 +117,28 @@ function buildAuthRouter(db, cfg) {
             res.status(401).json({ message: "Token invalide" });
             return;
         }
-        const [rows] = await db.query("SELECT id, username, role FROM users WHERE id = ? LIMIT 1", [payload.sub]);
+        const [rows] = await db.query(`SELECT id, username, role, email, firstName, lastName, avatarUrl,
+                disabled, mustChangePassword
+         FROM users WHERE id = ? LIMIT 1`, [payload.sub]);
         const row = rows[0];
         if (!row) {
             res.status(404).json({ message: "Utilisateur introuvable" });
             return;
         }
-        res.json({ id: row.id, username: row.username, role: row.role });
+        if (row.disabled) {
+            res.status(403).json({ message: "Compte désactivé" });
+            return;
+        }
+        res.json({
+            id: row.id,
+            username: row.username,
+            role: row.role,
+            email: row.email ?? "",
+            firstName: row.firstName ?? "",
+            lastName: row.lastName ?? "",
+            avatarUrl: row.avatarUrl ?? "",
+            mustChangePassword: Boolean(row.mustChangePassword),
+        });
     }));
     // ─── Bootstrap : créer le premier admin (refusé si table non vide) ─────
     router.post("/bootstrap", wrap(async (req, res) => {

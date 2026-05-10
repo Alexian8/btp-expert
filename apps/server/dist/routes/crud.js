@@ -6,9 +6,13 @@
 //   GET    /            → findAll
 //   GET    /count       → count
 //   GET    /:id         → findById
-//   POST   /            → create
-//   PATCH  /:id         → update
+//   POST   /            → create     (injecte createdBy depuis req.user.sub)
+//   PATCH  /:id         → update     (injecte updatedBy depuis req.user.sub)
 //   DELETE /:id         → delete
+//
+// SÉCURITÉ : `createdBy` / `updatedBy` ne sont JAMAIS lus depuis req.body.
+// Le middleware d'auth (requireAuth) populate req.user à partir du JWT
+// vérifié, et c'est cette valeur (req.user.sub) qui est passée au repo.
 // ═══════════════════════════════════════════════════════════════════════════
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildCrudRouter = buildCrudRouter;
@@ -35,7 +39,9 @@ function buildCrudRouter(repo) {
     }));
     router.post("/", wrap(async (req, res) => {
         try {
-            const created = await repo.create(req.body ?? {});
+            // SÉCURITÉ : on lit l'ID utilisateur depuis le JWT vérifié, JAMAIS du body
+            const auditUserId = req.user?.sub;
+            const created = await repo.create(req.body ?? {}, auditUserId);
             res.status(201).json(created);
         }
         catch (e) {
@@ -43,7 +49,8 @@ function buildCrudRouter(repo) {
         }
     }));
     router.patch("/:id", wrap(async (req, res) => {
-        const updated = await repo.update(String(req.params.id), req.body ?? {});
+        const auditUserId = req.user?.sub;
+        const updated = await repo.update(String(req.params.id), req.body ?? {}, auditUserId);
         if (!updated) {
             res.status(404).json({ message: "Not found" });
             return;

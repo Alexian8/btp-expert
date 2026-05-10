@@ -22,6 +22,13 @@ export interface RepositoryOptions {
   primaryKey?: "auto" | "client";
   /** Colonnes JSON — sérialisées en JSON.stringify avant insert/update. */
   jsonColumns?: readonly string[];
+  /**
+   * Si true, la table possède les colonnes `createdBy` et `updatedBy`
+   * et le repo y injecte automatiquement l'ID de l'utilisateur connecté
+   * fourni via le 2e argument de create()/update().
+   * Le client ne peut JAMAIS écrire ces colonnes directement (filtre repo).
+   */
+  hasAuditColumns?: boolean;
 }
 
 const ident = (s: string): string => "`" + s.replace(/`/g, "``") + "`";
@@ -74,7 +81,7 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
     return (rows[0] as unknown as T) ?? null;
   }
 
-  async create(data: Record<string, unknown>): Promise<T> {
+  async create(data: Record<string, unknown>, auditUserId?: number): Promise<T> {
     const useClientPk = this.opts.primaryKey === "client";
     const cols: string[] = [];
     const placeholders: string[] = [];
@@ -92,11 +99,25 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
 
     for (const [key, value] of Object.entries(data)) {
       if (key === "id") continue; // déjà ajouté en mode client-pk, ignoré en mode auto
+      // SÉCURITÉ : un client ne peut JAMAIS écrire createdBy/updatedBy
+      // depuis le payload (sinon il pourrait usurper un autre user).
+      if (key === "createdBy" || key === "updatedBy") continue;
       if (!this.opts.writableColumns.includes(key)) continue;
       cols.push(ident(key));
       placeholders.push("?");
       values.push(this.serializeValue(key, value));
     }
+
+    // Injection auto de createdBy / updatedBy depuis le JWT serveur
+    if (this.opts.hasAuditColumns && auditUserId != null) {
+      cols.push(ident("createdBy"));
+      placeholders.push("?");
+      values.push(auditUserId);
+      cols.push(ident("updatedBy"));
+      placeholders.push("?");
+      values.push(auditUserId);
+    }
+
     if (!cols.length) throw new Error("Aucune colonne valide à insérer");
 
     const sql = `INSERT INTO ${ident(this.table)} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`;
@@ -114,15 +135,27 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
     return value;
   }
 
-  async update(id: number | string, data: Record<string, unknown>): Promise<T | null> {
+  async update(
+    id: number | string,
+    data: Record<string, unknown>,
+    auditUserId?: number
+  ): Promise<T | null> {
     const sets: string[] = [];
     const values: unknown[] = [];
     for (const [key, value] of Object.entries(data)) {
       if (key === "id") continue; // PK ne s'update pas
+      if (key === "createdBy" || key === "updatedBy") continue; // SÉCURITÉ
       if (!this.opts.writableColumns.includes(key)) continue;
       sets.push(`${ident(key)} = ?`);
       values.push(this.serializeValue(key, value));
     }
+
+    // Injection auto updatedBy
+    if (this.opts.hasAuditColumns && auditUserId != null) {
+      sets.push(`${ident("updatedBy")} = ?`);
+      values.push(auditUserId);
+    }
+
     if (!sets.length) return this.findById(id);
 
     if (this.opts.hasUpdatedAt) sets.push(`${ident("updatedAt")} = CURRENT_TIMESTAMP`);

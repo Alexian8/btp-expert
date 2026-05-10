@@ -363,6 +363,71 @@ async function runMigrations(db) {
     for (const sql of statements) {
         await db.query(sql);
     }
+    // Migrations additives (idempotentes) — enterprise upgrade
+    await runEnterpriseMigrations(db);
+}
+// ─── Helpers migrations additives ────────────────────────────────────────
+async function columnExists(db, table, column) {
+    const [rows] = await db.query(`SELECT COUNT(*) AS n FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, [table, column]);
+    return Number(rows[0].n) > 0;
+}
+async function addColumnIfNotExists(db, table, column, definition) {
+    if (!(await columnExists(db, table, column))) {
+        await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+    }
+}
+async function indexExists(db, table, indexName) {
+    const [rows] = await db.query(`SELECT COUNT(*) AS n FROM information_schema.statistics
+     WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`, [table, indexName]);
+    return Number(rows[0].n) > 0;
+}
+async function addIndexIfNotExists(db, table, indexName, columns) {
+    if (!(await indexExists(db, table, indexName))) {
+        await db.query(`CREATE INDEX \`${indexName}\` ON \`${table}\` (${columns})`);
+    }
+}
+// ─── Migrations enterprise (audit trail + RBAC users) ────────────────────
+//
+// Ajoute :
+//  • Profil enrichi sur `users` (email, firstName, lastName, avatarUrl,
+//    disabled, mustChangePassword, lastLoginAt)
+//  • Champs d'audit `createdBy` / `updatedBy` (FK soft INT vers users.id)
+//    sur toutes les tables data critiques.
+//
+// Toutes les opérations sont idempotentes : safe à relancer plusieurs fois.
+async function runEnterpriseMigrations(db) {
+    // 1. Enrichissement table users
+    await addColumnIfNotExists(db, "users", "email", "VARCHAR(255) DEFAULT ''");
+    await addColumnIfNotExists(db, "users", "firstName", "VARCHAR(128) DEFAULT ''");
+    await addColumnIfNotExists(db, "users", "lastName", "VARCHAR(128) DEFAULT ''");
+    await addColumnIfNotExists(db, "users", "avatarUrl", "VARCHAR(512) DEFAULT ''");
+    await addColumnIfNotExists(db, "users", "disabled", "TINYINT(1) NOT NULL DEFAULT 0");
+    await addColumnIfNotExists(db, "users", "mustChangePassword", "TINYINT(1) NOT NULL DEFAULT 0");
+    await addColumnIfNotExists(db, "users", "lastLoginAt", "DATETIME NULL");
+    await addColumnIfNotExists(db, "users", "updatedAt", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    await addIndexIfNotExists(db, "users", "idx_users_email", "email");
+    await addIndexIfNotExists(db, "users", "idx_users_role", "role");
+    // 2. Audit trail (createdBy / updatedBy) sur les tables data
+    // FK soft INT (pas de FK contrainte stricte pour permettre la suppression
+    // d'un utilisateur sans casser l'historique). updatedBy nullable.
+    const auditTables = [
+        "clients",
+        "suppliers",
+        "chantiers",
+        "quotes",
+        "invoices",
+        "invoice_payments",
+        "expenses",
+        "expense_notes",
+        "subcontractors",
+        "agenda_events",
+    ];
+    for (const t of auditTables) {
+        await addColumnIfNotExists(db, t, "createdBy", "INT NULL");
+        await addColumnIfNotExists(db, t, "updatedBy", "INT NULL");
+        await addIndexIfNotExists(db, t, `idx_${t}_createdBy`, "createdBy");
+    }
 }
 // ─── Reset des tables (DESTRUCTIF) ────────────────────────────────────────
 // Drop puis recrée toutes les tables sauf users/settings/oauth_tokens.

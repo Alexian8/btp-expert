@@ -24,6 +24,7 @@ import { PurchaseOrderEditorPage } from "@/features/purchase-orders/components/P
 import { PurchaseOrderDetailPage } from "@/features/purchase-orders/components/PurchaseOrderDetailPage";
 import { StatisticsPage } from "@/features/stats/components/StatisticsPage";
 import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
+import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
 import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -42,6 +43,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   if (user) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+// Guard : route réservée admin (sécurité côté serveur, ce guard est juste pour l'UX)
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin") return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -156,6 +165,14 @@ const router = createBrowserRouter(
         {
           path: "admin-docs",
           element: <AdminDocsPage />,
+        },
+        {
+          path: "admin/users",
+          element: (
+            <AdminOnlyRoute>
+              <UsersAdminPage />
+            </AdminOnlyRoute>
+          ),
         },
         {
           path: "settings",

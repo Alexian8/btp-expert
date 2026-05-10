@@ -52,7 +52,7 @@ class MysqlRepository {
         const [rows] = await this.db.query(`SELECT * FROM ${ident(this.table)} WHERE id = ? LIMIT 1`, [id]);
         return rows[0] ?? null;
     }
-    async create(data) {
+    async create(data, auditUserId) {
         const useClientPk = this.opts.primaryKey === "client";
         const cols = [];
         const placeholders = [];
@@ -69,11 +69,24 @@ class MysqlRepository {
         for (const [key, value] of Object.entries(data)) {
             if (key === "id")
                 continue; // déjà ajouté en mode client-pk, ignoré en mode auto
+            // SÉCURITÉ : un client ne peut JAMAIS écrire createdBy/updatedBy
+            // depuis le payload (sinon il pourrait usurper un autre user).
+            if (key === "createdBy" || key === "updatedBy")
+                continue;
             if (!this.opts.writableColumns.includes(key))
                 continue;
             cols.push(ident(key));
             placeholders.push("?");
             values.push(this.serializeValue(key, value));
+        }
+        // Injection auto de createdBy / updatedBy depuis le JWT serveur
+        if (this.opts.hasAuditColumns && auditUserId != null) {
+            cols.push(ident("createdBy"));
+            placeholders.push("?");
+            values.push(auditUserId);
+            cols.push(ident("updatedBy"));
+            placeholders.push("?");
+            values.push(auditUserId);
         }
         if (!cols.length)
             throw new Error("Aucune colonne valide à insérer");
@@ -91,16 +104,23 @@ class MysqlRepository {
         }
         return value;
     }
-    async update(id, data) {
+    async update(id, data, auditUserId) {
         const sets = [];
         const values = [];
         for (const [key, value] of Object.entries(data)) {
             if (key === "id")
                 continue; // PK ne s'update pas
+            if (key === "createdBy" || key === "updatedBy")
+                continue; // SÉCURITÉ
             if (!this.opts.writableColumns.includes(key))
                 continue;
             sets.push(`${ident(key)} = ?`);
             values.push(this.serializeValue(key, value));
+        }
+        // Injection auto updatedBy
+        if (this.opts.hasAuditColumns && auditUserId != null) {
+            sets.push(`${ident("updatedBy")} = ?`);
+            values.push(auditUserId);
         }
         if (!sets.length)
             return this.findById(id);

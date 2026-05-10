@@ -19,6 +19,7 @@ const crud_1 = require("./routes/crud");
 const auth_1 = require("./routes/auth");
 const backup_1 = require("./routes/backup");
 const microsoft_1 = require("./routes/microsoft");
+const admin_users_1 = require("./routes/admin-users");
 const auth_2 = require("./auth");
 // ─── Listes de colonnes ──────────────────────────────────────────────────
 const CLIENT_COLS = [
@@ -203,25 +204,29 @@ async function createApp(cfg, db) {
         res.json({ ok: true, version: "0.2.0", time: new Date().toISOString() });
     });
     app.use("/api/auth", (0, auth_1.buildAuthRouter)(pool, cfg));
+    // ─── Admin : gestion utilisateurs (admin only) ─────────────────────────
+    app.use("/api/admin/users", (0, admin_users_1.buildAdminUsersRouter)(pool, cfg));
     const auth = (0, auth_2.requireAuth)(cfg);
     // ─── Clients ───────────────────────────────────────────────────────────
     const clients = new repository_1.MysqlRepository(pool, "clients", {
         primaryKey: "client",
-        filterableColumns: ["type", "city", "siret", "email"],
+        filterableColumns: ["type", "city", "siret", "email", "createdBy"],
         sortableColumns: ["createdAt", "lastName", "companyName"],
         writableColumns: CLIENT_COLS,
         jsonColumns: ["tags"],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/clients", auth, (0, crud_1.buildCrudRouter)(clients));
     // ─── Suppliers ─────────────────────────────────────────────────────────
     const suppliers = new repository_1.MysqlRepository(pool, "suppliers", {
         primaryKey: "client",
-        filterableColumns: ["category", "city", "siret"],
+        filterableColumns: ["category", "city", "siret", "createdBy"],
         sortableColumns: ["createdAt", "companyName"],
         writableColumns: SUPPLIER_COLS,
         jsonColumns: ["tags"],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/suppliers", auth, (0, crud_1.buildCrudRouter)(suppliers));
     // Alias rétro-compatible
@@ -229,45 +234,49 @@ async function createApp(cfg, db) {
     // ─── Chantiers ─────────────────────────────────────────────────────────
     const chantiers = new repository_1.MysqlRepository(pool, "chantiers", {
         primaryKey: "client",
-        filterableColumns: ["status", "priority", "clientId", "city", "categoryId"],
+        filterableColumns: ["status", "priority", "clientId", "city", "categoryId", "createdBy"],
         sortableColumns: ["createdAt", "reference", "title", "startDateEstimated"],
         writableColumns: CHANTIER_COLS,
         jsonColumns: ["photos", "tags"],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/chantiers", auth, (0, crud_1.buildCrudRouter)(chantiers));
     // ─── Quotes ────────────────────────────────────────────────────────────
     const quotes = new repository_1.MysqlRepository(pool, "quotes", {
         primaryKey: "client",
-        filterableColumns: ["status", "clientId", "chantierId", "reference"],
+        filterableColumns: ["status", "clientId", "chantierId", "reference", "createdBy"],
         sortableColumns: ["createdAt", "issueDate", "reference", "totalTTC"],
         writableColumns: QUOTE_COLS,
         jsonColumns: ["items", "companySnapshot"],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/quotes", auth, (0, crud_1.buildCrudRouter)(quotes));
     // ─── Invoices ──────────────────────────────────────────────────────────
     const invoices = new repository_1.MysqlRepository(pool, "invoices", {
         primaryKey: "client",
-        filterableColumns: ["status", "type", "clientId", "chantierId", "fromQuoteId", "reference"],
+        filterableColumns: ["status", "type", "clientId", "chantierId", "fromQuoteId", "reference", "createdBy"],
         sortableColumns: ["createdAt", "issueDate", "dueDate", "reference", "totalTTC"],
         writableColumns: INVOICE_COLS,
         jsonColumns: ["items", "companySnapshot"],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices));
     // ─── Invoice payments ──────────────────────────────────────────────────
     const invoicePayments = new repository_1.MysqlRepository(pool, "invoice_payments", {
         primaryKey: "client",
-        filterableColumns: ["invoiceId", "method"],
+        filterableColumns: ["invoiceId", "method", "createdBy"],
         sortableColumns: ["createdAt", "date", "amount"],
         writableColumns: ["invoiceId", "amount", "date", "method", "reference", "notes"],
+        hasAuditColumns: true,
     });
     app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments));
     // ─── Expenses ──────────────────────────────────────────────────────────
     const expenses = new repository_1.MysqlRepository(pool, "expenses", {
         primaryKey: "client",
-        filterableColumns: ["category", "supplierId", "chantierId", "isPaid"],
+        filterableColumns: ["category", "supplierId", "chantierId", "isPaid", "createdBy"],
         sortableColumns: ["date", "amount", "createdAt"],
         writableColumns: [
             "label",
@@ -283,12 +292,13 @@ async function createApp(cfg, db) {
             "attachmentPath",
         ],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses));
     // ─── Expense notes ─────────────────────────────────────────────────────
     const expenseNotes = new repository_1.MysqlRepository(pool, "expense_notes", {
         primaryKey: "client",
-        filterableColumns: ["category", "chantierId", "isReimbursed", "isValidated"],
+        filterableColumns: ["category", "chantierId", "isReimbursed", "isValidated", "createdBy"],
         sortableColumns: ["date", "amount", "createdAt"],
         writableColumns: [
             "label",
@@ -305,12 +315,13 @@ async function createApp(cfg, db) {
             "notes",
         ],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/expense-notes", auth, (0, crud_1.buildCrudRouter)(expenseNotes));
     // ─── Subcontractors ────────────────────────────────────────────────────
     const subcontractors = new repository_1.MysqlRepository(pool, "subcontractors", {
         primaryKey: "client",
-        filterableColumns: ["activity", "siret", "city"],
+        filterableColumns: ["activity", "siret", "city", "createdBy"],
         sortableColumns: ["companyName", "createdAt"],
         writableColumns: [
             "companyName",
@@ -337,12 +348,13 @@ async function createApp(cfg, db) {
             "notes",
         ],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/subcontractors", auth, (0, crud_1.buildCrudRouter)(subcontractors));
     // ─── Agenda events ─────────────────────────────────────────────────────
     const agendaEvents = new repository_1.MysqlRepository(pool, "agenda_events", {
         primaryKey: "client",
-        filterableColumns: ["type", "clientId", "chantierId"],
+        filterableColumns: ["type", "clientId", "chantierId", "createdBy"],
         sortableColumns: ["startDate", "createdAt"],
         writableColumns: [
             "title",
@@ -359,8 +371,17 @@ async function createApp(cfg, db) {
             "lastSyncedAt",
         ],
         hasUpdatedAt: true,
+        hasAuditColumns: true,
     });
     app.use("/api/agenda-events", auth, (0, crud_1.buildCrudRouter)(agendaEvents));
+    // ─── Public route : liste compacte des users (id+nom+role) ────────────
+    // Pour afficher "Créé par X" dans les listes Devis/Factures sans donner
+    // accès à toute la table users (réservée aux admins via /api/admin/users).
+    app.get("/api/users/public", auth, asyncHandler(async (_req, res) => {
+        const [rows] = await pool.query(`SELECT id, username, firstName, lastName, avatarUrl, role
+         FROM users WHERE disabled = 0 ORDER BY firstName, lastName, username`);
+        res.json(rows);
+    }));
     // ─── Settings ──────────────────────────────────────────────────────────
     app.get("/api/settings", auth, asyncHandler(async (_req, res) => {
         const [rows] = await pool.query("SELECT `key`, value FROM settings");
