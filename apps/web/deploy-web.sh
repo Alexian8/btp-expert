@@ -32,6 +32,28 @@ echo "→ recopie le code serveur (au cas où il y aurait des changements)"
 cp -r "$REPO_DIR/apps/server/dist" "$DEPLOY_DIR/apps/server/" 2>/dev/null || true
 cp "$REPO_DIR/apps/server/app.js" "$DEPLOY_DIR/apps/server/app.js" 2>/dev/null || true
 
+echo "→ sync deps prod : merge apps/server/package.json -> doc root"
+# Garde le package.json doc root mais met à jour les dépendances pour
+# être en phase avec apps/server/package.json (sans devDependencies).
+node -e "
+  const fs = require('fs');
+  const path = require('path');
+  const root = '$DEPLOY_DIR/package.json';
+  const src = '$REPO_DIR/apps/server/package.json';
+  const cur = fs.existsSync(root) ? JSON.parse(fs.readFileSync(root, 'utf8')) : {};
+  const upstream = JSON.parse(fs.readFileSync(src, 'utf8'));
+  cur.name = cur.name || 'btp-server-deploy';
+  cur.private = true;
+  cur.version = upstream.version || '0.1.0';
+  cur.main = 'apps/server/app.js';
+  cur.dependencies = upstream.dependencies || {};
+  // ne pas écraser scripts perso, mais s'assurer du minimum
+  cur.scripts = cur.scripts || {};
+  cur.scripts.start = cur.scripts.start || 'node apps/server/app.js';
+  fs.writeFileSync(root, JSON.stringify(cur, null, 2));
+  console.log('  ✓ deps mises à jour (' + Object.keys(cur.dependencies).length + ' packages)');
+" || echo "  ✗ sync package.json a échoué, fix manuel requis"
+
 echo "→ signal restart Passenger"
 mkdir -p "$DEPLOY_DIR/tmp"
 touch "$DEPLOY_DIR/tmp/restart.txt"
