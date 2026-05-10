@@ -12,7 +12,9 @@ import {
   ArrowRight,
   Activity,
   ClipboardCheck,
+  Plus,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 import { cn } from "@btp/ui";
@@ -185,6 +187,17 @@ export function Dashboard() {
             </span>
           </div>
           <p className="text-muted-foreground mt-1 text-sm">{formatToday()}</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={() => navigate("/factures")}>
+            <Plus className="w-4 h-4" />
+            Nouveau devis
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/chantiers")}>
+            <Hammer className="w-4 h-4" />
+            Nouveau chantier
+          </Button>
         </div>
       </div>
 

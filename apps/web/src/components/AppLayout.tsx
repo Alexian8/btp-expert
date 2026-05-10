@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -6,11 +6,20 @@ import {
   Receipt,
   Hammer,
   Users,
+  Package,
+  Calendar,
+  Wallet,
+  HardHat,
+  BarChart3,
+  Activity,
+  FileSignature,
+  Archive,
   Database,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  User as UserIcon,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -28,16 +37,47 @@ import { useAuthStore } from "@/stores/authStore";
 import logoSquareUrl from "@/assets/logo-square.png";
 import logoHorizontalUrl from "@/assets/logo-horizontal.png";
 
-// Navigation alignée sur celle de l'app desktop. Les pages non encore branchées
-// côté serveur sont volontairement omises ; on les ajoutera quand /api/quotes,
-// /api/vault, etc. seront prêts.
+// Navigation alignée sur celle de l'app desktop. Les items non encore branchés
+// côté serveur sont marqués "coming". L'utilisateur les voit pour avoir un look
+// identique mais ils renvoient vers une page "Bientôt disponible".
 const navigation = [
-  { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true },
-  { to: "/factures", label: "Factures", icon: Receipt },
-  { to: "/chantiers", label: "Chantiers", icon: Hammer },
-  { to: "/clients", label: "Clients", icon: Users },
-  { to: "/sauvegardes", label: "Sauvegardes", icon: Database },
+  { to: "/", label: "Tableau de bord", icon: LayoutDashboard, end: true, coming: false },
+  { to: "/factures", label: "Devis & Factures", icon: Receipt, coming: false },
+  { to: "/chantiers", label: "Chantiers", icon: Hammer, coming: false },
+  { to: "/clients", label: "Clients", icon: Users, coming: false },
+  { to: "/fournisseurs", label: "Fournisseurs", icon: Package, coming: true },
+  { to: "/agenda", label: "Agenda", icon: Calendar, coming: true },
+  { to: "/depenses", label: "Dépenses", icon: Receipt, coming: true },
+  { to: "/notes-frais", label: "Notes de frais", icon: Wallet, coming: true },
+  { to: "/sous-traitants", label: "Sous-traitants", icon: HardHat, coming: true },
+  { to: "/finances", label: "Finances", icon: BarChart3, coming: true },
+  { to: "/statistiques", label: "Statistiques", icon: Activity, coming: true },
+  { to: "/documents-admin", label: "Documents admin", icon: FileSignature, coming: true },
+  { to: "/coffre-fort", label: "Coffre-fort", icon: Archive, coming: true },
+  { to: "/sauvegardes", label: "Sauvegardes", icon: Database, coming: false },
 ];
+
+function useTheme() {
+  const [isDark, setIsDark] = useState(() =>
+    document.documentElement.classList.contains("dark")
+  );
+  const toggle = () => {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    try {
+      localStorage.setItem("btp.web.theme", next ? "dark" : "light");
+    } catch {}
+  };
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return { isDark, toggle };
+}
 
 export function AppLayout() {
   const { user, logout } = useAuthStore();
@@ -45,11 +85,76 @@ export function AppLayout() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isDark, toggle: toggleTheme } = useTheme();
 
   const currentNav = navigation.find(
     (n) => n.to === location.pathname || (n.to !== "/" && location.pathname.startsWith(n.to))
   );
   const pageTitle = currentNav?.label || "BatiDesk";
+
+  function NavItem({
+    to,
+    label,
+    icon: Icon,
+    end,
+    coming,
+    onClick,
+  }: {
+    to: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+    end?: boolean;
+    coming?: boolean;
+    onClick?: () => void;
+  }) {
+    if (coming) {
+      return (
+        <button
+          onClick={() => {
+            alert(
+              `« ${label} » : page disponible bientôt.\nLes routes serveur correspondantes ne sont pas encore branchées.`
+            );
+            onClick?.();
+          }}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
+            "text-muted-foreground hover:bg-accent hover:text-accent-foreground opacity-60",
+            collapsed && "justify-center"
+          )}
+          title={collapsed ? `${label} (bientôt)` : "Bientôt disponible"}
+        >
+          <Icon className="w-4 h-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate flex-1 text-left">{label}</span>
+              <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted">
+                bientôt
+              </span>
+            </>
+          )}
+        </button>
+      );
+    }
+    return (
+      <NavLink
+        to={to}
+        end={end}
+        onClick={onClick}
+        className={({ isActive }) =>
+          cn(
+            "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
+            "hover:bg-accent hover:text-accent-foreground",
+            isActive && "bg-accent text-accent-foreground",
+            collapsed && "justify-center"
+          )
+        }
+        title={collapsed ? label : undefined}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        {!collapsed && <span className="truncate flex-1">{label}</span>}
+      </NavLink>
+    );
+  }
 
   return (
     <div className="h-screen flex bg-background">
@@ -90,23 +195,7 @@ export function AppLayout() {
 
         <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
           {navigation.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  isActive && "bg-accent text-accent-foreground",
-                  collapsed && "justify-center"
-                )
-              }
-              title={collapsed ? item.label : undefined}
-            >
-              <item.icon className="w-4 h-4 shrink-0" />
-              {!collapsed && <span className="truncate flex-1">{item.label}</span>}
-            </NavLink>
+            <NavItem key={item.to} {...item} />
           ))}
         </nav>
 
@@ -142,6 +231,10 @@ export function AppLayout() {
             </button>
             <h2 className="text-base font-semibold tracking-tight">{pageTitle}</h2>
           </div>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme} title="Changer le thème">
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -209,22 +302,7 @@ export function AppLayout() {
             </div>
             <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
               {navigation.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
-                      "hover:bg-accent hover:text-accent-foreground",
-                      isActive && "bg-accent text-accent-foreground"
-                    )
-                  }
-                >
-                  <item.icon className="w-4 h-4 shrink-0" />
-                  <span>{item.label}</span>
-                </NavLink>
+                <NavItem key={item.to} {...item} onClick={() => setMobileOpen(false)} />
               ))}
             </nav>
             <Separator />

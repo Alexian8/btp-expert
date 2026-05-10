@@ -92,7 +92,7 @@ class HttpClient {
     // quand on appelle this.fetchImpl(url) — fetch a besoin de `this === window`.
     this.fetchImpl =
       config.fetchImpl ??
-      ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+      ((input: Parameters<typeof fetch>[0], init?: RequestInit) => fetch(input, init));
   }
 
   async authHeaders(): Promise<Record<string, string>> {

@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "passenger:start": "node app.js",
     "migrate:sqlite": "tsx scripts/migrate-from-sqlite.ts",
+    "sync:desktop": "tsx scripts/sync-from-desktop.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
