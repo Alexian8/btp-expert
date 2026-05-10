@@ -27,6 +27,7 @@ import { SendQuoteByEmailModal } from "./SendQuoteByEmailModal";
 import { ConvertToInvoiceModal } from "@/features/invoices/components/ConvertToInvoiceModal";
 import { PdfActions } from "@/features/pdf/PdfActions";
 import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
+import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
 import {
   EMPTY_QUOTE, QUOTE_STATUS_META, QUOTE_STATUS_ORDER,
   type Quote, type QuoteItem, type QuoteStatus, type LineWorkType,
@@ -276,17 +277,22 @@ ${company?.companyName || ""}`;
             <div className="flex gap-2 shrink-0 flex-wrap">
               {existing && (
                 <>
-                  {/* PDF — généré client-side via @react-pdf/renderer */}
-                  <PdfActions
-                    document={
-                      <QuotePdfDocument
-                        quote={existing}
-                        client={useClientsStore.getState().clients.find((c) => c.id === existing.clientId)}
-                        company={company as Record<string, unknown>}
+                  {/* PDF — 2 templates au choix, persisté en localStorage */}
+                  {(() => {
+                    const c = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
+                    const co = company as Record<string, unknown>;
+                    return (
+                      <PdfActions
+                        templates={{
+                          modern: <QuotePdfDocument quote={existing} client={c} company={co} />,
+                          sobre: <QuotePdfMinimal quote={existing} client={c} company={co} />,
+                        }}
+                        persistKey="quote-template"
+                        defaultTemplate="modern"
+                        fileName={`${existing.reference || "Devis"}.pdf`}
                       />
-                    }
-                    fileName={`${existing.reference || "Devis"}.pdf`}
-                  />
+                    );
+                  })()}
                   <Button variant="outline" size="sm" onClick={handleOpenEmailModal}>
                     <Mail className="w-3.5 h-3.5" />
                     Envoyer par email

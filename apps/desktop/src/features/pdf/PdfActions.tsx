@@ -1,25 +1,44 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { pdf } from "@react-pdf/renderer";
-import { Eye, Download, FileText, X, Loader2 } from "lucide-react";
+import { Eye, Download, FileText, X, Loader2, Palette } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PdfActions — Boutons "Aperçu" + "Télécharger" pour un document PDF généré
-// par @react-pdf/renderer.
+// PdfActions — Boutons "Aperçu" + "Télécharger" + sélecteur de template
 //
-// Usage :
+// Supporte 1 ou plusieurs templates ; le choix est persisté en localStorage.
+//
+// Usage simple (1 template) :
+//   <PdfActions document={<QuotePdfDocument ... />} fileName="DEVIS-001.pdf" />
+//
+// Usage multi-templates :
 //   <PdfActions
-//     document={<QuotePdfDocument quote={quote} client={client} />}
-//     fileName="DEVIS-2025-001.pdf"
+//     templates={{
+//       modern:  <QuotePdfDocument quote={q} client={c} company={co} />,
+//       sobre:   <QuotePdfMinimal  quote={q} client={c} company={co} />,
+//     }}
+//     persistKey="quote-pdf-template"
+//     fileName="DEVIS-001.pdf"
 //   />
 // ═══════════════════════════════════════════════════════════════════════════
 
+const TEMPLATE_LABELS: Record<string, string> = {
+  modern: "Moderne (couleur)",
+  sobre: "Sobre (noir & blanc)",
+};
+
 interface Props {
-  /** Le composant PDF (élément React) à rendre. */
-  document: React.ReactElement;
+  /** Mode 1 template : passer le composant directement. */
+  document?: React.ReactElement;
+  /** Mode multi-templates : map { key: ReactElement }. */
+  templates?: Record<string, React.ReactElement>;
+  /** Clé localStorage pour persister le choix de template (multi only). */
+  persistKey?: string;
+  /** Template par défaut au 1er affichage. */
+  defaultTemplate?: string;
   /** Nom du fichier au téléchargement (.pdf). */
   fileName: string;
   /** Callback optionnel après un téléchargement réussi (utile pour auto-save vault). */
@@ -28,12 +47,50 @@ interface Props {
   compact?: boolean;
 }
 
-export function PdfActions({ document: doc, fileName, onDownloaded, compact = false }: Props) {
+export function PdfActions({
+  document: doc,
+  templates,
+  persistKey,
+  defaultTemplate,
+  fileName,
+  onDownloaded,
+  compact = false,
+}: Props) {
+  // Choix de template (persistant si persistKey fourni)
+  const templateKeys = templates ? Object.keys(templates) : [];
+  const initialTemplate = (() => {
+    if (!templates) return "";
+    if (persistKey && typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`btp.pdf.${persistKey}`);
+        if (saved && templates[saved]) return saved;
+      } catch {
+        /* ignore */
+      }
+    }
+    return defaultTemplate ?? templateKeys[0] ?? "";
+  })();
+  const [selectedTemplate, setSelectedTemplateState] = useState(initialTemplate);
+  const setSelectedTemplate = (key: string): void => {
+    setSelectedTemplateState(key);
+    if (persistKey) {
+      try {
+        localStorage.setItem(`btp.pdf.${persistKey}`, key);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const activeDoc: React.ReactElement | null = templates
+    ? templates[selectedTemplate] ?? null
+    : doc ?? null;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<"preview" | "download" | null>(null);
 
   async function generateBlob(): Promise<Blob> {
-    return await pdf(doc).toBlob();
+    if (!activeDoc) throw new Error("Aucun template PDF disponible");
+    return await pdf(activeDoc).toBlob();
   }
 
   async function handlePreview() {
@@ -82,12 +139,30 @@ export function PdfActions({ document: doc, fileName, onDownloaded, compact = fa
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Sélecteur de template (visible uniquement si multi-templates) */}
+        {templates && templateKeys.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            <Palette className="w-3.5 h-3.5 text-muted-foreground hidden md:inline" />
+            <select
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+              className="px-2 py-1.5 text-xs rounded-md border border-input bg-background h-9"
+              title="Style du PDF"
+            >
+              {templateKeys.map((k) => (
+                <option key={k} value={k}>
+                  {TEMPLATE_LABELS[k] ?? k}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <Button
           variant="outline"
           size={compact ? "icon" : "default"}
           onClick={handlePreview}
-          disabled={loading !== null}
+          disabled={loading !== null || !activeDoc}
           title="Aperçu PDF"
         >
           {loading === "preview" ? (
@@ -100,7 +175,7 @@ export function PdfActions({ document: doc, fileName, onDownloaded, compact = fa
         <Button
           size={compact ? "icon" : "default"}
           onClick={handleDownload}
-          disabled={loading !== null}
+          disabled={loading !== null || !activeDoc}
           title="Télécharger PDF"
         >
           {loading === "download" ? (

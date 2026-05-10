@@ -26,6 +26,7 @@ import { PaymentsHistory } from "./PaymentsHistory";
 import { SendInvoiceByEmailModal } from "./SendInvoiceByEmailModal";
 import { PdfActions } from "@/features/pdf/PdfActions";
 import { InvoicePdfDocument } from "@/features/pdf/InvoicePdfDocument";
+import { InvoicePdfMinimal } from "@/features/pdf/InvoicePdfMinimal";
 import {
   EMPTY_INVOICE,
   INVOICE_STATUS_META,
@@ -323,17 +324,22 @@ ${companyName}`,
           <div className="flex gap-2 shrink-0 flex-wrap">
             {existing && (
               <>
-                {/* PDF — généré client-side via @react-pdf/renderer */}
-                <PdfActions
-                  document={
-                    <InvoicePdfDocument
-                      invoice={existing}
-                      client={useClientsStore.getState().clients.find((c) => c.id === existing.clientId)}
-                      company={company as Record<string, unknown>}
+                {/* PDF — 2 templates au choix, persisté en localStorage */}
+                {(() => {
+                  const c = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
+                  const co = company as Record<string, unknown>;
+                  return (
+                    <PdfActions
+                      templates={{
+                        modern: <InvoicePdfDocument invoice={existing} client={c} company={co} />,
+                        sobre: <InvoicePdfMinimal invoice={existing} client={c} company={co} />,
+                      }}
+                      persistKey="invoice-template"
+                      defaultTemplate="modern"
+                      fileName={`${existing.reference || "Facture"}.pdf`}
                     />
-                  }
-                  fileName={`${existing.reference || "Facture"}.pdf`}
-                />
+                  );
+                })()}
                 <Button variant="outline" size="sm" onClick={handleOpenEmailModal}>
                   <Mail className="w-3.5 h-3.5" />
                   Envoyer par email
