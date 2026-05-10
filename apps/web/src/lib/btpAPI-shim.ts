@@ -184,6 +184,48 @@ export function installBtpApiShim(): void {
     return obj;
   };
 
+  // ─── Normalisation des champs JSON null retournés par MySQL ─────────────
+  // Le code desktop fait `entity.items.map(…)` ou `entity.tags.map(…)` direct.
+  // Si la colonne JSON est null en DB, ça crash. On comble avec des valeurs
+  // sûres (tableaux ou objets vides) en relisant les rows.
+  const arrayDefaults = ["items", "tags", "photos", "lignes"];
+  const objectDefaults = ["companySnapshot", "data", "meta"];
+
+  function normalizeRow<T>(row: T): T {
+    if (!row || typeof row !== "object") return row;
+    const out = { ...(row as Record<string, unknown>) };
+    for (const k of arrayDefaults) {
+      if (out[k] === null || out[k] === undefined) out[k] = [];
+      else if (typeof out[k] === "string") {
+        try {
+          out[k] = JSON.parse(out[k] as string);
+        } catch {
+          out[k] = [];
+        }
+      }
+    }
+    for (const k of objectDefaults) {
+      if (out[k] === null || out[k] === undefined) out[k] = {};
+      else if (typeof out[k] === "string") {
+        try {
+          out[k] = JSON.parse(out[k] as string);
+        } catch {
+          out[k] = {};
+        }
+      }
+    }
+    return out as T;
+  }
+  function normalizeRows<T>(rows: T[] | T): T[] | T {
+    if (Array.isArray(rows)) return rows.map(normalizeRow);
+    return normalizeRow(rows);
+  }
+  // Wrapper pour les GET list/findById
+  const httpGet = async <T>(path: string): Promise<T> => {
+    const res = await http<T>("GET", path);
+    return normalizeRows(res as never) as T;
+  };
+
   // Le code desktop attend `{success, id, error}` pour les actions create/update/
   // updateStatus/delete. Notre serveur REST renvoie l'entité directement (200) ou
   // 204 sur delete. On wrappe pour matcher le format desktop.
@@ -206,9 +248,9 @@ export function installBtpApiShim(): void {
 
   // ─── Clients ───────────────────────────────────────────────────────────
   const clients = {
-    clientsList: () => http("GET", "/api/clients").catch(() => []),
+    clientsList: () => httpGet("/api/clients").catch(() => []),
     clientsGet: (id: string | number) =>
-      http("GET", `/api/clients/${encodeURIComponent(String(id))}`).catch(() => null),
+      httpGet(`/api/clients/${encodeURIComponent(String(id))}`).catch(() => null),
     clientsCreate: (data: unknown) => wrapCreate(http("POST", "/api/clients", ensureId(data))),
     clientsUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
       wrapAction(http("PATCH", `/api/clients/${encodeURIComponent(String(id))}`, data)),
@@ -226,9 +268,9 @@ export function installBtpApiShim(): void {
 
   // ─── Suppliers ─────────────────────────────────────────────────────────
   const suppliers = {
-    suppliersList: () => http("GET", "/api/suppliers").catch(() => []),
+    suppliersList: () => httpGet("/api/suppliers").catch(() => []),
     suppliersGet: (id: string | number) =>
-      http("GET", `/api/suppliers/${encodeURIComponent(String(id))}`).catch(() => null),
+      httpGet(`/api/suppliers/${encodeURIComponent(String(id))}`).catch(() => null),
     suppliersCreate: (data: unknown) => wrapCreate(http("POST", "/api/suppliers", ensureId(data))),
     suppliersUpdate: ({ id, data }: { id: string | number; data: unknown }) =>
       wrapAction(http("PATCH", `/api/suppliers/${encodeURIComponent(String(id))}`, data)),
@@ -255,12 +297,12 @@ export function installBtpApiShim(): void {
 
   // ─── Chantiers ─────────────────────────────────────────────────────────
   const chantiers = {
-    chantiersList: () => http("GET", "/api/chantiers").catch(() => []),
+    chantiersList: () => httpGet("/api/chantiers").catch(() => []),
     chantiersGet: (id: string | number) =>
-      http("GET", `/api/chantiers/${encodeURIComponent(String(id))}`).catch(() => null),
+      httpGet(`/api/chantiers/${encodeURIComponent(String(id))}`).catch(() => null),
     chantiersListByClient: async (clientId: string | number) => {
       try {
-        const all = (await http<unknown[]>("GET", "/api/chantiers")) as Array<{ clientId: unknown }>;
+        const all = (await httpGet<unknown[]>("/api/chantiers")) as Array<{ clientId: unknown }>;
         return all.filter((c) => String(c.clientId) === String(clientId));
       } catch {
         return [];
@@ -289,12 +331,12 @@ export function installBtpApiShim(): void {
 
   // ─── Quotes (devis) ────────────────────────────────────────────────────
   const quotes = {
-    quotesList: () => http("GET", "/api/quotes").catch(() => []),
+    quotesList: () => httpGet("/api/quotes").catch(() => []),
     quotesGet: (id: string | number) =>
-      http("GET", `/api/quotes/${encodeURIComponent(String(id))}`).catch(() => null),
+      httpGet(`/api/quotes/${encodeURIComponent(String(id))}`).catch(() => null),
     quotesListByClient: async (clientId: string | number) => {
       try {
-        const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ clientId: unknown }>;
+        const all = (await httpGet<unknown[]>("/api/quotes")) as Array<{ clientId: unknown }>;
         return all.filter((c) => String(c.clientId) === String(clientId));
       } catch {
         return [];
@@ -302,7 +344,7 @@ export function installBtpApiShim(): void {
     },
     quotesListByChantier: async (chantierId: string | number) => {
       try {
-        const all = (await http<unknown[]>("GET", "/api/quotes")) as Array<{ chantierId: unknown }>;
+        const all = (await httpGet<unknown[]>("/api/quotes")) as Array<{ chantierId: unknown }>;
         return all.filter((c) => String(c.chantierId) === String(chantierId));
       } catch {
         return [];
@@ -335,12 +377,12 @@ export function installBtpApiShim(): void {
 
   // ─── Invoices ──────────────────────────────────────────────────────────
   const invoices = {
-    invoicesList: () => http("GET", "/api/invoices").catch(() => []),
+    invoicesList: () => httpGet("/api/invoices").catch(() => []),
     invoicesGet: (id: string | number) =>
-      http("GET", `/api/invoices/${encodeURIComponent(String(id))}`).catch(() => null),
+      httpGet(`/api/invoices/${encodeURIComponent(String(id))}`).catch(() => null),
     invoicesListByClient: async (clientId: string | number) => {
       try {
-        const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ clientId: unknown }>;
+        const all = (await httpGet<unknown[]>("/api/invoices")) as Array<{ clientId: unknown }>;
         return all.filter((i) => String(i.clientId) === String(clientId));
       } catch {
         return [];
@@ -348,7 +390,7 @@ export function installBtpApiShim(): void {
     },
     invoicesListByChantier: async (chantierId: string | number) => {
       try {
-        const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ chantierId: unknown }>;
+        const all = (await httpGet<unknown[]>("/api/invoices")) as Array<{ chantierId: unknown }>;
         return all.filter((i) => String(i.chantierId) === String(chantierId));
       } catch {
         return [];
@@ -356,7 +398,7 @@ export function installBtpApiShim(): void {
     },
     invoicesListByQuote: async (quoteId: string | number) => {
       try {
-        const all = (await http<unknown[]>("GET", "/api/invoices")) as Array<{ fromQuoteId: unknown }>;
+        const all = (await httpGet<unknown[]>("/api/invoices")) as Array<{ fromQuoteId: unknown }>;
         return all.filter((i) => String(i.fromQuoteId) === String(quoteId));
       } catch {
         return [];
@@ -382,8 +424,7 @@ export function installBtpApiShim(): void {
     invoicesConvertFromQuote: stub("invoicesConvertFromQuote", { success: false }),
     invoicesListPayments: async (invoiceId: string | number) => {
       try {
-        const all = (await http<unknown[]>(
-          "GET",
+        const all = (await httpGet<unknown[]>(
           `/api/invoice-payments?invoiceId=${encodeURIComponent(String(invoiceId))}`
         )) as Array<{ invoiceId: unknown }>;
         return all.filter((p) => String(p.invoiceId) === String(invoiceId));
