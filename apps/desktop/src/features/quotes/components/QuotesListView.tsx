@@ -275,10 +275,10 @@ function RowMenu({ quoteId, reference }: { quoteId: string; reference: string })
     <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+        className="p-2 rounded-md border border-border bg-background hover:bg-accent text-foreground transition-colors"
         title="Actions"
       >
-        <MoreHorizontal className="w-4 h-4" />
+        <MoreHorizontal className="w-4 h-4" strokeWidth={2.5} />
       </button>
 
       {open && (

@@ -385,7 +385,7 @@ function NoteRow({ note, chantierLabel, delay, onClick, onValidate, onReimburse 
           variant="outline"
           size="sm"
           onClick={onValidate}
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          className="md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
           Valider
@@ -396,7 +396,7 @@ function NoteRow({ note, chantierLabel, delay, onClick, onValidate, onReimburse 
           variant="outline"
           size="sm"
           onClick={onReimburse}
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          className="md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
           Rembourser
