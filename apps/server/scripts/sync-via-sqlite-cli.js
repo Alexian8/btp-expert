@@ -42,12 +42,42 @@ for (const env of envCandidates) {
 
 const SQLITE = "/bin/sqlite3";
 
+// On envoie le script via stdin avec ".mode line" (dispo depuis SQLite 1.0).
+// Format de sortie :
+//   id = 1
+//   name = Alice
+//   <ligne vide>
+//   id = 2
+//   name = Bob
 function runSqlite(query) {
-  // .mode json + .once stdout → on récupère via execFileSync
-  const args = [sqlitePath, "-json", query];
-  const stdout = execFileSync(SQLITE, args, { encoding: "utf-8", maxBuffer: 256 * 1024 * 1024 });
-  if (!stdout.trim()) return [];
-  return JSON.parse(stdout);
+  const script = `.mode line\n${query};\n`;
+  const stdout = execFileSync(SQLITE, [sqlitePath], {
+    input: script,
+    encoding: "utf-8",
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  return parseLineMode(stdout);
+}
+
+function parseLineMode(text) {
+  const rows = [];
+  let current = null;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line.trim()) {
+      if (current && Object.keys(current).length) rows.push(current);
+      current = null;
+      continue;
+    }
+    const eq = line.indexOf(" = ");
+    if (eq < 0) continue;
+    if (!current) current = {};
+    const key = line.slice(0, eq).trim();
+    const val = line.slice(eq + 3);
+    current[key] = val;
+  }
+  if (current && Object.keys(current).length) rows.push(current);
+  return rows;
 }
 
 function tableExists(table) {
