@@ -167,6 +167,38 @@ async function createApp(cfg, db) {
         credentials: true,
     }));
     app.use(express_1.default.json({ limit: "10mb" }));
+    // ─── Basic Auth (mode dev) ─────────────────────────────────────────────
+    // Active uniquement si DEV_AUTH_USER + DEV_AUTH_PASS sont définis dans
+    // les env vars. Pour désactiver en prod : retirer ces 2 variables.
+    const devAuthUser = process.env.DEV_AUTH_USER;
+    const devAuthPass = process.env.DEV_AUTH_PASS;
+    if (devAuthUser && devAuthPass) {
+        console.log("[basic-auth] active (dev mode) - user:", devAuthUser);
+        app.use((req, res, next) => {
+            // Health check public (utile pour monitoring)
+            if (req.path === "/api/health")
+                return next();
+            const auth = req.headers.authorization;
+            if (auth && auth.startsWith("Basic ")) {
+                try {
+                    const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
+                    const idx = decoded.indexOf(":");
+                    if (idx >= 0) {
+                        const user = decoded.slice(0, idx);
+                        const pass = decoded.slice(idx + 1);
+                        if (user === devAuthUser && pass === devAuthPass) {
+                            return next();
+                        }
+                    }
+                }
+                catch {
+                    /* fallthrough to 401 */
+                }
+            }
+            res.set("WWW-Authenticate", 'Basic realm="BatiDesk Dev", charset="UTF-8"');
+            res.status(401).type("text/plain").send("Authentification requise (dev)");
+        });
+    }
     app.get("/api/health", (_req, res) => {
         res.json({ ok: true, version: "0.2.0", time: new Date().toISOString() });
     });
