@@ -357,8 +357,36 @@ export function installBtpApiShim(): void {
       wrapAction(http("PATCH", `/api/quotes/${encodeURIComponent(String(id))}`, { status })),
     quotesDelete: (id: string | number) =>
       wrapAction(http("DELETE", `/api/quotes/${encodeURIComponent(String(id))}`)),
-    quotesDuplicate: stub("quotesDuplicate", { success: false }),
-    quotesConvertToPo: stub("quotesConvertToPo", { success: false }),
+    quotesDuplicate: async (id: string | number) => {
+      try {
+        const original = (await httpGet<Record<string, unknown>>(
+          `/api/quotes/${encodeURIComponent(String(id))}`
+        )) as Record<string, unknown> | null;
+        if (!original) return { success: false, error: "Devis introuvable" };
+        const { id: _omit, createdAt, updatedAt, reference, ...rest } = original as {
+          id?: string;
+          createdAt?: string;
+          updatedAt?: string;
+          reference?: string;
+        };
+        return wrapCreate(
+          http("POST", "/api/quotes", {
+            ...(rest as object),
+            id: genId(),
+            reference: "",
+            status: "brouillon",
+            sentAt: "",
+            acceptedAt: "",
+          })
+        );
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    quotesConvertToPo: stub("quotesConvertToPo", {
+      success: false,
+      error: "Conversion en bon de commande pas encore disponible en web",
+    }),
     quotesCount: async (): Promise<number> => {
       try {
         const r = await http<{ count: number }>("GET", "/api/quotes/count");
@@ -411,7 +439,35 @@ export function installBtpApiShim(): void {
       wrapAction(http("PATCH", `/api/invoices/${encodeURIComponent(String(id))}`, { status })),
     invoicesDelete: (id: string | number) =>
       wrapAction(http("DELETE", `/api/invoices/${encodeURIComponent(String(id))}`)),
-    invoicesDuplicate: stub("invoicesDuplicate", { success: false }),
+    invoicesDuplicate: async (id: string | number) => {
+      try {
+        const original = (await httpGet<Record<string, unknown>>(
+          `/api/invoices/${encodeURIComponent(String(id))}`
+        )) as Record<string, unknown>;
+        if (!original) return { success: false, error: "Facture introuvable" };
+        const { id: _omit, createdAt, updatedAt, reference, ...rest } = original as {
+          id?: string;
+          createdAt?: string;
+          updatedAt?: string;
+          reference?: string;
+        };
+        return wrapCreate(
+          http("POST", "/api/invoices", {
+            ...(rest as object),
+            id: genId(),
+            reference: "",
+            status: "brouillon",
+            sentAt: "",
+            paidAt: "",
+            totalPaid: 0,
+            remindersCount: 0,
+            lastReminderSentAt: "",
+          })
+        );
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
     invoicesCount: async (): Promise<number> => {
       try {
         const r = await http<{ count: number }>("GET", "/api/invoices/count");
@@ -421,7 +477,52 @@ export function installBtpApiShim(): void {
       }
     },
     invoicesCountByStatus: stub("invoicesCountByStatus", {} as Record<string, number>),
-    invoicesConvertFromQuote: stub("invoicesConvertFromQuote", { success: false }),
+    invoicesConvertFromQuote: async (
+      quoteId: string | number,
+      options?: { type?: string; acomptePercent?: number; title?: string }
+    ): Promise<{ success: boolean; id?: string; error?: string }> => {
+      try {
+        const quote = (await httpGet<Record<string, unknown>>(
+          `/api/quotes/${encodeURIComponent(String(quoteId))}`
+        )) as Record<string, unknown> | null;
+        if (!quote) return { success: false, error: "Devis introuvable" };
+
+        const opts = options ?? {};
+        const invoiceType = opts.type ?? "standard";
+        const newId = genId();
+
+        const payload: Record<string, unknown> = {
+          id: newId,
+          reference: "",
+          status: "brouillon",
+          type: invoiceType,
+          title: opts.title || quote.title || "",
+          clientId: quote.clientId ?? "",
+          chantierId: quote.chantierId ?? "",
+          fromQuoteId: String(quoteId),
+          issueDate: new Date().toISOString().slice(0, 10),
+          dueDate: "",
+          paymentTermsDays: 30,
+          items: quote.items ?? [],
+          globalDiscountMode: quote.globalDiscountMode ?? "none",
+          globalDiscountPercent: quote.globalDiscountPercent ?? 0,
+          globalDiscountAmount: quote.globalDiscountAmount ?? 0,
+          acompteBasedOnQuoteId: invoiceType === "acompte" ? String(quoteId) : "",
+          acomptePercent: opts.acomptePercent ?? 0,
+          introText: quote.introText ?? "",
+          conditionsText: quote.conditionsText ?? "",
+          footerText: quote.footerText ?? "",
+          internalNotes: "",
+          companySnapshot: quote.companySnapshot ?? {},
+          totalHT: quote.totalHT ?? 0,
+          totalTTC: quote.totalTTC ?? 0,
+          totalPaid: 0,
+        };
+        return wrapCreate(http("POST", "/api/invoices", payload));
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
     invoicesListPayments: async (invoiceId: string | number) => {
       try {
         const all = (await httpGet<unknown[]>(
