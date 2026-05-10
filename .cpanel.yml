@@ -28,16 +28,28 @@ deployment:
     # En cas de NOUVELLE dépendance npm, lancer manuellement depuis Terminal :
     #   cd ~/intranet.jacobhabitat-dev.fr && npm install --omit=dev
 
-    # 1) Synchronise le code (sources + dist déjà compilés) vers le doc root
+    # 1) Synchronise le code (sources + dist déjà compilés) vers le doc root.
+    #    --no-perms évite que rsync écrase les permissions du doc root /
+    #    fichiers cPanel (.htaccess, etc.) — sinon Apache renvoie 403
+    #    "Server unable to read htaccess file" après chaque déploiement.
     - export DEPLOYPATH=/home/$USER/intranet.jacobhabitat-dev.fr
     - /bin/mkdir -p $DEPLOYPATH
-    - /bin/rsync -av --exclude='node_modules' --exclude='.git' --exclude='dist_electron' --exclude='apps/desktop' --exclude='.htaccess' ./ $DEPLOYPATH/
+    - /bin/rsync -rltv --no-perms --exclude='node_modules' --exclude='.git' --exclude='dist_electron' --exclude='apps/desktop' --exclude='.htaccess' --exclude='public/' ./ $DEPLOYPATH/
 
     # 2) Déploie le build Vite du front (apps/web/dist) vers public/.
     #    Express le sert comme SPA.
     - /bin/mkdir -p $DEPLOYPATH/public
-    - /bin/rsync -av --delete $DEPLOYPATH/apps/web/dist/ $DEPLOYPATH/public/
+    - /bin/rsync -rltv --no-perms --delete $DEPLOYPATH/apps/web/dist/ $DEPLOYPATH/public/
 
-    # 3) Restart de l'app Node.js (touche restart.txt = signal Passenger)
+    # 3) Garde-fou permissions — restaure les perms standard cPanel sur le
+    #    doc root et le .htaccess pour qu'Apache puisse toujours les lire.
+    #    Best-effort (|| true) car ces fichiers peuvent ne pas exister à
+    #    la 1ère exécution.
+    - /bin/chmod 0755 $DEPLOYPATH 2>/dev/null || true
+    - /bin/chmod 0644 $DEPLOYPATH/.htaccess 2>/dev/null || true
+    - /bin/find $DEPLOYPATH/public -type d -exec /bin/chmod 0755 {} \; 2>/dev/null || true
+    - /bin/find $DEPLOYPATH/public -type f -exec /bin/chmod 0644 {} \; 2>/dev/null || true
+
+    # 4) Restart de l'app Node.js (touche restart.txt = signal Passenger)
     - /bin/mkdir -p $DEPLOYPATH/tmp
     - /bin/touch $DEPLOYPATH/tmp/restart.txt
