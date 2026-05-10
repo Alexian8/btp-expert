@@ -226,9 +226,11 @@ export function buildSuperAdminRouter(db: DB, cfg: Config): Router {
 
         await conn.commit();
 
-        // 3. Audit log
+        // 3. Audit log — companyId pointe vers la company créée pour que
+        // son admin voie l'événement dans son journal.
         void writeAudit(db, {
           ...audited(req),
+          companyId: newCompanyId,
           action: "company_created",
           resource: "company",
           resourceId: String(newCompanyId),
@@ -350,6 +352,7 @@ export function buildSuperAdminRouter(db: DB, cfg: Config): Router {
 
       void writeAudit(db, {
         ...audited(req),
+        companyId: id,
         action: parsed.data.isActive === false ? "company_disabled" : "company_updated",
         resource: "company",
         resourceId: String(id),

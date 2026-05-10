@@ -45,16 +45,20 @@ export interface AuditEntry {
   ip?: string;
   userAgent?: string;
   meta?: Record<string, unknown> | null;
+  /** Multi-tenant : ID de l'entreprise. Sert à isoler les logs entre tenants.
+   *  null = super_admin / système (visible uniquement par super_admin). */
+  companyId?: number | null;
 }
 
 /**
- * Extrait IP + User-Agent + identité de la requête.
+ * Extrait IP + User-Agent + identité + tenant de la requête.
  * À appeler au début d'un handler pour avoir l'auteur.
  */
 export function audited(req: Request, override?: Partial<AuditEntry>): Omit<AuditEntry, "action"> {
   return {
     userId: req.user?.sub ?? null,
     username: req.user?.username ?? "",
+    companyId: req.user?.companyId ?? null,
     ip: req.ip ?? "",
     userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
     ...override,
@@ -69,9 +73,10 @@ export async function writeAudit(db: DB, entry: AuditEntry): Promise<void> {
   try {
     await db.execute<ResultSetHeader>(
       `INSERT INTO audit_logs
-         (userId, username, action, resource, resourceId, ip, userAgent, meta)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (companyId, userId, username, action, resource, resourceId, ip, userAgent, meta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        entry.companyId ?? null,
         entry.userId,
         entry.username ?? "",
         entry.action,
@@ -104,6 +109,10 @@ export interface AuditQuery {
   until?: string;
   /** Recherche texte sur username / resourceId / ip. */
   search?: string;
+  /** Multi-tenant : restreindre à un tenant précis.
+   *  Quand défini, on n'expose QUE les logs de cette company.
+   *  Pour super_admin : laisser undefined (= tous les logs). */
+  companyId?: number;
 }
 
 export interface AuditRow extends RowDataPacket {
@@ -117,6 +126,7 @@ export interface AuditRow extends RowDataPacket {
   ip: string;
   userAgent: string;
   meta: unknown;
+  companyId: number | null;
 }
 
 export async function listAuditLogs(
@@ -126,6 +136,12 @@ export async function listAuditLogs(
   const wheres: string[] = [];
   const params: unknown[] = [];
 
+  // ⚠️ Isolation multi-tenant : si companyId fourni, on filtre strictement.
+  // Les logs sans companyId (legacy ou système) ne fuitent PAS aux admins.
+  if (q.companyId != null) {
+    wheres.push("companyId = ?");
+    params.push(q.companyId);
+  }
   if (q.userId != null) {
     wheres.push("userId = ?");
     params.push(q.userId);
@@ -158,7 +174,7 @@ export async function listAuditLogs(
   const offset = Math.max(q.offset ?? 0, 0);
 
   const [rows] = await db.query<AuditRow[]>(
-    `SELECT id, timestamp, userId, username, action, resource, resourceId,
+    `SELECT id, timestamp, companyId, userId, username, action, resource, resourceId,
             ip, userAgent, meta
      FROM audit_logs ${whereSql}
      ORDER BY timestamp ${orderSql}, id ${orderSql}

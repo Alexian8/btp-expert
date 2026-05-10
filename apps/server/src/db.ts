@@ -429,9 +429,13 @@ export async function runMigrations(db: Pool): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
     // ─── Audit logs ────────────────────────────────────────────────────────
+    // companyId : isolation multi-tenant — un admin ne voit QUE les logs de
+    // sa company. NULL = action système / super_admin (visible uniquement par
+    // super_admin).
     `CREATE TABLE IF NOT EXISTS audit_logs (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
       timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      companyId INT NULL,
       userId INT NULL,
       username VARCHAR(64) DEFAULT '',
       action VARCHAR(64) NOT NULL,
@@ -441,6 +445,7 @@ export async function runMigrations(db: Pool): Promise<void> {
       userAgent VARCHAR(512) DEFAULT '',
       meta JSON,
       INDEX idx_audit_timestamp (timestamp),
+      INDEX idx_audit_companyId (companyId),
       INDEX idx_audit_userId (userId),
       INDEX idx_audit_action (action),
       INDEX idx_audit_resource (resource)
@@ -649,6 +654,24 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
     await addColumnIfNotExists(db, t, "updatedBy", "INT NULL");
     await addIndexIfNotExists(db, t, `idx_${t}_companyId`, "companyId");
     await addIndexIfNotExists(db, t, `idx_${t}_createdBy`, "createdBy");
+  }
+
+  // 4. Multi-tenant : isolation des audit_logs entre companies.
+  //    Sans ce scoping, un admin d'entreprise voit les logs de TOUTES les
+  //    entreprises de la plate-forme.
+  await addColumnIfNotExists(db, "audit_logs", "companyId", "INT NULL");
+  await addIndexIfNotExists(db, "audit_logs", "idx_audit_companyId", "companyId");
+  // Backfill : pour les lignes existantes (companyId NULL), on récupère le
+  // tenant à partir de userId via la table users. Best-effort idempotent.
+  try {
+    await db.query(`
+      UPDATE audit_logs al
+      JOIN users u ON u.id = al.userId
+      SET al.companyId = u.companyId
+      WHERE al.companyId IS NULL AND al.userId IS NOT NULL
+    `);
+  } catch (e) {
+    console.warn("[migrations] audit_logs companyId backfill failed:", e);
   }
 }
 

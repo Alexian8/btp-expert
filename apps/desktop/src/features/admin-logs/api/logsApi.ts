@@ -5,6 +5,9 @@
 export interface AuditLog {
   id: number;
   timestamp: string;
+  /** Multi-tenant : entreprise concernée par l'événement.
+   *  null = action super_admin / système. */
+  companyId: number | null;
   userId: number | null;
   username: string;
   action: string;

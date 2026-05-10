@@ -84,6 +84,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         void writeAudit(db, {
           userId: row?.id ?? null,
           username: parsed.data.username,
+          companyId: row?.companyId ?? null,
           action: "login_fail",
           ip,
           userAgent,
@@ -102,6 +103,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         void writeAudit(db, {
           userId: row.id,
           username: row.username,
+          companyId: row.companyId ?? null,
           action: "login_blocked",
           ip,
           userAgent,
@@ -127,6 +129,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
           void writeAudit(db, {
             userId: row.id,
             username: row.username,
+            companyId: row.companyId ?? null,
             action: "login_blocked",
             ip,
             userAgent,
@@ -142,6 +145,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       void writeAudit(db, {
         userId: row.id,
         username: row.username,
+        companyId: row.companyId ?? null,
         action: "login_ok",
         ip,
         userAgent,
@@ -240,6 +244,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
           void writeAudit(db, {
             userId: payload.sub,
             username: payload.username,
+            companyId: payload.companyId ?? null,
             action: "cpanel_mailbox_password_synced",
             ip: req.ip ?? "",
             userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
@@ -253,6 +258,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       void writeAudit(db, {
         userId: payload.sub,
         username: payload.username,
+        companyId: payload.companyId ?? null,
         action: "change_password",
         ip: req.ip ?? "",
         userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),

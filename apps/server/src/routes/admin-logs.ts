@@ -36,9 +36,29 @@ export function buildAdminLogsRouter(db: DB, cfg: Config): Router {
   const router = Router();
   router.use(requireAuth(cfg), requireRole("admin"));
 
+  /**
+   * Détermine le scope tenant à appliquer en lecture :
+   *   - super_admin → undefined (= tous les tenants)
+   *   - admin       → son propre companyId (isolation stricte)
+   *
+   * Si pour une raison quelconque un admin n'a pas de companyId dans son JWT,
+   * on refuse l'accès plutôt que d'exposer tous les logs (fail-closed).
+   */
+  function tenantScope(req: Request): number | undefined | "deny" {
+    if (req.user?.role === "super_admin") return undefined;
+    const cid = req.user?.companyId;
+    if (typeof cid !== "number" || cid <= 0) return "deny";
+    return cid;
+  }
+
   router.get(
     "/",
     wrap(async (req, res) => {
+      const scope = tenantScope(req);
+      if (scope === "deny") {
+        res.status(403).json({ message: "Tenant inconnu" });
+        return;
+      }
       const q = req.query as Record<string, string | undefined>;
       const filter: AuditQuery = {
         limit: q.limit ? Number(q.limit) : undefined,
@@ -50,30 +70,52 @@ export function buildAdminLogsRouter(db: DB, cfg: Config): Router {
         until: q.until || undefined,
         search: q.search || undefined,
         order: q.order === "asc" ? "asc" : "desc",
+        companyId: scope, // undefined pour super_admin, number pour admin
       };
       const result = await listAuditLogs(db, filter);
       res.json(result);
     })
   );
 
-  // Liste des actions distinctes — pour peupler le filtre UI
+  // Liste des actions distinctes — pour peupler le filtre UI (scopée tenant)
   router.get(
     "/actions",
-    wrap(async (_req, res) => {
+    wrap(async (req, res) => {
+      const scope = tenantScope(req);
+      if (scope === "deny") {
+        res.status(403).json({ message: "Tenant inconnu" });
+        return;
+      }
+      const sql =
+        scope === undefined
+          ? "SELECT DISTINCT action FROM audit_logs ORDER BY action ASC"
+          : "SELECT DISTINCT action FROM audit_logs WHERE companyId = ? ORDER BY action ASC";
       const [rows] = await db.query<RowDataPacket[]>(
-        "SELECT DISTINCT action FROM audit_logs ORDER BY action ASC"
+        sql,
+        scope === undefined ? [] : [scope]
       );
       res.json(rows.map((r) => (r as { action: string }).action));
     })
   );
 
-  // Liste compacte users — pour peupler le filtre UI
+  // Liste compacte users — pour peupler le filtre UI (scopée tenant)
   router.get(
     "/users",
-    wrap(async (_req, res) => {
+    wrap(async (req, res) => {
+      const scope = tenantScope(req);
+      if (scope === "deny") {
+        res.status(403).json({ message: "Tenant inconnu" });
+        return;
+      }
+      const sql =
+        scope === undefined
+          ? `SELECT id, username, firstName, lastName
+             FROM users ORDER BY firstName, lastName, username`
+          : `SELECT id, username, firstName, lastName
+             FROM users WHERE companyId = ? ORDER BY firstName, lastName, username`;
       const [rows] = await db.query<RowDataPacket[]>(
-        `SELECT id, username, firstName, lastName
-         FROM users ORDER BY firstName, lastName, username`
+        sql,
+        scope === undefined ? [] : [scope]
       );
       res.json(rows);
     })
