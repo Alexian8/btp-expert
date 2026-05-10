@@ -1,78 +1,274 @@
 "use strict";
 // ═══════════════════════════════════════════════════════════════════════════
-// Email service — envoi via SMTP (Nodemailer)
+// Email service — client SMTP pur Node (zéro dépendance externe)
+//
+// Implémente le minimum nécessaire pour envoyer un email via SMTP avec
+// authentification AUTH LOGIN. Compatible :
+//   • Port 465 (SSL/TLS implicite) — recommandé sur o2switch
+//   • Port 587 (STARTTLS) — mode upgrade depuis plain
 //
 // Si SMTP_HOST/USER/PASS ne sont pas configurés, sendMail() devient no-op
 // et retourne { ok: false, skipped: true }. L'app continue de fonctionner :
 // les credentials sont alors affichés dans l'UI admin (modal "tempPassword")
 // que l'admin transmet manuellement.
-//
-// Pour activer en prod :
-//   SMTP_HOST=smtp.example.com SMTP_PORT=587 SMTP_USER=...@... SMTP_PASS=...
-//   SMTP_FROM="BatiDesk <noreply@example.com>"
 // ═══════════════════════════════════════════════════════════════════════════
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendMail = sendMail;
 exports.welcomeEmailHtml = welcomeEmailHtml;
-const nodemailer_1 = __importDefault(require("nodemailer"));
-let cached = {
-    cfg: null,
-    transporter: null,
-};
-function getTransporter(cfg) {
-    if (cached.cfg === cfg && cached.transporter !== null)
-        return cached.transporter;
-    if (!cfg.SMTP_HOST || !cfg.SMTP_USER || !cfg.SMTP_PASS) {
-        cached = { cfg, transporter: null };
-        return null;
-    }
-    const transporter = nodemailer_1.default.createTransport({
-        host: cfg.SMTP_HOST,
-        port: cfg.SMTP_PORT,
-        secure: cfg.SMTP_PORT === 465, // 465 = SSL implicite, 587 = STARTTLS
-        auth: { user: cfg.SMTP_USER, pass: cfg.SMTP_PASS },
-    });
-    cached = { cfg, transporter };
-    return transporter;
-}
-/**
- * Envoie un email via SMTP. Si SMTP non configuré : skipped: true.
- * Best-effort : ne throw jamais. En cas d'erreur réseau/SMTP, log + retourne
- * { ok: false, error }.
- */
+const net = __importStar(require("node:net"));
+const tls = __importStar(require("node:tls"));
 async function sendMail(cfg, input) {
-    const transporter = getTransporter(cfg);
-    if (!transporter) {
+    if (!cfg.SMTP_HOST || !cfg.SMTP_USER || !cfg.SMTP_PASS) {
         console.log(`[email] SMTP non configuré, no-op pour: ${input.to} / ${input.subject}`);
         return { ok: false, skipped: true };
     }
     const from = cfg.SMTP_FROM || `BatiDesk <${cfg.SMTP_USER}>`;
     try {
-        const info = await transporter.sendMail({
+        const result = await smtpSend({
+            host: cfg.SMTP_HOST,
+            port: cfg.SMTP_PORT,
+            user: cfg.SMTP_USER,
+            pass: cfg.SMTP_PASS,
             from,
             to: input.to,
             subject: input.subject,
             html: input.html,
             text: input.text ?? stripHtml(input.html),
         });
-        console.log(`[email] sent OK to=${input.to} messageId=${info.messageId}`);
-        return { ok: true, messageId: info.messageId };
+        if (result.ok) {
+            console.log(`[email] sent OK to=${input.to} messageId=${result.messageId}`);
+        }
+        else {
+            console.error(`[email] send FAILED to=${input.to}: ${result.error}`);
+        }
+        return result;
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error(`[email] send FAILED to=${input.to}: ${msg}`);
+        console.error(`[email] send EXCEPTION to=${input.to}: ${msg}`);
         return { ok: false, error: msg };
     }
+}
+/**
+ * Envoie un email via SMTP. Implémente le state machine SMTP :
+ *   220 → EHLO → 250 → AUTH LOGIN → 334 → user(b64) → 334 → pass(b64) →
+ *   235 → MAIL FROM → 250 → RCPT TO → 250 → DATA → 354 → body+. → 250 →
+ *   QUIT → 221.
+ */
+function smtpSend(input) {
+    return new Promise((resolve) => {
+        const useSSL = input.port === 465;
+        let socket;
+        if (useSSL) {
+            socket = tls.connect({
+                host: input.host,
+                port: input.port,
+                servername: input.host,
+            });
+        }
+        else {
+            socket = net.connect({ host: input.host, port: input.port });
+        }
+        let buffer = "";
+        let step = "greeting";
+        let resolved = false;
+        const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@batidesk>`;
+        const finish = (result) => {
+            if (resolved)
+                return;
+            resolved = true;
+            clearTimeout(timer);
+            try {
+                socket.end();
+            }
+            catch {
+                /* ignore */
+            }
+            resolve(result);
+        };
+        const timer = setTimeout(() => {
+            finish({ ok: false, error: "SMTP timeout (30s)" });
+        }, 30000);
+        const write = (cmd) => {
+            socket.write(cmd + "\r\n");
+        };
+        socket.setEncoding("utf8");
+        socket.on("error", (err) => {
+            finish({ ok: false, error: `SMTP socket error: ${err.message}` });
+        });
+        socket.on("end", () => {
+            if (step !== "done") {
+                finish({ ok: false, error: `Connection closed prematurely at step ${step}` });
+            }
+        });
+        socket.on("data", (chunk) => {
+            buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+            // Une réponse SMTP se termine quand on voit "XXX texte" (espace, pas tiret)
+            // au début d'une ligne. Avant ça, "XXX-texte" (tiret) = continuation.
+            const responses = [];
+            while (true) {
+                const lines = buffer.split(/\r?\n/);
+                let endIdx = -1;
+                for (let i = 0; i < lines.length - 1; i++) {
+                    if (/^\d{3} /.test(lines[i] ?? "")) {
+                        endIdx = i;
+                        break;
+                    }
+                }
+                if (endIdx === -1)
+                    break;
+                responses.push(lines.slice(0, endIdx + 1).join("\n"));
+                buffer = lines.slice(endIdx + 1).join("\n");
+            }
+            for (const response of responses) {
+                const code = parseInt(response.slice(0, 3), 10);
+                if (Number.isNaN(code)) {
+                    finish({ ok: false, error: `Réponse SMTP invalide: ${response.slice(0, 80)}` });
+                    return;
+                }
+                if (code >= 400) {
+                    finish({ ok: false, error: `SMTP error ${code}: ${response.slice(4, 200)}` });
+                    return;
+                }
+                switch (step) {
+                    case "greeting": // 220 server greeting
+                        write(`EHLO batidesk`);
+                        step = "ehlo";
+                        break;
+                    case "ehlo": // 250 EHLO response
+                        write(`AUTH LOGIN`);
+                        step = "auth-login";
+                        break;
+                    case "auth-login": // 334 (Username:)
+                        write(Buffer.from(input.user, "utf8").toString("base64"));
+                        step = "auth-user";
+                        break;
+                    case "auth-user": // 334 (Password:)
+                        write(Buffer.from(input.pass, "utf8").toString("base64"));
+                        step = "auth-pass";
+                        break;
+                    case "auth-pass": // 235 auth OK
+                        write(`MAIL FROM:<${extractEmail(input.from)}>`);
+                        step = "mail-from";
+                        break;
+                    case "mail-from": // 250
+                        write(`RCPT TO:<${extractEmail(input.to)}>`);
+                        step = "rcpt-to";
+                        break;
+                    case "rcpt-to": // 250
+                        write(`DATA`);
+                        step = "data";
+                        break;
+                    case "data": // 354 start input
+                        socket.write(buildMimeMessage(input, messageId) + "\r\n.\r\n");
+                        step = "body";
+                        break;
+                    case "body": // 250 message accepted
+                        write(`QUIT`);
+                        step = "quit";
+                        break;
+                    case "quit": // 221 bye
+                        step = "done";
+                        finish({ ok: true, messageId });
+                        return;
+                    case "done":
+                        return;
+                }
+            }
+        });
+    });
+}
+/** Extrait l'adresse email depuis "Nom <email@x.com>" ou retourne tel quel. */
+function extractEmail(s) {
+    const m = s.match(/<([^>]+)>/);
+    return m && m[1] ? m[1] : s.trim();
+}
+function buildMimeMessage(input, messageId) {
+    const date = new Date().toUTCString();
+    const boundary = `bd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    // Le `.` au début d'une ligne dans le body doit être doublé (dot stuffing RFC 5321)
+    const dotStuff = (s) => s.replace(/(^|\r?\n)\./g, "$1..");
+    const headers = [
+        `From: ${input.from}`,
+        `To: ${input.to}`,
+        `Subject: ${encodeHeader(input.subject)}`,
+        `Date: ${date}`,
+        `Message-ID: ${messageId}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ].join("\r\n");
+    const body = [
+        "",
+        `--${boundary}`,
+        `Content-Type: text/plain; charset=utf-8`,
+        `Content-Transfer-Encoding: 8bit`,
+        "",
+        dotStuff(input.text),
+        "",
+        `--${boundary}`,
+        `Content-Type: text/html; charset=utf-8`,
+        `Content-Transfer-Encoding: 8bit`,
+        "",
+        dotStuff(input.html),
+        "",
+        `--${boundary}--`,
+        "",
+    ].join("\r\n");
+    return headers + "\r\n" + body;
+}
+/** RFC 2047 encoding pour les headers contenant du non-ASCII (sujet en UTF-8). */
+function encodeHeader(s) {
+    // eslint-disable-next-line no-control-regex
+    if (/^[\x00-\x7F]*$/.test(s))
+        return s;
+    return `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
 }
 function stripHtml(html) {
     return html
         .replace(/<style[\s\S]*?<\/style>/gi, "")
         .replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<[^>]+>/g, "")
-        .replace(/\s+/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n\s*\n\s*\n/g, "\n\n")
         .trim();
 }
 /**
@@ -97,23 +293,20 @@ function welcomeEmailHtml(opts) {
     <tr>
       <td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);max-width:600px;width:100%;">
-          <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#2563eb 0%,#1e40af 100%);padding:32px 40px;color:#ffffff;">
-              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em;">🏗️ BatiDesk</h1>
+              <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em;">BatiDesk</h1>
               <p style="margin:8px 0 0 0;font-size:14px;opacity:.9;">${companyName}</p>
             </td>
           </tr>
-          <!-- Body -->
           <tr>
             <td style="padding:40px;">
-              <h2 style="margin:0 0 12px 0;font-size:20px;font-weight:600;color:#0f172a;">Bienvenue ${firstName} 👋</h2>
+              <h2 style="margin:0 0 12px 0;font-size:20px;font-weight:600;color:#0f172a;">Bienvenue ${firstName}</h2>
               <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#475569;">
                 Un compte a été créé pour vous sur <strong>${companyName}</strong>.<br>
                 Voici vos identifiants pour vous connecter à BatiDesk.
               </p>
 
-              <!-- Credentials box -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:24px 0;">
                 <tr>
                   <td style="padding:20px;">
@@ -127,15 +320,14 @@ function welcomeEmailHtml(opts) {
               </table>
 
               <p style="margin:0 0 24px 0;font-size:14px;line-height:1.6;color:#475569;">
-                ⚠️ <strong>Pour votre sécurité, vous devrez changer ce mot de passe à la première connexion.</strong>
+                <strong>Pour votre sécurité, vous devrez changer ce mot de passe à la première connexion.</strong>
               </p>
 
-              <!-- CTA button -->
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px 0;">
                 <tr>
                   <td>
                     <a href="${loginUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:8px;">
-                      Se connecter à BatiDesk →
+                      Se connecter à BatiDesk
                     </a>
                   </td>
                 </tr>
@@ -147,7 +339,6 @@ function welcomeEmailHtml(opts) {
               </p>
             </td>
           </tr>
-          <!-- Footer -->
           <tr>
             <td style="padding:20px 40px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;font-size:12px;color:#94a3b8;">
               Cet email a été envoyé automatiquement. Si vous n'attendiez pas ce compte, contactez votre administrateur.
