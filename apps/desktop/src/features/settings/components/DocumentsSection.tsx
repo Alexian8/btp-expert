@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Palette, Sparkles, FileText, Mail, Save, Info, Eye } from "lucide-react";
+import {
+  Palette,
+  Sparkles,
+  FileText,
+  Mail,
+  Save,
+  Info,
+  Hash,
+  Type,
+  Layout,
+  Eye,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
@@ -11,45 +22,68 @@ import { Textarea } from "@/components/ui/textarea";
 import { SettingsSectionWrapper } from "./SettingsPage";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DocumentsSection — Personnalisation PDF + Templates email
+// DocumentsSection — Personnalisation PDF + numérotation + templates email
+// 3 onglets : Style PDF · Numérotation · Emails
 // ═══════════════════════════════════════════════════════════════════════════
 
-type Tab = "pdf" | "email";
+type Tab = "pdf" | "numbering" | "email";
 
 const PRESET_COLORS = [
   { name: "Bleu", value: "#2563eb" },
   { name: "Indigo", value: "#6366f1" },
   { name: "Émeraude", value: "#10b981" },
-  { name: "Orange BTP", value: "#ea580c" },
+  { name: "Orange", value: "#ea580c" },
   { name: "Rouge", value: "#dc2626" },
-  { name: "Gris ardoise", value: "#475569" },
+  { name: "Ardoise", value: "#475569" },
   { name: "Noir", value: "#111827" },
 ];
 
-// Session S28 — Polices PDF disponibles
 const PDF_FONTS = [
-  { value: "Inter", label: "Inter", category: "Moderne sans serif", sample: "ABCabc 123" },
-  { value: "Helvetica", label: "Helvetica", category: "Sans serif classique", sample: "ABCabc 123" },
-  { value: "Roboto", label: "Roboto", category: "Sans serif Google", sample: "ABCabc 123" },
-  { value: "Arial", label: "Arial", category: "Sans serif universel", sample: "ABCabc 123" },
-  { value: "Georgia", label: "Georgia", category: "Serif élégant", sample: "ABCabc 123" },
-  { value: "Times New Roman", label: "Times New Roman", category: "Serif traditionnel", sample: "ABCabc 123" },
-  { value: "Garamond", label: "Garamond", category: "Serif raffiné", sample: "ABCabc 123" },
-  { value: "Trebuchet MS", label: "Trebuchet MS", category: "Sans serif distinctif", sample: "ABCabc 123" },
+  { value: "Helvetica", label: "Helvetica" },
+  { value: "Inter", label: "Inter" },
+  { value: "Roboto", label: "Roboto" },
+  { value: "Arial", label: "Arial" },
+  { value: "Georgia", label: "Georgia (serif)" },
+  { value: "Times New Roman", label: "Times New Roman (serif)" },
+  { value: "Garamond", label: "Garamond (serif)" },
 ];
 
 type PdfStyle = "moderne" | "sobre" | "classique";
 
-const STYLE_OPTIONS: Array<{ value: PdfStyle; label: string; description: string }> = [
-  { value: "moderne",   label: "Moderne",          description: "Style Pennylane - En-tête coloré, design épuré" },
-  { value: "sobre",     label: "Sobre",            description: "Minimaliste - Noir et blanc avec accent" },
-  { value: "classique", label: "Classique BTP",    description: "Traditionnel - Bordures et serif" },
+const STYLE_OPTIONS: Array<{
+  value: PdfStyle;
+  label: string;
+  description: string;
+  preview: string; // mini-preview ASCII pour donner une idée
+  available: boolean;
+}> = [
+  {
+    value: "moderne",
+    label: "Moderne",
+    description: "En-tête coloré, design épuré façon Pennylane / Tolteck",
+    preview: "▓▓▓ HEADER\n  ━━━━━\n  ▌ ▌ ▌\n  ─────",
+    available: true,
+  },
+  {
+    value: "sobre",
+    label: "Sobre",
+    description: "Noir & blanc minimaliste façon classique BTP",
+    preview: "ENTREPRISE\n┌───┬───┐\n│ │ │ │ │\n└───┴───┘",
+    available: true,
+  },
+  {
+    value: "classique",
+    label: "Classique BTP",
+    description: "Bientôt — bordures épaisses + serif traditionnel",
+    preview: "═══════════\n║ ║ ║ ║ ║\n═══════════",
+    available: false,
+  },
 ];
 
 export function DocumentsSection() {
   const [tab, setTab] = useState<Tab>("pdf");
 
-  // PDF settings
+  // ─── PDF state (gardé tel quel pour compat avec les settings sauvegardés)
   const [pdfAccentColor, setPdfAccentColor] = useState("#2563eb");
   const [pdfStyle, setPdfStyle] = useState<PdfStyle>("moderne");
   const [pdfFooterText, setPdfFooterText] = useState("");
@@ -57,34 +91,29 @@ export function DocumentsSection() {
   const [pdfShowCompanyAddress, setPdfShowCompanyAddress] = useState(true);
   const [pdfIbanShown, setPdfIbanShown] = useState(true);
 
-  // Invoice settings
+  // Numérotation
   const [invoicePaymentTermsDays, setInvoicePaymentTermsDays] = useState(30);
   const [invoicePrefix, setInvoicePrefix] = useState("FACT");
-
-  // Session S25 — Quote settings
   const [quotePrefix, setQuotePrefix] = useState("DEV");
   const [quoteValidityDays, setQuoteValidityDays] = useState(90);
 
-  // ─── Session S26.3 — Personnalisation visuelle PDF ────────────────────
-  // Tailles en mm
-  const [pdfLogoSizeMm, setPdfLogoSizeMm] = useState(35);
-  const [pdfStampSizeMm, setPdfStampSizeMm] = useState(26);
-  const [pdfSignatureSizeMm, setPdfSignatureSizeMm] = useState(22);
-  // Position du bloc cachet/signature
-  const [pdfStampPosition, setPdfStampPosition] = useState<"left" | "center" | "right">("right");
-  // Densité
-  const [pdfDensity, setPdfDensity] = useState<"compact" | "normal" | "comfortable">("normal");
-  // Toggles d'affichage
+  // Mise en page
+  const [pdfStampPosition, setPdfStampPosition] =
+    useState<"left" | "center" | "right">("right");
+  const [pdfDensity, setPdfDensity] =
+    useState<"compact" | "normal" | "comfortable">("normal");
   const [pdfShowAccordBlock, setPdfShowAccordBlock] = useState(true);
   const [pdfShowSignatureBlock, setPdfShowSignatureBlock] = useState(true);
   const [pdfShowQualifications, setPdfShowQualifications] = useState(true);
 
-  // Session S28 — Police + Multi-style devis
-  const [pdfFont, setPdfFont] = useState("Inter");
-  const [pdfQuoteStyle, setPdfQuoteStyle] = useState<"moderne" | "sobre" | "classique">("moderne");
-
-  // Session S28 — PDF Lab : indicateur de génération en cours
-  const [previewLoading, setPreviewLoading] = useState<"quote" | "invoice" | null>(null);
+  const [pdfFont, setPdfFont] = useState("Helvetica");
+  // Compat : sauvegardé mais pas affiché (le style devis est piloté
+  // depuis la modal d'aperçu PDF directement, pas depuis Settings)
+  const [pdfQuoteStyle, setPdfQuoteStyle] = useState<PdfStyle>("moderne");
+  // Compat : tailles cachet/signature/logo (defaults sensibles)
+  const [pdfLogoSizeMm, setPdfLogoSizeMm] = useState(35);
+  const [pdfStampSizeMm, setPdfStampSizeMm] = useState(26);
+  const [pdfSignatureSizeMm, setPdfSignatureSizeMm] = useState(22);
 
   // Email templates
   const [emailQuoteSubject, setEmailQuoteSubject] = useState("");
@@ -99,46 +128,44 @@ export function DocumentsSection() {
 
   useEffect(() => {
     (async () => {
-      if (!window.btpAPI?.getSettings) { setLoading(false); return; }
+      if (!window.btpAPI?.getSettings) {
+        setLoading(false);
+        return;
+      }
       const s = await window.btpAPI.getSettings();
-      const sExt = s as any; // Session S25 — accès aux clés non typées
-      setPdfAccentColor(s.pdfAccentColor || "#2563eb");
-      const savedStyle = s.pdfStyle;
+      const sExt = s as Record<string, unknown>;
+      setPdfAccentColor((s.pdfAccentColor as string) || "#2563eb");
+      const savedStyle = s.pdfStyle as string | undefined;
       if (savedStyle === "moderne" || savedStyle === "sobre" || savedStyle === "classique") {
         setPdfStyle(savedStyle);
-      } else {
-        setPdfStyle("moderne");
       }
-      setPdfFooterText(s.pdfFooterText || "");
+      setPdfFooterText((s.pdfFooterText as string) || "");
       setPdfShowLogoInHeader(s.pdfShowLogoInHeader !== false);
       setPdfShowCompanyAddress(s.pdfShowCompanyAddress !== false);
       setPdfIbanShown(s.pdfIbanShown !== false);
       setInvoicePaymentTermsDays(Number(s.invoicePaymentTermsDays || 30));
-      setInvoicePrefix(s.invoicePrefix || "FACT");
-      // Session S25 — Quote settings
-      setQuotePrefix(sExt.quotePrefix || "DEV");
+      setInvoicePrefix((s.invoicePrefix as string) || "FACT");
+      setQuotePrefix((sExt.quotePrefix as string) || "DEV");
       setQuoteValidityDays(Number(sExt.quoteValidityDays || 90));
-      // Session S26.3 — Personnalisation PDF
       setPdfLogoSizeMm(Number(sExt.pdfLogoSizeMm || 35));
       setPdfStampSizeMm(Number(sExt.pdfStampSizeMm || 26));
       setPdfSignatureSizeMm(Number(sExt.pdfSignatureSizeMm || 22));
-      const pos = sExt.pdfStampPosition;
+      const pos = sExt.pdfStampPosition as string | undefined;
       setPdfStampPosition(pos === "left" || pos === "center" ? pos : "right");
-      const den = sExt.pdfDensity;
+      const den = sExt.pdfDensity as string | undefined;
       setPdfDensity(den === "compact" || den === "comfortable" ? den : "normal");
       setPdfShowAccordBlock(sExt.pdfShowAccordBlock !== false);
       setPdfShowSignatureBlock(sExt.pdfShowSignatureBlock !== false);
       setPdfShowQualifications(sExt.pdfShowQualifications !== false);
-      // Session S28 — Police + Multi-style devis
-      setPdfFont(sExt.pdfFont || "Inter");
-      const qs = sExt.pdfQuoteStyle;
+      setPdfFont((sExt.pdfFont as string) || "Helvetica");
+      const qs = sExt.pdfQuoteStyle as string | undefined;
       setPdfQuoteStyle(qs === "sobre" || qs === "classique" ? qs : "moderne");
-      setEmailQuoteSubject(s.emailQuoteSubject || "");
-      setEmailQuoteBody(s.emailQuoteBody || "");
-      setEmailInvoiceSubject(s.emailInvoiceSubject || "");
-      setEmailInvoiceBody(s.emailInvoiceBody || "");
-      setEmailReminderSubject(s.emailReminderSubject || "");
-      setEmailReminderBody(s.emailReminderBody || "");
+      setEmailQuoteSubject((s.emailQuoteSubject as string) || "");
+      setEmailQuoteBody((s.emailQuoteBody as string) || "");
+      setEmailInvoiceSubject((s.emailInvoiceSubject as string) || "");
+      setEmailInvoiceBody((s.emailInvoiceBody as string) || "");
+      setEmailReminderSubject((s.emailReminderSubject as string) || "");
+      setEmailReminderBody((s.emailReminderBody as string) || "");
       setLoading(false);
     })();
   }, []);
@@ -154,10 +181,8 @@ export function DocumentsSection() {
       pdfIbanShown,
       invoicePaymentTermsDays,
       invoicePrefix,
-      // Session S25 — Quote settings
       quotePrefix,
       quoteValidityDays,
-      // Session S26.3 — Personnalisation PDF
       pdfLogoSizeMm,
       pdfStampSizeMm,
       pdfSignatureSizeMm,
@@ -166,7 +191,6 @@ export function DocumentsSection() {
       pdfShowAccordBlock,
       pdfShowSignatureBlock,
       pdfShowQualifications,
-      // Session S28 — Police + Multi-style devis
       pdfFont,
       pdfQuoteStyle,
       emailQuoteSubject,
@@ -175,7 +199,7 @@ export function DocumentsSection() {
       emailInvoiceBody,
       emailReminderSubject,
       emailReminderBody,
-    } as any);
+    } as Record<string, unknown>);
     setSaving(false);
     toast.success("Paramètres enregistrés");
   };
@@ -188,14 +212,22 @@ export function DocumentsSection() {
     );
   }
 
+  const showAccent = pdfStyle !== "sobre"; // le sobre est noir & blanc, pas de couleur
+
   return (
     <SettingsSectionWrapper
       title="Documents"
-      description="Personnalisation PDF et templates email"
+      description="Personnalisation PDF, numérotation et templates email"
     >
-      {/* Tabs internes */}
+      {/* ─── Tabs ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit mb-6">
-        <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")} icon={FileText} label="PDF" />
+        <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")} icon={FileText} label="Style PDF" />
+        <TabButton
+          active={tab === "numbering"}
+          onClick={() => setTab("numbering")}
+          icon={Hash}
+          label="Numérotation"
+        />
         <TabButton active={tab === "email"} onClick={() => setTab("email")} icon={Mail} label="Emails" />
       </div>
 
@@ -205,372 +237,258 @@ export function DocumentsSection() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {tab === "pdf" ? (
+        {/* ─── Tab PDF ──────────────────────────────────────────────── */}
+        {tab === "pdf" && (
           <div className="space-y-5">
-            {/* Couleur d'accent */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Palette className="w-4 h-4 text-primary" />
-                <Label className="text-sm font-medium">Couleur principale du PDF</Label>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                {PRESET_COLORS.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setPdfAccentColor(c.value)}
-                    className={cn(
-                      "w-10 h-10 rounded-lg border-2 transition-all",
-                      pdfAccentColor === c.value ? "border-foreground scale-110" : "border-border hover:scale-105"
-                    )}
-                    style={{ backgroundColor: c.value }}
-                    title={c.name}
-                  />
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="color"
-                  value={pdfAccentColor}
-                  onChange={(e) => setPdfAccentColor(e.target.value)}
-                  className="w-12 h-9 p-1"
-                />
-                <Input
-                  value={pdfAccentColor}
-                  onChange={(e) => setPdfAccentColor(e.target.value)}
-                  placeholder="#2563eb"
-                  className="font-mono text-sm max-w-[140px]"
-                />
-                <span className="text-xs text-muted-foreground">
-                  Utilisée pour l'en-tête du tableau, le total TTC, les accents
-                </span>
-              </div>
-            </div>
-
-            {/* Style du PDF */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <Label className="text-sm font-medium">Style du PDF</Label>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {/* Card 1 — Style global */}
+            <Card icon={Sparkles} title="Style général" description="Aspect visuel de tes devis et factures">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-5">
                 {STYLE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setPdfStyle(opt.value)}
+                    onClick={() => opt.available && setPdfStyle(opt.value)}
+                    disabled={!opt.available}
                     className={cn(
-                      "p-3 rounded-lg border-2 text-left transition-all",
-                      pdfStyle === opt.value
+                      "relative p-3 rounded-lg border-2 text-left transition-all overflow-hidden",
+                      pdfStyle === opt.value && opt.available
                         ? "border-primary bg-primary/5"
-                        : "border-border hover:border-border/80 hover:bg-accent/50"
+                        : "border-border hover:border-border/80 hover:bg-accent/50",
+                      !opt.available && "opacity-50 cursor-not-allowed"
                     )}
                   >
-                    <div className="font-medium text-sm">{opt.label}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{opt.description}</div>
+                    <div className="font-medium text-sm flex items-center gap-2">
+                      {opt.label}
+                      {!opt.available && (
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">
+                          Bientôt
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {opt.description}
+                    </div>
+                    <pre className="mt-2 text-[8px] text-muted-foreground/60 font-mono leading-tight whitespace-pre-wrap">
+                      {opt.preview}
+                    </pre>
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Options */}
-            <div>
-              <Label className="text-sm font-medium mb-3 block">Affichage</Label>
-              <div className="space-y-2">
+              {/* Couleur (visible si style avec accent couleur) */}
+              {showAccent && (
+                <div>
+                  <Label className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5" />
+                    Couleur d'accent
+                  </Label>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    {PRESET_COLORS.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setPdfAccentColor(c.value)}
+                        className={cn(
+                          "w-9 h-9 rounded-md border-2 transition-all",
+                          pdfAccentColor === c.value
+                            ? "border-foreground scale-110 shadow-sm"
+                            : "border-border hover:scale-105"
+                        )}
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                    <div className="ml-2 flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={pdfAccentColor}
+                        onChange={(e) => setPdfAccentColor(e.target.value)}
+                        className="w-9 h-9 rounded-md border border-border cursor-pointer p-0.5"
+                      />
+                      <Input
+                        value={pdfAccentColor}
+                        onChange={(e) => setPdfAccentColor(e.target.value)}
+                        placeholder="#2563eb"
+                        className="font-mono text-xs w-28 h-9"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Utilisée pour l'en-tête du tableau, le total TTC et les accents.
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            {/* Card 2 — Police */}
+            <Card icon={Type} title="Police d'écriture" description="Famille de typographie pour le texte">
+              <div className="flex items-center gap-3">
+                <select
+                  value={pdfFont}
+                  onChange={(e) => setPdfFont(e.target.value)}
+                  className="flex-1 max-w-xs px-3 py-2 rounded-md border border-input bg-background text-sm"
+                >
+                  {PDF_FONTS.map((f) => (
+                    <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="text-sm text-muted-foreground italic"
+                  style={{ fontFamily: pdfFont }}
+                >
+                  Aperçu : Devis · Facture · Total HT
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Helvetica est recommandé (universel, intégré à @react-pdf). Les autres polices
+                seront utilisées si elles sont installées sur l'appareil qui ouvre le PDF.
+              </p>
+            </Card>
+
+            {/* Card 3 — Mise en page */}
+            <Card icon={Layout} title="Mise en page" description="Densité et position des éléments">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <Label className="text-xs mb-2 block uppercase tracking-wider text-muted-foreground">
+                    Densité
+                  </Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { value: "compact", label: "Compact" },
+                      { value: "normal", label: "Normal" },
+                      { value: "comfortable", label: "Aéré" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setPdfDensity(opt.value as typeof pdfDensity)}
+                        className={cn(
+                          "px-2 py-2 rounded-md border text-xs font-medium transition-colors",
+                          pdfDensity === opt.value
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:bg-accent"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs mb-2 block uppercase tracking-wider text-muted-foreground">
+                    Position cachet/signature
+                  </Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { value: "left", label: "Gauche" },
+                      { value: "center", label: "Centré" },
+                      { value: "right", label: "Droite" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setPdfStampPosition(opt.value as typeof pdfStampPosition)}
+                        className={cn(
+                          "px-2 py-2 rounded-md border text-xs font-medium transition-colors",
+                          pdfStampPosition === opt.value
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:bg-accent"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Card 4 — Contenu */}
+            <Card
+              icon={FileText}
+              title="Contenu affiché"
+              description="Ce qui apparaît sur tes devis et factures"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
                 <CheckboxLine
                   checked={pdfShowLogoInHeader}
                   onChange={setPdfShowLogoInHeader}
-                  label="Afficher le logo en en-tête du PDF"
+                  label="Logo en en-tête"
                 />
                 <CheckboxLine
                   checked={pdfShowCompanyAddress}
                   onChange={setPdfShowCompanyAddress}
-                  label="Afficher l'adresse de l'entreprise dans le pied de page"
+                  label="Adresse de l'entreprise (pied)"
                 />
                 <CheckboxLine
                   checked={pdfIbanShown}
                   onChange={setPdfIbanShown}
-                  label="Afficher l'IBAN/BIC (pour virement)"
-                />
-              </div>
-            </div>
-
-            {/* Pied de page personnalisé */}
-            <div>
-              <Label htmlFor="footer-text">Pied de page personnalisé (optionnel)</Label>
-              <Textarea
-                id="footer-text"
-                value={pdfFooterText}
-                onChange={(e) => setPdfFooterText(e.target.value)}
-                rows={3}
-                placeholder="Ex: Membre de la FFB — Qualibat 2111 — RGE Eco-Artisan"
-                className="mt-1.5 font-sans text-sm"
-              />
-              <p className="text-xs text-muted-foreground mt-1.5">
-                Apparaît en bas du PDF sous les mentions légales (SIRET, TVA...)
-              </p>
-            </div>
-
-            {/* ─── Session S26.3 — Personnalisation visuelle ──────── */}
-            <div className="border-t border-border pt-5">
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  Personnalisation visuelle
-                </h3>
-                {/* Session S28 — PDF Lab : aperçu rapide du rendu */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const api = (window as any).btpAPI;
-                      if (!api?.pdfGeneratePreview) {
-                        toast.error("API d'aperçu indisponible");
-                        return;
-                      }
-                      setPreviewLoading("quote");
-                      try {
-                        const r = await api.pdfGeneratePreview("quote");
-                        if (r?.success) {
-                          toast.success("Aperçu devis ouvert");
-                        } else {
-                          toast.error(r?.error || "Erreur lors de la génération");
-                        }
-                      } catch (e: any) {
-                        toast.error(e?.message || "Erreur inattendue");
-                      } finally {
-                        setPreviewLoading(null);
-                      }
-                    }}
-                    disabled={previewLoading !== null}
-                    className={cn(
-                      "px-2.5 py-1.5 rounded-md border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-medium flex items-center gap-1.5 transition-colors",
-                      previewLoading === "quote" && "opacity-60 cursor-wait"
-                    )}
-                    title="Génère un PDF de devis avec données factices, en utilisant tes paramètres actuels"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    {previewLoading === "quote" ? "Génération..." : "Aperçu devis"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const api = (window as any).btpAPI;
-                      if (!api?.pdfGeneratePreview) {
-                        toast.error("API d'aperçu indisponible");
-                        return;
-                      }
-                      setPreviewLoading("invoice");
-                      try {
-                        const r = await api.pdfGeneratePreview("invoice");
-                        if (r?.success) {
-                          toast.success("Aperçu facture ouvert");
-                        } else {
-                          toast.error(r?.error || "Erreur lors de la génération");
-                        }
-                      } catch (e: any) {
-                        toast.error(e?.message || "Erreur inattendue");
-                      } finally {
-                        setPreviewLoading(null);
-                      }
-                    }}
-                    disabled={previewLoading !== null}
-                    className={cn(
-                      "px-2.5 py-1.5 rounded-md border border-border hover:bg-accent text-xs font-medium flex items-center gap-1.5 transition-colors",
-                      previewLoading === "invoice" && "opacity-60 cursor-wait"
-                    )}
-                    title="Génère un PDF de facture avec données factices, en utilisant tes paramètres actuels"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    {previewLoading === "invoice" ? "Génération..." : "Aperçu facture"}
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-muted-foreground mb-4 -mt-2">
-                💡 Enregistrez vos modifications puis cliquez sur "Aperçu" pour voir le rendu (devis ou facture avec données factices).
-              </p>
-
-              {/* Sliders de tailles */}
-              <div className="space-y-4 mb-5">
-                <SliderRow
-                  label="Taille du logo"
-                  value={pdfLogoSizeMm}
-                  onChange={setPdfLogoSizeMm}
-                  min={15}
-                  max={60}
-                  unit="mm"
-                />
-                <SliderRow
-                  label="Taille du cachet"
-                  value={pdfStampSizeMm}
-                  onChange={setPdfStampSizeMm}
-                  min={15}
-                  max={50}
-                  unit="mm"
-                />
-                <SliderRow
-                  label="Taille de la signature"
-                  value={pdfSignatureSizeMm}
-                  onChange={setPdfSignatureSizeMm}
-                  min={10}
-                  max={40}
-                  unit="mm"
-                />
-              </div>
-
-              {/* Position cachet */}
-              <div className="mb-4">
-                <Label className="mb-2 block">Position du bloc cachet/signature</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: "left", label: "Gauche" },
-                    { value: "center", label: "Centré" },
-                    { value: "right", label: "Droite" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setPdfStampPosition(opt.value as any)}
-                      className={cn(
-                        "px-3 py-2 rounded-md border text-sm transition-colors",
-                        pdfStampPosition === opt.value
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border hover:bg-accent"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Densité */}
-              <div className="mb-4">
-                <Label className="mb-2 block">Densité d'affichage</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: "compact", label: "Compact", desc: "Plus dense, gain de place" },
-                    { value: "normal", label: "Normal", desc: "Équilibré" },
-                    { value: "comfortable", label: "Aéré", desc: "Plus de respiration" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setPdfDensity(opt.value as any)}
-                      className={cn(
-                        "px-3 py-2 rounded-md border text-left transition-colors",
-                        pdfDensity === opt.value
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:bg-accent"
-                      )}
-                    >
-                      <div className={cn("text-sm font-medium", pdfDensity === opt.value && "text-primary")}>
-                        {opt.label}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Session S28 — Police d'écriture */}
-              <div className="mb-4">
-                <Label className="mb-2 block">Police d'écriture du PDF</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {PDF_FONTS.map((f) => (
-                    <button
-                      key={f.value}
-                      type="button"
-                      onClick={() => setPdfFont(f.value)}
-                      className={cn(
-                        "px-3 py-2 rounded-md border text-left transition-colors",
-                        pdfFont === f.value
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:bg-accent"
-                      )}
-                    >
-                      <div
-                        className={cn("text-sm font-medium leading-tight", pdfFont === f.value && "text-primary")}
-                        style={{ fontFamily: `"${f.value}", sans-serif` }}
-                      >
-                        {f.label}
-                      </div>
-                      <div
-                        className="text-[10px] text-muted-foreground mt-0.5"
-                        style={{ fontFamily: `"${f.value}", sans-serif` }}
-                      >
-                        {f.sample}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">
-                  S'applique aux devis et factures PDF.
-                </p>
-              </div>
-
-              {/* Session S28 — Style du devis (multi-template) */}
-              <div className="mb-4">
-                <Label className="mb-2 block">
-                  Style du devis
-                  <span className="text-[10px] text-muted-foreground ml-1.5 font-normal">
-                    (le style des factures se règle plus haut)
-                  </span>
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: "moderne", label: "Moderne", desc: "Pennylane / Tolteck — En-tête coloré, design épuré" },
-                    { value: "sobre", label: "Sobre", desc: "Minimaliste — Noir et blanc avec accent" },
-                    { value: "classique", label: "Classique BTP", desc: "Traditionnel — Bordures et serif" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setPdfQuoteStyle(opt.value as any)}
-                      className={cn(
-                        "px-3 py-2 rounded-md border text-left transition-colors",
-                        pdfQuoteStyle === opt.value
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:bg-accent"
-                      )}
-                    >
-                      <div className={cn("text-sm font-medium", pdfQuoteStyle === opt.value && "text-primary")}>
-                        {opt.label}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{opt.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Toggles affichage */}
-              <div className="space-y-2">
-                <Label className="block">Blocs à afficher sur les PDF</Label>
-                <CheckboxLine
-                  label="Bloc « Bon pour accord du client » (devis)"
-                  checked={pdfShowAccordBlock}
-                  onChange={setPdfShowAccordBlock}
+                  label="IBAN/BIC pour virement"
                 />
                 <CheckboxLine
-                  label="Bloc « Pour mon entreprise » (cachet/signature)"
-                  checked={pdfShowSignatureBlock}
-                  onChange={setPdfShowSignatureBlock}
-                />
-                <CheckboxLine
-                  label="Qualifications RGE / Qualibat en pied de page"
                   checked={pdfShowQualifications}
                   onChange={setPdfShowQualifications}
+                  label="Qualifications RGE / Qualibat"
+                />
+                <CheckboxLine
+                  checked={pdfShowAccordBlock}
+                  onChange={setPdfShowAccordBlock}
+                  label='Bloc "Bon pour accord" (devis)'
+                />
+                <CheckboxLine
+                  checked={pdfShowSignatureBlock}
+                  onChange={setPdfShowSignatureBlock}
+                  label='Bloc cachet/signature (entreprise)'
                 />
               </div>
-            </div>
 
-            {/* Session S25 — Paramètres devis */}
-            <div className="border-t border-border pt-5">
-              <h3 className="text-sm font-medium mb-3">Devis</h3>
+              <div className="mt-4 pt-4 border-t border-border">
+                <Label htmlFor="footer-text" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Pied de page personnalisé
+                </Label>
+                <Textarea
+                  id="footer-text"
+                  value={pdfFooterText}
+                  onChange={(e) => setPdfFooterText(e.target.value)}
+                  rows={2}
+                  placeholder="Ex : Membre de la FFB — Qualibat 2111 — RGE Eco-Artisan"
+                  className="mt-1.5 text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  S'affiche sous les mentions légales (SIRET, TVA…)
+                </p>
+              </div>
+            </Card>
+
+            {/* Astuce aperçu */}
+            <div className="flex items-start gap-2 p-3 rounded-md bg-muted/40 text-xs">
+              <Eye className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
+              <div>
+                <p className="font-medium mb-0.5">Voir le rendu</p>
+                <p className="text-muted-foreground">
+                  Pour visualiser tes paramètres, ouvre n'importe quel devis ou facture
+                  et clique sur le bouton <strong>Aperçu</strong>. Le PDF est généré en
+                  direct avec tes réglages.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Tab Numérotation ─────────────────────────────────────── */}
+        {tab === "numbering" && (
+          <div className="space-y-5">
+            <Card
+              icon={FileText}
+              title="Devis"
+              description="Format des références et durée de validité"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="quote-prefix">Préfixe de numérotation</Label>
+                  <Label htmlFor="quote-prefix">Préfixe</Label>
                   <Input
                     id="quote-prefix"
                     value={quotePrefix}
@@ -580,11 +498,11 @@ export function DocumentsSection() {
                     className="mt-1.5 font-mono"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Exemple : {quotePrefix || "DEV"}-{new Date().getFullYear()}-0001
+                    Exemple : <code className="font-mono text-foreground">{quotePrefix || "DEV"}-{new Date().getFullYear()}-0001</code>
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="quote-validity">Durée de validité (jours)</Label>
+                  <Label htmlFor="quote-validity">Validité (jours)</Label>
                   <Input
                     id="quote-validity"
                     type="number"
@@ -595,18 +513,20 @@ export function DocumentsSection() {
                     className="mt-1.5"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Validité par défaut affichée sur le devis
+                    Date "valable jusqu'au" sur le devis
                   </p>
                 </div>
               </div>
-            </div>
+            </Card>
 
-            {/* Paramètres factures */}
-            <div className="border-t border-border pt-5">
-              <h3 className="text-sm font-medium mb-3">Factures</h3>
+            <Card
+              icon={FileText}
+              title="Factures"
+              description="Format des références et délai de paiement"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="prefix">Préfixe de numérotation</Label>
+                  <Label htmlFor="prefix">Préfixe</Label>
                   <Input
                     id="prefix"
                     value={invoicePrefix}
@@ -616,11 +536,11 @@ export function DocumentsSection() {
                     className="mt-1.5 font-mono"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Exemple : {invoicePrefix}-{new Date().getFullYear()}-0001
+                    Exemple : <code className="font-mono text-foreground">{invoicePrefix}-{new Date().getFullYear()}-0001</code>
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="terms">Délai de paiement par défaut (jours)</Label>
+                  <Label htmlFor="terms">Délai de paiement (jours)</Label>
                   <Input
                     id="terms"
                     type="number"
@@ -631,27 +551,44 @@ export function DocumentsSection() {
                     className="mt-1.5"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Utilisé pour calculer la date d'échéance
+                    Date d'échéance auto-calculée (date d'émission + N jours)
                   </p>
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
-        ) : (
-          /* ─── Tab Emails ─── */
+        )}
+
+        {/* ─── Tab Emails ───────────────────────────────────────────── */}
+        {tab === "email" && (
           <div className="space-y-5">
-            <div className="flex items-start gap-2 p-3 rounded-md bg-muted text-xs">
+            <div className="flex items-start gap-2 p-3 rounded-md bg-primary/5 border border-primary/20 text-xs">
               <Info className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
               <div>
-                <p className="font-medium mb-1">Variables disponibles</p>
-                <p className="text-muted-foreground">
-                  <code className="text-foreground">{"{client}"}</code> · <code className="text-foreground">{"{reference}"}</code> · <code className="text-foreground">{"{title}"}</code> · <code className="text-foreground">{"{company}"}</code> · <code className="text-foreground">{"{totalTTC}"}</code> · <code className="text-foreground">{"{validUntil}"}</code> (devis) · <code className="text-foreground">{"{dueDate}"}</code> (facture) · <code className="text-foreground">{"{daysOverdue}"}</code> (relance)
+                <p className="font-medium mb-1">Variables disponibles dans tes templates</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{client}"}</code>
+                  {" · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{reference}"}</code>
+                  {" · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{title}"}</code>
+                  {" · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{company}"}</code>
+                  {" · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{totalTTC}"}</code>
+                  {" · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{validUntil}"}</code>
+                  {" devis · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{dueDate}"}</code>
+                  {" facture · "}
+                  <code className="text-foreground bg-muted px-1.5 py-0.5 rounded">{"{daysOverdue}"}</code>
+                  {" relance"}
                 </p>
               </div>
             </div>
 
             <EmailTemplateBlock
-              title="Devis"
+              title="Email d'envoi devis"
               subject={emailQuoteSubject}
               onSubjectChange={setEmailQuoteSubject}
               body={emailQuoteBody}
@@ -661,7 +598,7 @@ export function DocumentsSection() {
             />
 
             <EmailTemplateBlock
-              title="Facture"
+              title="Email d'envoi facture"
               subject={emailInvoiceSubject}
               onSubjectChange={setEmailInvoiceSubject}
               body={emailInvoiceBody}
@@ -671,7 +608,7 @@ export function DocumentsSection() {
             />
 
             <EmailTemplateBlock
-              title="Relance"
+              title="Email de relance"
               subject={emailReminderSubject}
               onSubjectChange={setEmailReminderSubject}
               body={emailReminderBody}
@@ -683,7 +620,7 @@ export function DocumentsSection() {
         )}
       </motion.div>
 
-      {/* Save button */}
+      {/* Save button sticky en bas */}
       <div className="flex justify-end pt-4 mt-6 border-t border-border">
         <Button onClick={handleSave} loading={saving}>
           <Save className="w-4 h-4" />
@@ -694,8 +631,13 @@ export function DocumentsSection() {
   );
 }
 
+// ─── Sous-composants ─────────────────────────────────────────────────────
+
 function TabButton({
-  active, onClick, icon: Icon, label,
+  active,
+  onClick,
+  icon: Icon,
+  label,
 }: {
   active: boolean;
   onClick: () => void;
@@ -716,28 +658,65 @@ function TabButton({
   );
 }
 
+function Card({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+          {description && (
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+          )}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function CheckboxLine({
-  checked, onChange, label,
+  checked,
+  onChange,
+  label,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
 }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer hover:bg-accent/40 px-2 py-2 rounded-md transition-colors">
+    <label className="flex items-center gap-2.5 cursor-pointer hover:bg-accent/40 px-2 py-1.5 rounded-md transition-colors">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="w-4 h-4 accent-primary"
+        className="w-4 h-4 accent-primary shrink-0"
       />
-      <span className="text-sm">{label}</span>
+      <span className="text-xs">{label}</span>
     </label>
   );
 }
 
 function EmailTemplateBlock({
-  title, subject, onSubjectChange, body, onBodyChange, placeholderSubject, placeholderBody,
+  title,
+  subject,
+  onSubjectChange,
+  body,
+  onBodyChange,
+  placeholderSubject,
+  placeholderBody,
 }: {
   title: string;
   subject: string;
@@ -749,9 +728,14 @@ function EmailTemplateBlock({
 }) {
   return (
     <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h3 className="text-sm font-semibold flex items-center gap-2">
+        <Mail className="w-4 h-4 text-muted-foreground" />
+        {title}
+      </h3>
       <div>
-        <Label className="text-xs">Objet</Label>
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          Objet
+        </Label>
         <Input
           value={subject}
           onChange={(e) => onSubjectChange(e.target.value)}
@@ -760,7 +744,9 @@ function EmailTemplateBlock({
         />
       </div>
       <div>
-        <Label className="text-xs">Corps</Label>
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          Corps du message
+        </Label>
         <Textarea
           value={body}
           onChange={(e) => onBodyChange(e.target.value)}
@@ -769,37 +755,6 @@ function EmailTemplateBlock({
           className="mt-1 text-sm font-sans"
         />
       </div>
-    </div>
-  );
-}
-
-// ─── Session S26.3 — Helper Slider avec affichage de valeur ────────────
-function SliderRow({
-  label, value, onChange, min, max, unit = "",
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  unit?: string;
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <Label className="text-sm">{label}</Label>
-        <span className="text-xs font-mono text-muted-foreground tabular-nums">
-          {value} {unit} <span className="text-muted-foreground/60">({min}–{max})</span>
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
-      />
     </div>
   );
 }
