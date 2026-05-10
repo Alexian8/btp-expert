@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom"
 
 import { AuthLayout } from "@/app/layouts/AuthLayout";
 import { DashboardLayout } from "@/app/layouts/DashboardLayout";
+import { SuperAdminLayout } from "@/app/layouts/SuperAdminLayout";
 import { LoginPage } from "@/features/auth/components/LoginPage";
 import { DashboardPage } from "@/features/dashboard/components/DashboardPage";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
@@ -78,6 +79,15 @@ function SuperAdminLanding() {
   return <DashboardPage />;
 }
 
+// Wrapper qui choisit le layout selon le rôle :
+// - super_admin → SuperAdminLayout (minimal, sans sidebar)
+// - autres rôles → DashboardLayout (sidebar complète)
+function RoleAwareLayout() {
+  const user = useAuthStore((s) => s.user) as { role?: string } | null;
+  if (user?.role === "super_admin") return <SuperAdminLayout />;
+  return <DashboardLayout />;
+}
+
 const router = createBrowserRouter(
   [
     {
@@ -93,7 +103,7 @@ const router = createBrowserRouter(
       path: "/",
       element: (
         <ProtectedRoute>
-          <DashboardLayout />
+          <RoleAwareLayout />
         </ProtectedRoute>
       ),
       children: [

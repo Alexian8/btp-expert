@@ -54,6 +54,7 @@ import { useSuppliersStore } from "@/stores/suppliersStore";
 import { useChantiersStore } from "@/stores/chantiersStore";
 import { useQuotesStore } from "@/stores/quotesStore";
 import { useInvoicesStore } from "@/stores/invoicesStore";
+import { useIsMobile } from "@/stores/deviceModeStore";
 
 // ─── Logos (importés comme modules pour que Vite les bundle correctement) ───
 import logoSquareUrl from "@/assets/logo-square.png";
@@ -87,6 +88,13 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Auto-close mobile sidebar on navigation
+  useEffect(() => {
+    if (isMobile) setMobileSidebarOpen(false);
+  }, [location.pathname, isMobile]);
 
   // Sync au démarrage : ajoute les nouveaux items, retire les disparus
   useEffect(() => {
@@ -157,26 +165,56 @@ export function DashboardLayout() {
 
   return (
     <CommandPaletteProvider>
-    <div className="h-screen flex bg-background">
+    <div className="h-screen flex bg-background relative">
       <OnboardingGate />
       <OneDriveStartupCheck enabled={checkOneDriveOnStartup} />
+
+      {/* OVERLAY mobile (clic pour fermer) */}
+      {isMobile && mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-label="Fermer le menu"
+        />
+      )}
+
       {/* SIDEBAR */}
       <aside
         className={cn(
-          "flex flex-col border-r border-border bg-card transition-all duration-200 relative",
-          collapsed ? "w-16" : "w-60"
+          "flex flex-col border-r border-border bg-card transition-transform duration-200",
+          // Desktop : sidebar dans le flex
+          !isMobile && "relative",
+          !isMobile && (collapsed ? "w-16" : "w-60"),
+          // Mobile : sidebar fixed, slide in/out
+          isMobile && "fixed inset-y-0 left-0 z-50 w-72 shadow-2xl",
+          isMobile && !mobileSidebarOpen && "-translate-x-full",
+          isMobile && mobileSidebarOpen && "translate-x-0"
         )}
       >
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="absolute -right-3 top-20 z-10 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center shadow-soft-sm hover:bg-accent transition-colors"
-          title={collapsed ? "Déplier" : "Replier"}
-        >
-          {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-        </button>
+        {/* Bouton replier (desktop only) */}
+        {!isMobile && (
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="absolute -right-3 top-20 z-10 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center shadow-soft-sm hover:bg-accent transition-colors"
+            title={collapsed ? "Déplier" : "Replier"}
+          >
+            {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+          </button>
+        )}
+
+        {/* Bouton fermer (mobile only) */}
+        {isMobile && (
+          <button
+            onClick={() => setMobileSidebarOpen(false)}
+            className="absolute right-3 top-3 z-10 w-8 h-8 rounded-md hover:bg-accent flex items-center justify-center"
+            title="Fermer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        )}
 
         <div className="h-16 flex items-center justify-center px-4 border-b border-border overflow-hidden">
-          {collapsed ? (
+          {(collapsed && !isMobile) ? (
             /* Replié : logo carré seul, centré, taille modérée */
             <img
               src={logoSquareUrl}
@@ -184,7 +222,7 @@ export function DashboardLayout() {
               className="w-10 h-10 rounded-lg object-contain shrink-0"
             />
           ) : (
-            /* Déplié : logo horizontal, respect du ratio, aligné à gauche */
+            /* Déplié (ou mobile) : logo horizontal, respect du ratio, aligné à gauche */
             <motion.img
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
@@ -228,13 +266,13 @@ export function DashboardLayout() {
                     "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
                     "hover:bg-accent hover:text-accent-foreground",
                     isActive && "bg-accent text-accent-foreground",
-                    collapsed && "justify-center"
+                    (collapsed && !isMobile) && "justify-center"
                   )
                 }
-                title={collapsed ? item.label : undefined}
+                title={(collapsed && !isMobile) ? item.label : undefined}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
-                {!collapsed && (
+                {(!collapsed || isMobile) && (
                   <>
                     <span className="truncate flex-1">{item.label}</span>
                     {!hideSidebarBadges && badge !== null && badge > 0 && (
@@ -259,22 +297,32 @@ export function DashboardLayout() {
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all",
                 "hover:bg-accent hover:text-accent-foreground",
                 isActive && "bg-accent text-accent-foreground",
-                collapsed && "justify-center"
+                (collapsed && !isMobile) && "justify-center"
               )
             }
-            title={collapsed ? "Paramètres" : undefined}
+            title={(collapsed && !isMobile) ? "Paramètres" : undefined}
           >
             <Settings className="w-4 h-4 shrink-0" />
-            {!collapsed && <span>Paramètres</span>}
+            {(!collapsed || isMobile) && <span>Paramètres</span>}
           </NavLink>
         </div>
       </aside>
 
       {/* MAIN */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6 shrink-0">
-          <div>
-            <h2 className="text-base font-semibold tracking-tight">{pageTitle}</h2>
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-3 sm:px-6 shrink-0 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Hamburger (mobile only) */}
+            {isMobile && (
+              <button
+                onClick={() => setMobileSidebarOpen(true)}
+                className="w-10 h-10 rounded-md hover:bg-accent flex items-center justify-center shrink-0 -ml-1"
+                aria-label="Ouvrir le menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
+            <h2 className="text-base font-semibold tracking-tight truncate">{pageTitle}</h2>
           </div>
 
           <div className="flex items-center gap-2">

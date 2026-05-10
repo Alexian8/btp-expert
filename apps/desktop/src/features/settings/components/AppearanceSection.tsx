@@ -1,11 +1,12 @@
 import { motion } from "framer-motion";
-import { Sun, Moon, Monitor, Check } from "lucide-react";
+import { Sun, Moon, Monitor, Check, Smartphone, LaptopMinimal, Sparkles } from "lucide-react";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SettingsSectionWrapper } from "./SettingsPage";
 import { useThemeStore, type Mode, type AccentColor, type Radius, type Density } from "@/stores/themeStore";
+import { useDeviceModeStore, type DeviceMode } from "@/stores/deviceModeStore";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppearanceSection — Personnalisation visuelle en temps réel
@@ -41,9 +42,25 @@ const DENSITY_OPTIONS: Array<{ key: Density; label: string; desc: string }> = [
   { key: "comfortable", label: "Confortable", desc: "Plus d'espace" },
 ];
 
+const DEVICE_MODE_OPTIONS: Array<{
+  key: DeviceMode;
+  label: string;
+  desc: string;
+  icon: React.ElementType;
+}> = [
+  { key: "auto", label: "Auto", desc: "Détecte iPhone/iPad/Android automatiquement", icon: Sparkles },
+  { key: "mobile", label: "Mobile", desc: "Force l'UI tactile (drawer, gros boutons)", icon: Smartphone },
+  { key: "desktop", label: "Desktop", desc: "Force l'UI bureau (sidebar fixe, dense)", icon: LaptopMinimal },
+];
+
 export function AppearanceSection() {
   const { mode, accent, radius, density, hideSidebarBadges, setMode, setAccent, setRadius, setDensity, setHideSidebarBadges, reset } =
     useThemeStore();
+  const deviceMode = useDeviceModeStore((s) => s.mode);
+  const setDeviceMode = useDeviceModeStore((s) => s.setMode);
+  const isAutoMobile = useDeviceModeStore((s) => s.isAutoMobile);
+  const isAutoStandalone = useDeviceModeStore((s) => s.isAutoStandalone);
+  const isIOS = useDeviceModeStore((s) => s.isIOS);
 
   return (
     <div className="space-y-6">
@@ -76,6 +93,63 @@ export function AppearanceSection() {
               )}
             </button>
           ))}
+        </div>
+      </SettingsSectionWrapper>
+
+      {/* Mode d'affichage : Auto / Mobile / Desktop */}
+      <SettingsSectionWrapper
+        title="Mode d'affichage"
+        description="Adapte l'UI selon ton appareil. En mode Auto, l'app détecte iPhone/Android et passe en UI tactile."
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          {DEVICE_MODE_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            const selected = deviceMode === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setDeviceMode(opt.key)}
+                className={cn(
+                  "relative flex flex-col items-start gap-2 p-3 rounded-lg border-2 text-left transition-all",
+                  selected
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-accent/50"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{opt.label}</span>
+                </div>
+                <span className="text-[11px] text-muted-foreground leading-snug">
+                  {opt.desc}
+                </span>
+                {selected && (
+                  <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Diagnostic auto-detection */}
+        <div className="text-xs text-muted-foreground bg-muted/40 rounded-md p-3 space-y-1">
+          <div className="font-medium text-foreground mb-1">Détection automatique</div>
+          <div>
+            <span className="opacity-70">Appareil : </span>
+            <span>{isIOS ? "iOS (iPhone/iPad)" : isAutoMobile ? "Mobile / Tablette" : "Bureau"}</span>
+          </div>
+          <div>
+            <span className="opacity-70">Installée à l'écran d'accueil : </span>
+            <span>{isAutoStandalone ? "Oui" : "Non"}</span>
+          </div>
+          {isIOS && !isAutoStandalone && (
+            <div className="mt-2 pt-2 border-t border-border/50">
+              💡 <strong>Astuce iPhone :</strong> ouvre l'app dans Safari → bouton Partager → "Sur l'écran d'accueil". L'app s'affichera en plein écran comme une vraie app.
+            </div>
+          )}
         </div>
       </SettingsSectionWrapper>
 

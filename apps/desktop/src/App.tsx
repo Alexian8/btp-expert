@@ -6,6 +6,7 @@ import { AppRouter } from "@/app/Router";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUsersStore } from "@/stores/usersStore";
+import { initDeviceDetection } from "@/stores/deviceModeStore";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // App — Point d'entrée React (après main.tsx)
@@ -31,6 +32,9 @@ export function App() {
     applyTheme();
     // Vérifier si c'est la 1ère utilisation
     checkSetup();
+    // Démarre la détection device (mobile / standalone PWA / iOS)
+    const cleanup = initDeviceDetection();
+    return cleanup;
   }, [applyTheme, checkSetup]);
 
   // Charge l'annuaire users dès qu'un user est connu (login OU rechargement de page)
