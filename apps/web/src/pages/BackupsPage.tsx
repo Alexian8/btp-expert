@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { Database, Play, Download, Trash2, RefreshCw, Clock, HardDrive } from "lucide-react";
+import { motion } from "framer-motion";
+import { Database, Play, Download, Trash2, RefreshCw, Clock, HardDrive, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { backupService, type BackupListResponse } from "@/lib/backupService";
 
 function formatBytes(n: number): string {
@@ -26,7 +28,7 @@ export function BackupsPage() {
   const [data, setData] = useState<BackupListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null); // nom du backup en cours d'op
+  const [busy, setBusy] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
   const reload = useCallback(async () => {
@@ -106,103 +108,144 @@ export function BackupsPage() {
   const lastBackup = data?.files[0];
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">Sauvegardes serveur</h1>
-        <button onClick={reload} className="btn-ghost" disabled={isLoading}>
-          <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
-          Actualiser
-        </button>
+    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sauvegardes</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Backups MySQL automatiques sur o2switch (cron quotidien à 3h du matin)
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={runBackup} disabled={running}>
+            <Play className="w-4 h-4" />
+            {running ? "Sauvegarde…" : "Lancer une sauvegarde"}
+          </Button>
+          <Button variant="outline" onClick={reload} disabled={isLoading} size="sm">
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            Actualiser
+          </Button>
+        </div>
       </div>
 
-      {/* ─── Carte d'état globale ──────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <div className="card">
-          <div className="flex items-center gap-2 text-text-muted text-xs mb-1">
-            <Clock size={14} />
-            Dernière sauvegarde
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-card border border-border rounded-lg p-4"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-lg bg-blue-500/15 text-blue-500 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
           </div>
-          <div className="font-medium">
+          <p className="text-xs text-muted-foreground">Dernière sauvegarde</p>
+          <p className="text-base font-semibold mt-0.5">
             {lastBackup ? formatRelative(lastBackup.createdAt) : "—"}
-          </div>
-        </div>
+          </p>
+        </motion.div>
 
-        <div className="card">
-          <div className="flex items-center gap-2 text-text-muted text-xs mb-1">
-            <Database size={14} />
-            Nombre de sauvegardes
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="bg-card border border-border rounded-lg p-4"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+              <Database className="w-4 h-4" />
+            </div>
           </div>
-          <div className="font-medium">{data?.count ?? "—"}</div>
-        </div>
+          <p className="text-xs text-muted-foreground">Nombre de sauvegardes</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">{data?.count ?? "—"}</p>
+        </motion.div>
 
-        <div className="card">
-          <div className="flex items-center gap-2 text-text-muted text-xs mb-1">
-            <HardDrive size={14} />
-            Espace total utilisé
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-card border border-border rounded-lg p-4"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center">
+              <HardDrive className="w-4 h-4" />
+            </div>
           </div>
-          <div className="font-medium">{data ? formatBytes(data.totalBytes) : "—"}</div>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button onClick={runBackup} className="btn-primary" disabled={running}>
-          <Play size={16} />
-          {running ? "Sauvegarde en cours…" : "Lancer une sauvegarde"}
-        </button>
+          <p className="text-xs text-muted-foreground">Espace utilisé</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">
+            {data ? formatBytes(data.totalBytes) : "—"}
+          </p>
+        </motion.div>
       </div>
 
       {error && (
-        <div className="card mb-4 border-red-500/30 bg-red-500/10 text-red-400 text-sm">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
 
-      {/* ─── Liste des backups ─────────────────────────────────────────── */}
+      {/* Liste */}
       {isLoading && !data ? (
-        <div className="text-text-muted text-sm">Chargement…</div>
+        <div className="text-muted-foreground text-sm py-12 text-center">Chargement…</div>
       ) : (data?.files.length ?? 0) === 0 ? (
-        <div className="card text-text-muted text-sm">
-          Aucune sauvegarde pour l'instant. Le cron tourne tous les jours à 3h. Tu peux aussi en lancer une maintenant via le bouton ci-dessus.
+        <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground text-sm">
+          Aucune sauvegarde pour l'instant. Le cron tourne tous les jours à 3h. Tu peux aussi en lancer une maintenant.
         </div>
       ) : (
         <div className="space-y-2">
           {data!.files.map((f) => (
-            <div key={f.name} className="card">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
+            <motion.div
+              key={f.name}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-card border border-border rounded-lg p-4 hover:border-primary/50 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center text-primary shrink-0">
+                  <Database className="w-4 h-4" />
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-mono text-xs truncate">{f.name}</div>
-                  <div className="text-xs text-text-muted mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {formatBytes(f.size)} · {formatRelative(f.createdAt)}
                   </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={() => downloadBackup(f.name)}
-                    className="btn-secondary !px-2 !py-1"
+                    disabled={busy === f.name}
                     title="Télécharger"
-                    disabled={busy === f.name}
+                    className="h-8 w-8"
                   >
-                    <Download size={14} />
-                  </button>
-                  <button
+                    <Download className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={() => restoreBackup(f.name)}
-                    className="btn-secondary !px-2 !py-1"
+                    disabled={busy === f.name}
                     title="Restaurer"
-                    disabled={busy === f.name}
+                    className="h-8 w-8"
                   >
-                    <Play size={14} />
-                  </button>
-                  <button
+                    <Play className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={() => deleteBackup(f.name)}
-                    className="btn-secondary !px-2 !py-1 hover:!border-red-500/50 hover:!text-red-400"
-                    title="Supprimer"
                     disabled={busy === f.name}
+                    title="Supprimer"
+                    className="h-8 w-8 hover:!border-destructive/50 hover:!text-destructive"
                   >
-                    <Trash2 size={14} />
-                  </button>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}

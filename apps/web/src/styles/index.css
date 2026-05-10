@@ -2,39 +2,235 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Variables CSS pour thèmes
+   ═══════════════════════════════════════════════════════════════════════
+   Ces variables sont la source unique de vérité pour toutes les couleurs.
+   Changer ici = changer partout dans l'app.
+   L'utilisateur peut override via les paramètres (voir stores/theme-store).
+   ═══════════════════════════════════════════════════════════════════════ */
+
 @layer base {
-  html, body, #root {
+  /* ───────────────────── THÈME CLAIR (défaut) ──────────────────────── */
+  :root {
+    /* Fond et texte principal */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    /* Cartes (fond blanc légèrement différent si besoin) */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    /* Popovers */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Couleur principale (accent) — bleu par défaut */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondaire (gris clair) */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    /* Éléments discrets */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent pour hover subtil */
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    /* Destructive (rouge) */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success (vert) */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning (orange/ambre) */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Bordures */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+
+    /* Ombre (couleur de base pour calculer les shadows) */
+    --shadow-color: 220 40% 20%;
+
+    /* Rayons */
+    --radius: 0.625rem; /* 10px par défaut, configurable */
+  }
+
+  /* ───────────────────── THÈME SOMBRE ──────────────────────────────── */
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 65%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 217 91% 65%;
+
+    --shadow-color: 220 40% 0%;
+  }
+
+  /* ───────────────────── VARIANTES DE COULEUR D'ACCENT ─────────────── */
+  /* L'utilisateur peut choisir une couleur d'accent parmi plusieurs */
+
+  :root[data-accent="violet"] {
+    --primary: 263 70% 60%;
+    --ring: 263 70% 60%;
+  }
+  :root[data-accent="violet"].dark {
+    --primary: 263 70% 65%;
+    --ring: 263 70% 65%;
+  }
+
+  :root[data-accent="emerald"] {
+    --primary: 160 84% 39%;
+    --ring: 160 84% 39%;
+  }
+  :root[data-accent="emerald"].dark {
+    --primary: 160 84% 45%;
+    --ring: 160 84% 45%;
+  }
+
+  :root[data-accent="amber"] {
+    --primary: 38 92% 50%;
+    --ring: 38 92% 50%;
+  }
+  :root[data-accent="amber"].dark {
+    --primary: 38 92% 55%;
+    --ring: 38 92% 55%;
+  }
+
+  :root[data-accent="rose"] {
+    --primary: 336 80% 58%;
+    --ring: 336 80% 58%;
+  }
+  :root[data-accent="rose"].dark {
+    --primary: 336 80% 65%;
+    --ring: 336 80% 65%;
+  }
+
+  :root[data-accent="slate"] {
+    --primary: 222 47% 25%;
+    --ring: 222 47% 25%;
+  }
+  :root[data-accent="slate"].dark {
+    --primary: 215 25% 75%;
+    --primary-foreground: 222 47% 11%;
+    --ring: 215 25% 75%;
+  }
+
+  /* ───────────────────── VARIANTES DE RAYON ────────────────────────── */
+  :root[data-radius="none"] { --radius: 0; }
+  :root[data-radius="sm"]   { --radius: 0.25rem; }
+  :root[data-radius="md"]   { --radius: 0.5rem; }
+  :root[data-radius="lg"]   { --radius: 0.75rem; }
+  :root[data-radius="xl"]   { --radius: 1rem; }
+  :root[data-radius="full"] { --radius: 9999px; }
+
+  /* ───────────────────── VARIANTES DE DENSITÉ ──────────────────────── */
+  /* Session 21 — Le scale est appliqué via font-size sur html
+     pour que TOUTES les unités rem/em scalent automatiquement.
+     16px (1rem) × scale = taille de base */
+  :root[data-density="compact"]     { --density-scale: 0.875; font-size: 14px; }
+  :root[data-density="normal"]      { --density-scale: 1;     font-size: 16px; }
+  :root[data-density="comfortable"] { --density-scale: 1.125; font-size: 18px; }
+
+  /* ───────────────────── BASE STYLES ───────────────────────────────── */
+  * {
+    @apply border-border;
+  }
+  html,
+  body {
     height: 100%;
-    margin: 0;
   }
   body {
-    @apply bg-bg-base text-text-primary font-sans antialiased;
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  ::selection {
-    @apply bg-accent/40 text-text-primary;
+  #root {
+    min-height: 100%;
+  }
+
+  /* Scrollbar élégante (webkit) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Focus visible partout */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
 
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+/* ═══════════════════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  /* Texte avec dégradé */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70;
   }
-  .btn-primary {
-    @apply btn bg-accent hover:bg-accent-hover text-white;
+
+  /* Glassmorphism léger */
+  .glass {
+    @apply bg-background/80 backdrop-blur-xl backdrop-saturate-150;
+    border: 1px solid hsl(var(--border) / 0.5);
   }
-  .btn-secondary {
-    @apply btn bg-bg-elevated hover:bg-bg-hover text-text-primary border border-border;
+
+  /* Effet "lift" au hover pour les cards */
+  .hover-lift {
+    @apply transition-all duration-200 ease-out-smooth;
   }
-  .btn-ghost {
-    @apply btn hover:bg-bg-hover text-text-secondary hover:text-text-primary;
-  }
-  .input {
-    @apply w-full rounded-lg bg-bg-elevated border border-border px-3 py-2 text-sm placeholder:text-text-muted focus:border-accent focus:outline-none transition-colors;
-  }
-  .card {
-    @apply bg-bg-elevated border border-border rounded-xl p-4;
-  }
-  .label {
-    @apply block text-sm font-medium text-text-secondary mb-1.5;
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    @apply shadow-soft-md;
   }
 }

@@ -1,74 +1,119 @@
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Lock, User as UserIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/authStore";
-import { LogIn } from "lucide-react";
+import logoSquareUrl from "@/assets/logo-square.png";
 
 export function Login() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
-  const navigate = useNavigate();
 
-  async function onSubmit(e: FormEvent) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    const res = await login(username.trim(), password);
-    if (!res.ok) {
-      setError(res.error ?? "Erreur");
+    setError("");
+
+    if (!username.trim() || !password) {
+      setError("Tous les champs sont requis");
       return;
     }
-    navigate("/", { replace: true });
-  }
+
+    const res = await login(username.trim(), password);
+    if (res.ok) navigate("/", { replace: true });
+    else setError(res.error ?? "Identifiants incorrects");
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm card">
-        <div className="text-center mb-6">
-          <div className="text-2xl font-bold mb-1">BatiDesk</div>
-          <div className="text-sm text-text-muted">Connexion à l'intranet</div>
-        </div>
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-background">
+      <div className="w-full max-w-sm">
+        <Card className="shadow-soft-xl">
+          <CardHeader className="space-y-4 text-center pt-8">
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
+              className="mx-auto w-36 h-36 flex items-center justify-center"
+            >
+              <img
+                src={logoSquareUrl}
+                alt="BatiDesk"
+                className="w-full h-full object-contain"
+              />
+            </motion.div>
+            <CardDescription className="text-sm">
+              Connectez-vous à votre espace de travail
+            </CardDescription>
+          </CardHeader>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="label" htmlFor="username">Identifiant</label>
-            <input
-              id="username"
-              className="input"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username">Identifiant</Label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="Votre identifiant"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="pl-9"
+                    autoFocus
+                    autoComplete="username"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <label className="label" htmlFor="password">Mot de passe</label>
-            <input
-              id="password"
-              className="input"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Mot de passe</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Votre mot de passe"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-9"
+                    autoComplete="current-password"
+                  />
+                </div>
+              </div>
 
-          {error && (
-            <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm"
+                >
+                  {error}
+                </motion.div>
+              )}
+            </CardContent>
 
-          <button type="submit" className="btn-primary w-full" disabled={isLoading}>
-            <LogIn size={16} />
-            {isLoading ? "Connexion…" : "Se connecter"}
-          </button>
-        </form>
+            <CardFooter>
+              <Button type="submit" className="w-full" loading={isLoading}>
+                Se connecter
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
       </div>
     </div>
   );
