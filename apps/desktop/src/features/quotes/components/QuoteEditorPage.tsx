@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion } from "framer-motion";
 import {
-  ArrowLeft, Save, Trash2, Send, Check, X as XIcon, Info,
-  Calendar, FileText, Receipt, Pencil, Eye, Download, Mail,
+  ArrowLeft, Save, Trash2, Send, Check, X as XIcon, Info, FileText, Receipt, Mail,
   MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,8 +36,8 @@ import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
 import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
 import { QuotePdfClassique } from "@/features/pdf/QuotePdfClassique";
 import {
-  EMPTY_QUOTE, QUOTE_STATUS_META, QUOTE_STATUS_ORDER,
-  type Quote, type QuoteItem, type QuoteStatus, type LineWorkType,
+  EMPTY_QUOTE, QUOTE_STATUS_META,
+  type Quote, type QuoteStatus, type LineWorkType,
 } from "@btp/types";
 import { computeQuoteTotals } from "../quoteEngine";
 

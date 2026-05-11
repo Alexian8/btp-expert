@@ -1,4 +1,4 @@
-import { Building2, Code, Heart } from "lucide-react";
+import { Code, Heart } from "lucide-react";
 
 import { SettingsSectionWrapper } from "./SettingsPage";
 import logoSquareUrl from "@/assets/logo-square.png";

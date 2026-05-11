@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, HardHat, Edit, Phone, MapPin,
@@ -11,8 +10,6 @@ import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   SUBCONTRACTOR_ACTIVITY_META, ATTESTATION_TYPE_META, ATTESTATION_STATUS_META,
   getAttestationStatus,

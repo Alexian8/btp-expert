@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Save, Folder } from "lucide-react";
+import { X, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";

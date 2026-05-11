@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Loader2, Check } from "lucide-react";
+import { MapPin, Loader2 } from "lucide-react";
 
 import { cn } from "@btp/ui";
 import { Input } from "@/components/ui/input";

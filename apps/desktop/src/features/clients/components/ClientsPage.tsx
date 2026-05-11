@@ -9,7 +9,6 @@ import {
   MapPin,
   Phone,
   Mail,
-  Filter,
   LayoutGrid,
   List,
   Trash2,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Building2, Save, MapPin, CreditCard, Shield, User, Lightbulb, Stamp, PenLine, Award, ScrollText, Plus, Trash2, ExternalLink } from "lucide-react";
+import { Save, Shield, Lightbulb, Stamp, PenLine, Award, ScrollText, Plus, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
