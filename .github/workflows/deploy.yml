@@ -1,0 +1,112 @@
+name: Deploy to o2switch
+
+# Manual trigger only for now. Once validated, you can add:
+#   push:
+#     branches: [main]
+# to deploy automatically on every push to main.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Rsync in dry-run mode (no changes on server)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-o2switch
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to o2switch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # All four must be configured under
+      # Settings -> Secrets and variables -> Actions -> New repository secret.
+      O2SWITCH_HOST: ${{ secrets.O2SWITCH_HOST }}
+      O2SWITCH_USER: ${{ secrets.O2SWITCH_USER }}
+      O2SWITCH_SSH_KEY: ${{ secrets.O2SWITCH_SSH_KEY }}
+      O2SWITCH_DEPLOY_PATH: ${{ secrets.O2SWITCH_DEPLOY_PATH }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+      - name: Build server
+        run: npm run build -w @btp/server
+
+      - name: Build web app
+        run: npm run build -w @btp/web
+
+      - name: Verify required secrets
+        run: |
+          if [ -z "$O2SWITCH_HOST" ] || [ -z "$O2SWITCH_USER" ] \
+             || [ -z "$O2SWITCH_SSH_KEY" ] || [ -z "$O2SWITCH_DEPLOY_PATH" ]; then
+            echo "::error::Missing required secrets. Set O2SWITCH_HOST, O2SWITCH_USER, O2SWITCH_SSH_KEY and O2SWITCH_DEPLOY_PATH."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$O2SWITCH_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$O2SWITCH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rsync sources + builds to o2switch
+        run: |
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+            echo "::notice::Running in DRY-RUN mode — no files will be changed on the server."
+          fi
+          rsync -rltv --no-perms $DRY_RUN_FLAG \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='dist_electron' \
+            --exclude='apps/desktop' \
+            --exclude='.htaccess' \
+            --exclude='public/' \
+            -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=accept-new" \
+            ./ "$O2SWITCH_USER@$O2SWITCH_HOST:$O2SWITCH_DEPLOY_PATH/"
+
+      - name: Publish web build to public/
+        run: |
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          rsync -rltv --no-perms --delete $DRY_RUN_FLAG \
+            -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=accept-new" \
+            apps/web/dist/ "$O2SWITCH_USER@$O2SWITCH_HOST:$O2SWITCH_DEPLOY_PATH/public/"
+
+      - name: Restore cPanel-friendly permissions and restart Passenger
+        if: ${{ !inputs.dry_run }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=accept-new \
+            "$O2SWITCH_USER@$O2SWITCH_HOST" \
+            "DEPLOYPATH='$O2SWITCH_DEPLOY_PATH'; \
+             chmod 0755 \"\$DEPLOYPATH\" 2>/dev/null || true; \
+             chmod 0644 \"\$DEPLOYPATH/.htaccess\" 2>/dev/null || true; \
+             find \"\$DEPLOYPATH/public\" -type d -exec chmod 0755 {} \\; 2>/dev/null || true; \
+             find \"\$DEPLOYPATH/public\" -type f -exec chmod 0644 {} \\; 2>/dev/null || true; \
+             mkdir -p \"\$DEPLOYPATH/tmp\"; \
+             touch \"\$DEPLOYPATH/tmp/restart.txt\""
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
