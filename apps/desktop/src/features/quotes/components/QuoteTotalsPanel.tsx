@@ -1,4 +1,4 @@
-import { Percent, Euro, Minus } from "lucide-react";
+import { Percent, Euro } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";

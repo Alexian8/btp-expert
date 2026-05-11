@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { Hammer, Plus, LayoutGrid, Search, List } from "lucide-react";
 
 import { cn } from "@btp/ui";

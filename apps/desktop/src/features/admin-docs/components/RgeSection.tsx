@@ -1,6 +1,5 @@
 import { Leaf, Construction, ExternalLink, Sparkles } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RgeSection — Placeholder préparation 2026

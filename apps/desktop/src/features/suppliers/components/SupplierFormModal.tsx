@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Building2, MapPin, User, CreditCard, FileText, Save, Search } from "lucide-react";
+import { X, Building2, MapPin, CreditCard, FileText, Save, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";

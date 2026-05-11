@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Cloud, Database, Clock, AlertTriangle, Check, Download, X, ShieldAlert,
+  Cloud, Database, AlertTriangle, Download, X, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 

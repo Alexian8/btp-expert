@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Cloud,
   FolderOpen,
-  HardDrive,
   Download,
   Upload,
   Trash2,
@@ -12,7 +11,6 @@ import {
   Check,
   Clock,
   FileArchive,
-  Info,
   Database,
   Briefcase,
   Apple,
@@ -25,7 +23,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@btp/ui";
 import { SettingsSectionWrapper } from "./SettingsPage";
 import { OneDriveSection } from "./OneDriveSection";

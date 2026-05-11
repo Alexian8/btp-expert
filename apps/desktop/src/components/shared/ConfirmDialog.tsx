@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Trash2, CheckCircle } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
 

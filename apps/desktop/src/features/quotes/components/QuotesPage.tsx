@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Receipt, Plus, Search, FileText, Calendar } from "lucide-react";
+import { Receipt, Plus, Search, FileText } from "lucide-react";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";

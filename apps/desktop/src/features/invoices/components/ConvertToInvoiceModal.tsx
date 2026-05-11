@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@btp/ui";
 import { useInvoicesStore } from "@/stores/invoicesStore";
-import type { Quote, InvoiceType } from "@btp/types";
+import type { Quote } from "@btp/types";
 import { INVOICE_TYPE_META } from "@btp/types";
 
 // ═══════════════════════════════════════════════════════════════════════════

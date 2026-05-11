@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
-import { Button } from "@/components/ui/button";
 import { formatEuro } from "@btp/types";
 import { useStatsStore } from "@/stores/statsStore";
 
