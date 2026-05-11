@@ -4,6 +4,9 @@
 // qui est chargé (cf racine du dossier apps/server/).
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Must run before any other import that loads Express/HTTP modules.
+import "./instrument";
+
 import { loadConfig } from "./config";
 import { createApp } from "./app";
 import { pingPool } from "./db";

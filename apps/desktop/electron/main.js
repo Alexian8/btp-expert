@@ -8,6 +8,34 @@ const crypto = require("node:crypto");
 // BatiDesk v16 — Electron Main Process
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ─── Sentry (errors only, no-op if SENTRY_DSN is empty) ──────────────────
+const SENTRY_DSN = process.env.SENTRY_DSN || "";
+if (SENTRY_DSN) {
+  try {
+    const Sentry = require("@sentry/electron/main");
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: app.isPackaged ? "production" : "development",
+      release: app.getVersion(),
+      sendDefaultPii: false,
+      // No performance tracing by default (errors only).
+      tracesSampleRate: 0,
+      beforeSend(event) {
+        // Strip Authorization headers and obvious credential fields.
+        if (event.request?.headers) {
+          delete event.request.headers.Authorization;
+          delete event.request.headers.authorization;
+          delete event.request.headers.Cookie;
+          delete event.request.headers.cookie;
+        }
+        return event;
+      },
+    });
+  } catch (e) {
+    console.warn("[sentry] init failed:", e?.message || e);
+  }
+}
+
 const isDev = !app.isPackaged;
 let mainWindow = null;
 

@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import * as Sentry from "@sentry/node";
 import cors from "cors";
 import helmet from "helmet";
 import path from "node:path";
@@ -593,6 +594,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   app.use((_req, res) => {
     res.status(404).json({ message: "Route inconnue" });
   });
+
+  // Sentry catches errors that propagate to here (no-op if DSN unset).
+  Sentry.setupExpressErrorHandler(app);
 
   // Error handler — en prod : pas de leak de stack trace
   const isProd = cfg.NODE_ENV === "production";
