@@ -5,6 +5,8 @@
 // qui est chargé (cf racine du dossier apps/server/).
 // ═══════════════════════════════════════════════════════════════════════════
 Object.defineProperty(exports, "__esModule", { value: true });
+// Must run before any other import that loads Express/HTTP modules.
+require("./instrument");
 const config_1 = require("./config");
 const app_1 = require("./app");
 const db_1 = require("./db");

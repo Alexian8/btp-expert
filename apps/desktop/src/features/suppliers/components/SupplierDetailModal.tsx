@@ -3,7 +3,6 @@ import { X, Building2, Phone, Mail, MapPin, CreditCard, ExternalLink, Pencil, Gl
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { formatSiret } from "@/lib/sireneService";
 import type { Supplier } from "@btp/types";
 

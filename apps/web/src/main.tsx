@@ -1,6 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { installBtpApiShim } from "./lib/btpAPI-shim";
+import { initSentry } from "./lib/sentry";
+
+initSentry();
 
 // ─── Capture des erreurs de boot pour les afficher visuellement ──────────
 function showFatal(err: unknown): void {

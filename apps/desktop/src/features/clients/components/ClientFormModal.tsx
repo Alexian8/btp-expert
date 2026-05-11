@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { SiretLookup } from "@/components/shared/SiretLookup";
 import { AddressAutocomplete } from "@/components/shared/AddressAutocomplete";
 import { useClientsStore } from "@/stores/clientsStore";
-import { EMPTY_CLIENT, type Client, type ContactType, type Civility } from "@btp/types";
+import { EMPTY_CLIENT, type Client, type Civility } from "@btp/types";
 import type { SireneCompany } from "@/lib/sireneService";
 
 // ═══════════════════════════════════════════════════════════════════════════

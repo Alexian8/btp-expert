@@ -5,7 +5,6 @@ import {
   Upload,
   Download,
   Trash2,
-  AlertCircle,
   Calendar,
   Eye,
   Image as ImageIcon,

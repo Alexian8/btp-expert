@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, Save, Trash2, Send, Eye, Download, Mail, Bell,
+  ArrowLeft, Save, Trash2, Send, Mail, Bell,
   CreditCard, FileText, AlertCircle, MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";

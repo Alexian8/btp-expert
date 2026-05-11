@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, User, Building2, MapPin, Phone, Mail, Pencil,
-  Hammer, Receipt, FileText, Calendar, Tag, ExternalLink, ArrowRight, FolderOpen,
+  Hammer, Receipt, Tag, ExternalLink, ArrowRight, FolderOpen,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 

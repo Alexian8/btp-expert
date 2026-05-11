@@ -46,6 +46,14 @@ try {
   log(`dotenv error: ${e.message}`);
 }
 
+// Sentry must be initialized before any module that loads express/http.
+try {
+  require("./dist/instrument");
+  log("sentry instrument loaded");
+} catch (e) {
+  log(`sentry instrument skipped: ${e && e.message}`);
+}
+
 const express = require("express");
 const proxy = express();
 

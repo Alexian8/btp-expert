@@ -29,7 +29,6 @@ import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
 import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
 import { LogsPage } from "@/features/admin-logs/components/LogsPage";
 import { CompaniesAdminPage } from "@/features/super-admin/components/CompaniesAdminPage";
-import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { useAuthStore } from "@/stores/authStore";
 
 // ═══════════════════════════════════════════════════════════════════════════

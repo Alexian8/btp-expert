@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft, Pencil, Trash2, Phone, Mail, ExternalLink,
   Info, Clock, FileText, PenLine, Camera, Zap, MapPin,
   Calendar, Euro, User as UserIcon, Building2, Hammer, Receipt,
-  Plus, Download, Trash, FolderOpen, Image, File, MessageSquare,
+  Plus, Trash, FolderOpen, Image, File, MessageSquare,
   Tag,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Separator } from "@/components/ui/separator";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DocumentDropzone } from "@/components/shared/DocumentDropzone";
 import { LinkedEventsList } from "@/features/agenda/components/LinkedEventsList";

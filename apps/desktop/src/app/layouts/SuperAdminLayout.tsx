@@ -4,7 +4,6 @@ import {
   Building2,
   LogOut,
   ShieldCheck,
-  User as UserIcon,
   Sun,
   Moon,
   Monitor,
