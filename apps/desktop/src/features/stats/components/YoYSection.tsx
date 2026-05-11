@@ -24,10 +24,6 @@ export function YoYSection() {
     fetchYoYComparison(year);
   }, [year]);
 
-  if (!yoyComparison) {
-    return <div className="text-sm text-muted-foreground">Chargement...</div>;
-  }
-
   // Extraire valeurs selon métrique
   const data = useMemo(() => {
     if (!yoyComparison) return null;
@@ -40,6 +36,19 @@ export function YoYSection() {
     }));
     return extract(metric);
   }, [yoyComparison, metric]);
+
+  const maxValue = useMemo(() => {
+    if (!data) return 1000;
+    let max = 0;
+    for (const d of data) {
+      max = Math.max(max, Math.abs(d.current), Math.abs(d.previous));
+    }
+    return max || 1000;
+  }, [data]);
+
+  if (!yoyComparison) {
+    return <div className="text-sm text-muted-foreground">Chargement...</div>;
+  }
 
   const metricMeta = {
     ca: {
@@ -69,15 +78,6 @@ export function YoYSection() {
   };
 
   const meta = metricMeta[metric];
-
-  const maxValue = useMemo(() => {
-    if (!data) return 1000;
-    let max = 0;
-    for (const d of data) {
-      max = Math.max(max, Math.abs(d.current), Math.abs(d.previous));
-    }
-    return max || 1000;
-  }, [data]);
 
   return (
     <div className="space-y-4 max-w-5xl">

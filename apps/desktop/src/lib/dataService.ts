@@ -249,9 +249,9 @@ declare global {
       vaultCreateFolder: (data: any) => Promise<{ success: boolean; id?: string; error?: string }>;
       vaultUpdateFolder: (id: string, data: any) => Promise<{ success: boolean; error?: string }>;
       vaultDeleteFolder: (id: string) => Promise<{ success: boolean; error?: string }>;
-      vaultListDocuments: (params?: { folderId?: string; includeTrashed?: boolean }) => Promise<any[]>;
+      vaultListDocuments: (params?: { folderId?: string; includeTrashed?: boolean; chantierId?: string; clientId?: string; quoteId?: string; invoiceId?: string }) => Promise<any[]>;
       vaultListTrash: () => Promise<any[]>;
-      vaultUploadDocument: (params: { folderId: string; sourcePath: string; fileName?: string; description?: string; expirationDate?: string; tags?: any[] }) => Promise<{ success: boolean; id?: string; error?: string }>;
+      vaultUploadDocument: (params: { folderId: string; sourcePath?: string; file?: Blob | File; fileName?: string; mimeType?: string; description?: string; expirationDate?: string; tags?: any[]; chantierId?: string; clientId?: string; quoteId?: string; invoiceId?: string; category?: string }) => Promise<{ success: boolean; id?: string; error?: string }>;
       vaultUpdateDocument: (id: string, data: any) => Promise<{ success: boolean; error?: string }>;
       vaultTrashDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
       vaultRestoreDocument: (id: string) => Promise<{ success: boolean; error?: string }>;
