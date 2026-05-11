@@ -17,13 +17,9 @@ export function SeasonalitySection() {
     fetchSeasonality();
   }, []);
 
-  if (!seasonality) {
-    return <div className="text-sm text-muted-foreground">Chargement...</div>;
-  }
-
   // Construire matrice années × mois
   const matrix = useMemo(() => {
-    if (!seasonality) return new Map();
+    if (!seasonality) return new Map<string, number>();
     const m = new Map<string, number>();
     for (const c of seasonality.cells) {
       m.set(`${c.year}-${c.month}`, c.ca);
@@ -33,7 +29,7 @@ export function SeasonalitySection() {
 
   // Identifier le mois le plus fort/faible en moyenne
   const { bestMonth, worstMonth } = useMemo(() => {
-    if (!seasonality.monthlyAverage.length) {
+    if (!seasonality?.monthlyAverage.length) {
       return { bestMonth: null as any, worstMonth: null as any };
     }
     let best = seasonality.monthlyAverage[0];
@@ -44,6 +40,10 @@ export function SeasonalitySection() {
     }
     return { bestMonth: best, worstMonth: worst };
   }, [seasonality]);
+
+  if (!seasonality) {
+    return <div className="text-sm text-muted-foreground">Chargement...</div>;
+  }
 
   if (seasonality.years.length === 0) {
     return (

@@ -121,7 +121,7 @@ export interface ChantierClause {
 export interface User {
   id: number;
   username: string;
-  role?: "admin" | "manager" | "accountant" | "worker" | "viewer" | "user";
+  role?: "super_admin" | "admin" | "manager" | "accountant" | "worker" | "viewer" | "user";
   email?: string;
   firstName?: string;
   lastName?: string;

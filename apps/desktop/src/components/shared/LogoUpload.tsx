@@ -87,7 +87,6 @@ export function LogoUpload(_props: Props) {
         )}
       >
         {logoDataUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoDataUrl}
             alt="Logo"

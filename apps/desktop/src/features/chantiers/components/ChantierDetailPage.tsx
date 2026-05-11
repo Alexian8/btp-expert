@@ -641,6 +641,7 @@ function TabDocuments({ chantierId }: { chantierId: string }) {
 }
 
 // Bloc legacy : conservé pour compat si jamais appelé (à supprimer plus tard)
+/* eslint-disable react-hooks/rules-of-hooks -- legacy unused component, prefixed with _ */
 function _LegacyTabDocumentsUnused({ chantierId }: { chantierId: string }) {
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -744,6 +745,7 @@ function _LegacyTabDocumentsUnused({ chantierId }: { chantierId: string }) {
     </div>
   );
 }
+/* eslint-enable react-hooks/rules-of-hooks */
 
 function DocumentRow({ doc, onOpen, onShow, onDelete }: { doc: any; onOpen: () => void; onShow: () => void; onDelete: () => void }) {
   const iconByMime = () => {

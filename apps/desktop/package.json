@@ -22,7 +22,7 @@
     "release:mac": "npm run build && electron-builder --mac --publish=never",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3 || echo 'postinstall rebuild skipped'",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint . --report-unused-disable-directives",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Skip electron-rebuild postinstall: native modules aren't
+          # needed for typecheck / lint / web / server builds.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Typecheck (all workspaces)
+        run: npm run typecheck
+
+      - name: Lint (all workspaces with lint script)
+        run: npm run lint
+
+      - name: Test (all workspaces with test script)
+        run: npm test
+
+      - name: Build web app
+        run: npm run build -w @btp/web
+
+      - name: Build server
+        run: npm run build -w @btp/server
