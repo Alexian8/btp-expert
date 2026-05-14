@@ -29,6 +29,7 @@ import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
 import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
 import { LogsPage } from "@/features/admin-logs/components/LogsPage";
 import { CompaniesAdminPage } from "@/features/super-admin/components/CompaniesAdminPage";
+import { RouteErrorBoundary } from "@/components/shared/RouteErrorBoundary";
 import { useAuthStore } from "@/stores/authStore";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -115,6 +116,7 @@ const router = createBrowserRouter(
           <AuthLayout />
         </PublicRoute>
       ),
+      errorElement: <RouteErrorBoundary />,
       children: [{ index: true, element: <LoginPage /> }],
     },
     {
@@ -124,6 +126,10 @@ const router = createBrowserRouter(
           <RoleAwareLayout />
         </ProtectedRoute>
       ),
+      // errorElement : attrape les erreurs de rendu de TOUTES les pages
+      // enfants, les pousse à Sentry et affiche une UI propre au lieu de
+      // l'écran brut "Unexpected Application Error!".
+      errorElement: <RouteErrorBoundary />,
       children: [
         {
           index: true,

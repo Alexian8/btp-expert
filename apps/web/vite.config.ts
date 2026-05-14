@@ -25,6 +25,13 @@ export default defineConfig({
         find: /^@\/lib\/btpAPI-shim$/,
         replacement: path.join(webSrc, "lib/btpAPI-shim.ts"),
       },
+      // Le module Sentry est spécifique à chaque build : la version desktop
+      // utilise @sentry/electron, la version web @sentry/react. On override
+      // @/lib/sentry vers la version web pour le build navigateur.
+      {
+        find: /^@\/lib\/sentry$/,
+        replacement: path.join(webSrc, "lib/sentry.ts"),
+      },
       { find: "@/web", replacement: webSrc },
       { find: "@", replacement: desktopSrc },
       { find: "@btp/core", replacement: path.resolve(__dirname, "../../packages/core/src") },

@@ -25,3 +25,17 @@ export function initSentry(): void {
     console.warn("[sentry] web init failed:", e);
   }
 }
+
+/**
+ * Capture explicite d'une exception. Utilisé par les error boundaries
+ * (React Router) : les erreurs de rendu attrapées par un boundary ne
+ * remontent PAS jusqu'à window.onerror, il faut les pousser à la main.
+ * No-op si Sentry n'est pas initialisé (DSN absent).
+ */
+export function captureException(error: unknown): void {
+  try {
+    Sentry.captureException(error);
+  } catch {
+    /* Sentry ne doit jamais crasher l'app */
+  }
+}

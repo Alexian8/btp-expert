@@ -133,7 +133,13 @@ export function ChantierMarginsList({ margins }: { margins: ChantierMargin[] }) 
   return (
     <div className="space-y-1.5">
       {visible.map((m, idx) => {
-        const margePositive = m.marge >= 0;
+        // Garde-fous : le serveur peut renvoyer des champs numériques
+        // undefined/null (chantier sans données complètes) — on évite le
+        // crash "Cannot read properties of undefined (reading 'toFixed')".
+        const marge = m.marge ?? 0;
+        const ca = m.ca ?? 0;
+        const margePct = m.margePct ?? 0;
+        const margePositive = marge >= 0;
         return (
           <motion.div
             key={m.chantierId}
@@ -165,14 +171,14 @@ export function ChantierMarginsList({ margins }: { margins: ChantierMargin[] }) 
                       "tabular-nums font-semibold",
                       margePositive ? "text-emerald-500" : "text-rose-500"
                     )}>
-                      {formatEuro(m.marge)}
+                      {formatEuro(marge)}
                     </span>
-                    {m.ca > 0 && (
+                    {ca > 0 && (
                       <span className={cn(
                         "ml-1 text-[10px]",
                         margePositive ? "text-emerald-500" : "text-rose-500"
                       )}>
-                        ({m.margePct.toFixed(0)}%)
+                        ({margePct.toFixed(0)}%)
                       </span>
                     )}
                   </span>
