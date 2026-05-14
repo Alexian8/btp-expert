@@ -1,0 +1,23 @@
+# ─── Xcode ────────────────────────────────────────────────────────────────
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+DerivedData/
+build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ─── Swift Package Manager ────────────────────────────────────────────────
+.swiftpm/
+.build/
+Package.resolved
+
+# ─── Dépendances tierces (non utilisées, au cas où) ───────────────────────
+Pods/
+Carthage/Build/
+
+# ─── macOS ────────────────────────────────────────────────────────────────
+.DS_Store
