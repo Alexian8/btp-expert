@@ -46,7 +46,18 @@ export const useFinanceStore = create<FinanceState>((set) => ({
         window.btpAPI.accountingGetTopSuppliers?.(5) ?? [],
         window.btpAPI.accountingGetChantierMargins?.() ?? [],
       ]);
-      set({ stats, monthly, topClients, topSuppliers, chantierMargins, isLoading: false });
+      // Garde-fou : en mode web, certaines API sont encore stubées et peuvent
+      // renvoyer {} au lieu d'un tableau. On normalise pour éviter les crashs
+      // "x.map is not a function" / "x.filter is not a function" dans l'UI.
+      const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+      set({
+        stats: stats && typeof stats === "object" ? (stats as FinanceStats) : EMPTY_STATS,
+        monthly: arr<MonthlyDataPoint>(monthly),
+        topClients: arr<TopClient>(topClients),
+        topSuppliers: arr<TopSupplier>(topSuppliers),
+        chantierMargins: arr<ChantierMargin>(chantierMargins),
+        isLoading: false,
+      });
     } catch (e) {
       console.error("[financeStore] fetchAll", e);
       set({ isLoading: false });

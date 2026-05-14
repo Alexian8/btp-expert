@@ -27,6 +27,18 @@ interface State {
   fetchAll: () => Promise<void>;
 }
 
+// Garde-fous : en mode web certaines API stats sont stubées et peuvent
+// renvoyer {} au lieu d'un tableau ou d'un objet stats valide. On normalise
+// pour éviter les crashs ".map is not a function" dans les widgets.
+function asArray<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+function asObjectOrNull<T>(v: unknown): T | null {
+  // {} (stub web) → null, pour que les guards `if (!stats)` fonctionnent.
+  if (v && typeof v === "object" && Object.keys(v).length > 0) return v as T;
+  return null;
+}
+
 export const useStatsStore = create<State>((set, get) => ({
   pipeline: null,
   paymentDelays: null,
@@ -39,37 +51,37 @@ export const useStatsStore = create<State>((set, get) => ({
   fetchPipeline: async () => {
     if (!window.btpAPI?.statsGetQuotePipeline) return;
     const pipeline = await window.btpAPI.statsGetQuotePipeline();
-    set({ pipeline });
+    set({ pipeline: asObjectOrNull<QuotePipelineStats>(pipeline) });
   },
 
   fetchPaymentDelays: async () => {
     if (!window.btpAPI?.statsGetPaymentDelays) return;
     const paymentDelays = await window.btpAPI.statsGetPaymentDelays();
-    set({ paymentDelays });
+    set({ paymentDelays: asObjectOrNull<PaymentDelayStats>(paymentDelays) });
   },
 
   fetchClientDelays: async (limit = 10) => {
     if (!window.btpAPI?.statsGetClientPaymentDelays) return;
     const clientDelays = await window.btpAPI.statsGetClientPaymentDelays(limit);
-    set({ clientDelays });
+    set({ clientDelays: asArray<ClientPaymentDelay>(clientDelays) });
   },
 
   fetchOverdueInvoices: async () => {
     if (!window.btpAPI?.statsGetOverdueInvoices) return;
     const overdueInvoices = await window.btpAPI.statsGetOverdueInvoices();
-    set({ overdueInvoices });
+    set({ overdueInvoices: asArray<OverdueInvoice>(overdueInvoices) });
   },
 
   fetchYoYComparison: async (year) => {
     if (!window.btpAPI?.statsGetYoYComparison) return;
     const yoyComparison = await window.btpAPI.statsGetYoYComparison(year);
-    set({ yoyComparison });
+    set({ yoyComparison: asObjectOrNull<YoYComparison>(yoyComparison) });
   },
 
   fetchSeasonality: async () => {
     if (!window.btpAPI?.statsGetSeasonality) return;
     const seasonality = await window.btpAPI.statsGetSeasonality();
-    set({ seasonality });
+    set({ seasonality: asObjectOrNull<SeasonalityData>(seasonality) });
   },
 
   fetchAll: async () => {

@@ -1248,19 +1248,34 @@ export function installBtpApiShim(): void {
   console.log("[btpAPI-shim] installed for web mode");
 }
 
+// Méthodes stub qui renvoient un TABLEAU (le code desktop fait .map/.filter
+// dessus). L'heuristique par nom ne suffit pas pour celles-ci : on les liste
+// explicitement pour éviter les crashs "x.map is not a function".
+const ARRAY_RETURNING_STUBS = new Set<string>([
+  "accountingGetMonthlyEvolution",
+  "accountingGetTopClients",
+  "accountingGetTopSuppliers",
+  "accountingGetChantierMargins",
+  "statsGetClientPaymentDelays",
+  "statsGetOverdueInvoices",
+]);
+
 function createStubsFor(names: readonly string[]): Record<string, () => Promise<unknown>> {
   const out: Record<string, () => Promise<unknown>> = {};
   for (const name of names) {
     // Heuristique pour deviner le format de retour attendu par le code desktop :
-    //  - nom contient List/Search/All  → tableau vide
+    //  - nom contient List/Search/All / dans ARRAY_RETURNING_STUBS → tableau vide
     //  - nom contient Count           → 0
     //  - nom contient Stats/Pipeline/Delays/Comparison/Seasonality → objet "vide" cohérent
     //  - autre (action) → { success: false, error: "non disponible en web" }
     const lower = name.toLowerCase();
     // Par défaut : objet vide {} — sûr car {}.anything === undefined (pas de TypeError)
     let fallback: unknown = {};
-    if (/list|search|history|expir/i.test(lower)) fallback = [];
-    else if (/count|hash/.test(lower)) fallback = 0;
+    if (/list|search|history|expir/i.test(lower) || ARRAY_RETURNING_STUBS.has(name)) {
+      fallback = [];
+    } else if (/count|hash/.test(lower)) {
+      fallback = 0;
+    }
     out[name] = stub(name, fallback);
   }
   return out;
