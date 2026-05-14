@@ -102,7 +102,8 @@ final class APIClient: ObservableObject {
     }
 
     /// Génère un identifiant UUID minuscule, comme `crypto.randomUUID()` côté web.
-    static func newID() -> String {
+    /// `nonisolated` : appelable hors du MainActor (ex: décodage d'items JSON).
+    nonisolated static func newID() -> String {
         UUID().uuidString.lowercased()
     }
 

@@ -47,6 +47,58 @@ struct OptionalDateRow: View {
     }
 }
 
+/// Champ de saisie d'un nombre décimal lié à un Double.
+/// Utilise un état texte interne pour une saisie fluide (séparateur , ou .).
+struct DecimalField: View {
+    let label: String
+    @Binding var value: Double
+    var suffix: String = ""
+
+    @State private var text: String
+
+    init(_ label: String, value: Binding<Double>, suffix: String = "") {
+        self.label = label
+        _value = value
+        self.suffix = suffix
+        _text = State(initialValue: Format.numberInputText(value.wrappedValue))
+    }
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("0", text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 140)
+                .onChange(of: text) { _, newValue in
+                    value = Format.parseUserNumber(newValue)
+                }
+            if !suffix.isEmpty {
+                Text(suffix).foregroundStyle(Theme.mutedForeground)
+            }
+        }
+    }
+}
+
+/// Ligne de date obligatoire : un DatePicker qui lit / écrit une chaîne
+/// "yyyy-MM-dd" (le backend stocke les dates en texte).
+struct RequiredDateRow: View {
+    let label: String
+    @Binding var dateString: String
+
+    private var dateBinding: Binding<Date> {
+        Binding(
+            get: { Format.parseDate(dateString) ?? Date() },
+            set: { dateString = Format.isoDay($0) }
+        )
+    }
+
+    var body: some View {
+        DatePicker(label, selection: dateBinding, displayedComponents: .date)
+    }
+}
+
 /// Affiche un message d'erreur de formulaire dans une section dédiée.
 struct FormErrorRow: View {
     let message: String

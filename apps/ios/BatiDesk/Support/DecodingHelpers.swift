@@ -47,4 +47,18 @@ extension KeyedDecodingContainer {
         }
         return false
     }
+
+    /// Tableau JSON — accepte un vrai tableau OU une chaîne contenant du JSON
+    /// (selon que le driver MySQL parse ou non la colonne JSON). [] si absent.
+    func jsonArray<Element: Decodable>(_ key: Key, of type: Element.Type) -> [Element] {
+        if let array = try? decode([Element].self, forKey: key) {
+            return array
+        }
+        if let raw = try? decode(String.self, forKey: key),
+           let data = raw.data(using: .utf8),
+           let array = try? JSONDecoder().decode([Element].self, from: data) {
+            return array
+        }
+        return []
+    }
 }
