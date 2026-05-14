@@ -16,6 +16,7 @@ struct Chantier: Decodable, Identifiable, Equatable {
     var addressLine2: String
     var postalCode: String
     var city: String
+    var country: String
     var nature: String
     var description: String
     var startDateEstimated: String
@@ -27,7 +28,7 @@ struct Chantier: Decodable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, reference, title, status, priority, clientId
-        case addressLine1, addressLine2, postalCode, city
+        case addressLine1, addressLine2, postalCode, city, country
         case nature, description, startDateEstimated, endDateEstimated
         case budgetEstimatedHT, budgetEstimatedTTC, notes, createdAt
     }
@@ -44,6 +45,7 @@ struct Chantier: Decodable, Identifiable, Equatable {
         addressLine2 = c.str(.addressLine2)
         postalCode = c.str(.postalCode)
         city = c.str(.city)
+        country = c.str(.country)
         nature = c.str(.nature)
         description = c.str(.description)
         startDateEstimated = c.str(.startDateEstimated)

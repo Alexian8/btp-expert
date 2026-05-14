@@ -7,6 +7,7 @@ import SwiftUI
 struct ClientsView: View {
     @StateObject private var vm = ResourceListViewModel<Client>(path: "/api/clients")
     @State private var search = ""
+    @State private var showCreate = false
 
     private var filtered: [Client] {
         guard !search.isEmpty else { return vm.items }
@@ -35,7 +36,9 @@ struct ClientsView: View {
                     }
                     ForEach(filtered) { client in
                         NavigationLink {
-                            ClientDetailView(client: client)
+                            ClientDetailView(client: client) {
+                                Task { await vm.load() }
+                            }
                         } label: {
                             ClientRow(client: client)
                         }
@@ -56,6 +59,21 @@ struct ClientsView: View {
         .background(Theme.background)
         .navigationTitle("Clients")
         .searchable(text: $search, prompt: "Rechercher un client")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Nouveau client")
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            ClientFormView { _ in
+                Task { await vm.load() }
+            }
+        }
         .task { await vm.loadIfNeeded() }
     }
 }
@@ -93,7 +111,19 @@ struct ClientRow: View {
 
 // ─── Détail ───────────────────────────────────────────────────────────────
 struct ClientDetailView: View {
-    let client: Client
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var client: Client
+    let onChanged: () -> Void
+
+    @State private var showEdit = false
+    @State private var showDeleteConfirm = false
+    @State private var actionError: String?
+
+    init(client: Client, onChanged: @escaping () -> Void = {}) {
+        _client = State(initialValue: client)
+        self.onChanged = onChanged
+    }
 
     var body: some View {
         ScrollView {
@@ -155,5 +185,62 @@ struct ClientDetailView: View {
         .background(Theme.background)
         .navigationTitle(client.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showEdit = true
+                    } label: {
+                        Label("Modifier", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Supprimer", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            ClientFormView(editing: client) { updated in
+                client = updated
+                onChanged()
+            }
+        }
+        .confirmationDialog(
+            "Supprimer ce client ?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                Task { await performDelete() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action est définitive.")
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
+    }
+
+    private func performDelete() async {
+        do {
+            try await APIClient.shared.delete("/api/clients/\(client.id)")
+            onChanged()
+            dismiss()
+        } catch {
+            actionError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 }

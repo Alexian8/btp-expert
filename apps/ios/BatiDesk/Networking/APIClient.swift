@@ -84,6 +84,28 @@ final class APIClient: ObservableObject {
         try await request("GET", path)
     }
 
+    /// POST — création. Le serveur renvoie 201 + l'entité créée.
+    /// ⚠️ Le backend exige un `id` (UUID) dans le corps (primaryKey "client").
+    func create<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
+        try await request("POST", path, body: body)
+    }
+
+    /// PATCH — mise à jour partielle. Seules les clés envoyées sont modifiées
+    /// côté serveur ; renvoie 200 + l'entité à jour.
+    func update<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
+        try await request("PATCH", path, body: body)
+    }
+
+    /// DELETE — suppression. Le serveur renvoie 204 (corps vide).
+    func delete(_ path: String) async throws {
+        _ = try await rawRequest("DELETE", path)
+    }
+
+    /// Génère un identifiant UUID minuscule, comme `crypto.randomUUID()` côté web.
+    static func newID() -> String {
+        UUID().uuidString.lowercased()
+    }
+
     // ─── Requête brute (corps non décodé / réponses 204) ───────────────────
     @discardableResult
     func rawRequest(_ method: String, _ path: String, body: Encodable? = nil) async throws -> Data {

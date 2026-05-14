@@ -39,4 +39,16 @@ final class ClientDirectory: ObservableObject {
     func client(_ clientId: String) -> Client? {
         byId[clientId]
     }
+
+    /// Tous les clients triés par nom — pour les sélecteurs (ex: form chantier).
+    var allClientsSorted: [Client] {
+        byId.values.sorted {
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    /// Met à jour le cache après une création / modification de client.
+    func upsert(_ client: Client) {
+        byId[client.id] = client
+    }
 }
