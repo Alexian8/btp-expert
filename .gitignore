@@ -58,6 +58,11 @@ apps/server/*.db-journal
 apps/server/*.db-wal
 apps/server/*.db-shm
 
+# Tarballs de déploiement (node_modules prébuildés, > 30MB — ne JAMAIS
+# commit dans Git : ça bloat le repo de façon permanente).
+*.tar.gz
+deploy-node-modules.tar.gz
+
 # cPanel
 .cpanel.yml.bak
 
