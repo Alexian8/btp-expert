@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import type { QuoteItem, QuoteTotals, VatRate } from "./quotes";
+import { safeMeta } from "./safe-meta";
 
 // ─── Statuts de facture ──────────────────────────────────────────────────
 export type InvoiceStatus =
@@ -38,14 +39,14 @@ export type InvoicePaymentMethod =
   | "prelevement"
   | "autre";
 
-export const PAYMENT_METHOD_META: Record<InvoicePaymentMethod, { label: string }> = {
+export const PAYMENT_METHOD_META: Record<InvoicePaymentMethod, { label: string }> = safeMeta({
   virement:    { label: "Virement" },
   cheque:      { label: "Chèque" },
   especes:     { label: "Espèces" },
   carte:       { label: "Carte bancaire" },
   prelevement: { label: "Prélèvement" },
   autre:       { label: "Autre" },
-};
+});
 
 // ─── Facture complète ────────────────────────────────────────────────────
 export interface Invoice {
@@ -145,19 +146,19 @@ export const EMPTY_INVOICE: Omit<Invoice, "id" | "reference" | "createdAt" | "up
 };
 
 // ─── Meta statuts ────────────────────────────────────────────────────────
-export const INVOICE_STATUS_META: Record<InvoiceStatus, { label: string; color: string }> = {
+export const INVOICE_STATUS_META: Record<InvoiceStatus, { label: string; color: string }> = safeMeta({
   brouillon:              { label: "Brouillon",              color: "slate"  },
   envoyee:                { label: "Envoyée",                color: "blue"   },
   "partiellement-payee":  { label: "Partiellement payée",    color: "amber"  },
   payee:                  { label: "Payée",                  color: "emerald"},
   annulee:                { label: "Annulée",                color: "rose"   },
-};
+});
 
 export const INVOICE_STATUS_ORDER: InvoiceStatus[] = [
   "brouillon", "envoyee", "partiellement-payee", "payee", "annulee",
 ];
 
-export const INVOICE_TYPE_META: Record<InvoiceType, { label: string; shortLabel: string; description: string }> = {
+export const INVOICE_TYPE_META: Record<InvoiceType, { label: string; shortLabel: string; description: string }> = safeMeta({
   standard: {
     label: "Facture standard",
     shortLabel: "Standard",
@@ -173,7 +174,7 @@ export const INVOICE_TYPE_META: Record<InvoiceType, { label: string; shortLabel:
     shortLabel: "Avoir",
     description: "Annulation ou remboursement (montants négatifs)",
   },
-};
+});
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────
 

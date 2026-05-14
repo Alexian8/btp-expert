@@ -7,6 +7,8 @@
 //     payés par le dirigeant ou un employé
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 export type ExpenseNoteCategory =
   | "carburant"        // Carburant véhicule
   | "peage"            // Péage autoroute
@@ -78,7 +80,7 @@ export const EXPENSE_NOTE_CATEGORY_META: Record<ExpenseNoteCategory, {
   label: string;
   defaultVatRate: number;       // taux TVA par défaut pour cette catégorie
   colorTw: string;
-}> = {
+}> = safeMeta({
   carburant:       { label: "Carburant",        defaultVatRate: 20,  colorTw: "bg-amber-500/15 text-amber-500" },
   peage:           { label: "Péage",             defaultVatRate: 20,  colorTw: "bg-orange-500/15 text-orange-500" },
   parking:         { label: "Parking",           defaultVatRate: 20,  colorTw: "bg-yellow-500/15 text-yellow-500" },
@@ -92,25 +94,25 @@ export const EXPENSE_NOTE_CATEGORY_META: Record<ExpenseNoteCategory, {
   abonnement:      { label: "Abonnement",        defaultVatRate: 20,  colorTw: "bg-cyan-500/15 text-cyan-500" },
   cadeau:           { label: "Cadeau client",     defaultVatRate: 20,  colorTw: "bg-rose-500/15 text-rose-500" },
   autre:           { label: "Autre",             defaultVatRate: 20,  colorTw: "bg-slate-500/15 text-slate-500" },
-};
+});
 
 export const EXPENSE_NOTE_STATUS_META: Record<ExpenseNoteStatus, {
   label: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   brouillon:    { label: "Brouillon",     colorTw: "bg-slate-500/15 text-slate-500" },
   validee:      { label: "Validée",       colorTw: "bg-blue-500/15 text-blue-500" },
   remboursee:   { label: "Remboursée",    colorTw: "bg-emerald-500/15 text-emerald-500" },
   refacturee:   { label: "Refacturée",    colorTw: "bg-violet-500/15 text-violet-500" },
-};
+});
 
 export const EXPENSE_NOTE_PAYER_META: Record<ExpenseNotePayer, {
   label: string;
-}> = {
+}> = safeMeta({
   dirigeant:   { label: "Dirigeant" },
   employe:     { label: "Employé" },
   carte_pro:   { label: "Carte pro" },
-};
+});
 
 // ─── Stats ────────────────────────────────────────────────────────────────
 export interface ExpenseNoteStats {

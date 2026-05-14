@@ -8,6 +8,8 @@
 //   - Réglementé par la loi du 31/12/1975
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 export type SubcontractorActivity =
   | "maconnerie"      // Maçonnerie / gros œuvre
   | "couverture"      // Couverture / zinguerie
@@ -76,7 +78,7 @@ export interface Subcontractor {
 export const SUBCONTRACTOR_ACTIVITY_META: Record<SubcontractorActivity, {
   label: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   maconnerie:   { label: "Maçonnerie",          colorTw: "bg-stone-500/15 text-stone-500" },
   couverture:   { label: "Couverture",          colorTw: "bg-slate-500/15 text-slate-500" },
   menuiserie:   { label: "Menuiserie",          colorTw: "bg-amber-700/15 text-amber-700" },
@@ -92,7 +94,7 @@ export const SUBCONTRACTOR_ACTIVITY_META: Record<SubcontractorActivity, {
   facade:       { label: "Façade / ITE",         colorTw: "bg-emerald-500/15 text-emerald-500" },
   metallerie:   { label: "Métallerie",           colorTw: "bg-gray-600/15 text-gray-600" },
   autre:        { label: "Autre",                colorTw: "bg-slate-500/15 text-slate-500" },
-};
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Attestations (URSSAF, décennale, RC, fiscale, etc.)
@@ -133,7 +135,7 @@ export const ATTESTATION_TYPE_META: Record<AttestationType, {
   defaultDurationMonths: number;  // durée de validité par défaut
   required: boolean;              // requise par la loi
   colorTw: string;
-}> = {
+}> = safeMeta({
   urssaf:              { label: "Attestation URSSAF",            defaultDurationMonths: 6,  required: true,  colorTw: "bg-emerald-500/15 text-emerald-500" },
   fiscale:             { label: "Régularité fiscale",            defaultDurationMonths: 12, required: true,  colorTw: "bg-blue-500/15 text-blue-500" },
   decennale:           { label: "Assurance décennale",            defaultDurationMonths: 12, required: true,  colorTw: "bg-violet-500/15 text-violet-500" },
@@ -144,7 +146,7 @@ export const ATTESTATION_TYPE_META: Record<AttestationType, {
   list_salaries:        { label: "Liste salariés étrangers",      defaultDurationMonths: 6,  required: false, colorTw: "bg-pink-500/15 text-pink-500" },
   vigilance_etranger:   { label: "Vigilance étrangers",            defaultDurationMonths: 6,  required: false, colorTw: "bg-rose-500/15 text-rose-500" },
   autre:                { label: "Autre",                           defaultDurationMonths: 12, required: false, colorTw: "bg-slate-500/15 text-slate-500" },
-};
+});
 
 // ─── Statut d'une attestation (calculé) ───────────────────────────────────
 export type AttestationStatus = "valide" | "expire_bientot" | "expiree";
@@ -166,11 +168,11 @@ export function getAttestationStatus(expirationDate: string, warningDays = 30): 
 export const ATTESTATION_STATUS_META: Record<AttestationStatus, {
   label: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   valide:          { label: "Valide",         colorTw: "bg-emerald-500/15 text-emerald-500" },
   expire_bientot:  { label: "Expire bientôt", colorTw: "bg-amber-500/15 text-amber-500" },
   expiree:         { label: "EXPIRÉE",        colorTw: "bg-red-500/15 text-red-500" },
-};
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Stats

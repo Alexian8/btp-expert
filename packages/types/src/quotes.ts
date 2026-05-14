@@ -2,6 +2,8 @@
 // Types Devis (Session 8)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 export type QuoteStatus = "brouillon" | "envoye" | "accepte" | "refuse";
 
 export type VatRate = 0 | 5.5 | 10 | 20;
@@ -20,12 +22,12 @@ export type QuoteItemKind = "line" | "section";
 // "" = non spécifié, "P" = Pose seule, "F" = Fourniture seule, "PF" = Pose + Fourniture
 export type LineWorkType = "" | "P" | "F" | "PF";
 
-export const LINE_WORK_TYPE_META: Record<LineWorkType, { label: string; longLabel: string }> = {
+export const LINE_WORK_TYPE_META: Record<LineWorkType, { label: string; longLabel: string }> = safeMeta({
   "": { label: "—", longLabel: "Non spécifié" },
   "P": { label: "P", longLabel: "Pose" },
   "F": { label: "F", longLabel: "Fourniture" },
   "PF": { label: "PF", longLabel: "Pose et fourniture" },
-};
+});
 
 export interface QuoteItem {
   id: string;
@@ -162,12 +164,12 @@ export const EMPTY_QUOTE: Omit<Quote, "id" | "reference" | "createdAt" | "update
 };
 
 // ─── Meta statuts ───────────────────────────────────────────────────────
-export const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; color: string }> = {
+export const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; color: string }> = safeMeta({
   brouillon: { label: "Brouillon", color: "slate"   },
   envoye:    { label: "Envoyé",    color: "blue"    },
   accepte:   { label: "Accepté",   color: "emerald" },
   refuse:    { label: "Refusé",    color: "rose"    },
-};
+});
 
 export const QUOTE_STATUS_ORDER: QuoteStatus[] = ["brouillon", "envoye", "accepte", "refuse"];
 

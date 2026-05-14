@@ -2,6 +2,8 @@
 // Types Chantiers (Session 6 + Session 7)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 export type ChantierStatus = "prospect" | "en-cours" | "termine" | "annule";
 
 export type ChantierPriority = "low" | "normal" | "high";
@@ -115,20 +117,20 @@ export interface Chantier {
 }
 
 // ─── Constantes ──────────────────────────────────────────────────────────
-export const CHANTIER_STATUS_META: Record<ChantierStatus, { label: string; color: string }> = {
+export const CHANTIER_STATUS_META: Record<ChantierStatus, { label: string; color: string }> = safeMeta({
   "prospect":  { label: "Prospect",  color: "slate"    },
   "en-cours":  { label: "En cours",  color: "blue"     },
   "termine":   { label: "Terminé",   color: "emerald"  },
   "annule":    { label: "Annulé",    color: "rose"     },
-};
+});
 
 export const CHANTIER_STATUS_ORDER: ChantierStatus[] = ["prospect", "en-cours", "termine", "annule"];
 
-export const CHANTIER_PRIORITY_META: Record<ChantierPriority, { label: string; color: string }> = {
+export const CHANTIER_PRIORITY_META: Record<ChantierPriority, { label: string; color: string }> = safeMeta({
   "low":    { label: "Basse",  color: "slate" },
   "normal": { label: "Normale", color: "blue" },
   "high":   { label: "Haute",  color: "amber" },
-};
+});
 
 export const COMMON_CHANTIER_TAGS = [
   "Rénovation", "Neuf", "Extension", "Toiture", "Plomberie",

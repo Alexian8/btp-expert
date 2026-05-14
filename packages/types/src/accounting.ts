@@ -2,6 +2,8 @@
 // Types Comptabilité (Session 13 - Mix A+C : suivi + FEC)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 export type ExpenseCategory =
   | "materiaux"        // matériaux de construction
   | "outillage"        // matériel et outillage
@@ -75,7 +77,7 @@ export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, {
   emoji: string;            // pour affichage rapide (la convention sans-emoji UI ne s'applique qu'aux composants visuels — ici c'est dans des labels textuels, mais on les évitera dans le rendu)
   pcgAccount: string;       // compte PCG associé (pour FEC)
   colorTw: string;          // classe Tailwind
-}> = {
+}> = safeMeta({
   materiaux:       { label: "Matériaux",            emoji: "",  pcgAccount: "601000", colorTw: "bg-blue-500/15 text-blue-500" },
   outillage:       { label: "Outillage",             emoji: "",  pcgAccount: "606300", colorTw: "bg-violet-500/15 text-violet-500" },
   carburant:       { label: "Carburant",             emoji: "",  pcgAccount: "606100", colorTw: "bg-amber-500/15 text-amber-500" },
@@ -94,7 +96,7 @@ export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, {
   logiciel:        { label: "Logiciels",             emoji: "",  pcgAccount: "651600", colorTw: "bg-fuchsia-500/15 text-fuchsia-500" },
   publicite:       { label: "Publicité",             emoji: "",  pcgAccount: "623000", colorTw: "bg-red-500/15 text-red-500" },
   autre:           { label: "Autre",                 emoji: "",  pcgAccount: "658000", colorTw: "bg-gray-500/15 text-gray-500" },
-};
+});
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   cb:           "Carte bancaire",
@@ -108,11 +110,11 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 export const EXPENSE_STATUS_META: Record<ExpenseStatus, {
   label: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   a_payer:  { label: "À payer",  colorTw: "bg-amber-500/15 text-amber-500" },
   payee:    { label: "Payée",     colorTw: "bg-emerald-500/15 text-emerald-500" },
   annulee:  { label: "Annulée",   colorTw: "bg-slate-500/15 text-slate-500" },
-};
+});
 
 // ─── Stats ────────────────────────────────────────────────────────────────
 export interface FinanceStats {

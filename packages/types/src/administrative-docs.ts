@@ -8,6 +8,8 @@
 //   - Documents RGE / MaPrimeRénov' (préparation 2026)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PV DE RÉCEPTION DE CHANTIER
 // ═══════════════════════════════════════════════════════════════════════════
@@ -83,7 +85,7 @@ export const RECEPTION_TYPE_META: Record<ReceptionType, {
   label: string;
   colorTw: string;
   description: string;
-}> = {
+}> = safeMeta({
   sans_reserves: {
     label: "Sans réserves",
     colorTw: "bg-emerald-500/15 text-emerald-500",
@@ -99,13 +101,13 @@ export const RECEPTION_TYPE_META: Record<ReceptionType, {
     colorTw: "bg-red-500/15 text-red-500",
     description: "Travaux non réceptionnés",
   },
-};
+});
 
-export const RECEPTION_STATUS_META: Record<ReceptionStatus, { label: string; colorTw: string }> = {
+export const RECEPTION_STATUS_META: Record<ReceptionStatus, { label: string; colorTw: string }> = safeMeta({
   brouillon: { label: "Brouillon", colorTw: "bg-slate-500/15 text-slate-500" },
   signe:     { label: "Signé",      colorTw: "bg-emerald-500/15 text-emerald-500" },
   annule:    { label: "Annulé",     colorTw: "bg-red-500/15 text-red-500" },
-};
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ATTESTATIONS TVA RÉDUITE
@@ -188,7 +190,7 @@ export const TVA_RATE_META: Record<string, {
   label: string;
   description: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   "5.5": {
     label: "TVA 5,5%",
     description: "Travaux d'amélioration de la qualité énergétique",
@@ -199,21 +201,21 @@ export const TVA_RATE_META: Record<string, {
     description: "Travaux d'amélioration, transformation, aménagement, entretien",
     colorTw: "bg-blue-500/15 text-blue-500",
   },
-};
+});
 
-export const LOGEMENT_TYPE_META: Record<LogementType, { label: string }> = {
+export const LOGEMENT_TYPE_META: Record<LogementType, { label: string }> = safeMeta({
   residence_principale:   { label: "Résidence principale" },
   residence_secondaire:   { label: "Résidence secondaire" },
   logement_loue:           { label: "Logement loué" },
   ehpad:                   { label: "EHPAD / médico-social" },
   autre:                   { label: "Autre" },
-};
+});
 
-export const TVA_ATTESTATION_STATUS_META: Record<TvaAttestationStatus, { label: string; colorTw: string }> = {
+export const TVA_ATTESTATION_STATUS_META: Record<TvaAttestationStatus, { label: string; colorTw: string }> = safeMeta({
   brouillon:  { label: "Brouillon", colorTw: "bg-slate-500/15 text-slate-500" },
   signee:     { label: "Signée",     colorTw: "bg-emerald-500/15 text-emerald-500" },
   archivee:   { label: "Archivée",   colorTw: "bg-blue-500/15 text-blue-500" },
-};
+});
 
 // Engagements pré-remplis selon le taux TVA
 export const TVA_5_5_COMMITMENTS = [
@@ -284,12 +286,12 @@ export interface Dc4Declaration {
   updatedAt: string;
 }
 
-export const DC4_STATUS_META: Record<Dc4Status, { label: string; colorTw: string }> = {
+export const DC4_STATUS_META: Record<Dc4Status, { label: string; colorTw: string }> = safeMeta({
   brouillon: { label: "Brouillon", colorTw: "bg-slate-500/15 text-slate-500" },
   envoyee:   { label: "Envoyée",   colorTw: "bg-blue-500/15 text-blue-500" },
   acceptee:  { label: "Acceptée",  colorTw: "bg-emerald-500/15 text-emerald-500" },
   refusee:   { label: "Refusée",   colorTw: "bg-red-500/15 text-red-500" },
-};
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DOCUMENTS RGE / MaPrimeRénov' (préparation 2026)
@@ -325,13 +327,13 @@ export interface RgeDocument {
   updatedAt: string;
 }
 
-export const RGE_DOCUMENT_TYPE_META: Record<RgeDocumentType, { label: string }> = {
+export const RGE_DOCUMENT_TYPE_META: Record<RgeDocumentType, { label: string }> = safeMeta({
   devis_rge:        { label: "Devis RGE" },
   facture_rge:      { label: "Facture RGE" },
   attestation_rge:  { label: "Attestation fin de travaux RGE" },
   fiche_technique:  { label: "Fiche technique" },
   autre:            { label: "Autre" },
-};
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Stats globales

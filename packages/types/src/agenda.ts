@@ -2,6 +2,8 @@
 // Types Agenda (Session 12)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 export type AgendaEventType = "chantier" | "rdv" | "signature" | "intervention" | "autre";
 
 export interface AgendaEvent {
@@ -41,7 +43,7 @@ export const AGENDA_TYPE_META: Record<AgendaEventType, {
   colorHex: string;
   colorTw: string;
   bgTw: string;
-}> = {
+}> = safeMeta({
   chantier: {
     label: "Chantier",
     colorHex: "#3b82f6",
@@ -72,7 +74,7 @@ export const AGENDA_TYPE_META: Record<AgendaEventType, {
     colorTw: "text-slate-500",
     bgTw: "bg-slate-500/15 text-slate-500 border-slate-500/30",
   },
-};
+});
 
 // ─── Stats ────────────────────────────────────────────────────────────────
 export interface AgendaStats {

@@ -1,3 +1,4 @@
+export * from "./safe-meta";
 export * from "./entities";
 export * from "./settings";
 export * from "./backup";

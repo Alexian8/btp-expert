@@ -2,6 +2,8 @@
 // Types Bons de commande + Situations de travaux (Session 15)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { safeMeta } from "./safe-meta";
+
 // ─── Statut BdC ───────────────────────────────────────────────────────────
 export type PurchaseOrderStatus =
   | "brouillon"          // En cours de saisie
@@ -79,7 +81,7 @@ export interface PurchaseOrder {
 export const PO_STATUS_META: Record<PurchaseOrderStatus, {
   label: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   brouillon: { label: "Brouillon",  colorTw: "bg-slate-500/15 text-slate-500" },
   envoye:    { label: "Envoyé",      colorTw: "bg-blue-500/15 text-blue-500" },
   signe:     { label: "Signé",        colorTw: "bg-violet-500/15 text-violet-500" },
@@ -87,7 +89,7 @@ export const PO_STATUS_META: Record<PurchaseOrderStatus, {
   termine:   { label: "Terminé",      colorTw: "bg-emerald-500/15 text-emerald-500" },
   solde:     { label: "Soldé",        colorTw: "bg-green-700/15 text-green-700" },
   annule:    { label: "Annulé",       colorTw: "bg-red-500/15 text-red-500" },
-};
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Situations de travaux (factures intermédiaires d'avancement)
@@ -155,12 +157,12 @@ export interface Situation {
 export const SITUATION_STATUS_META: Record<SituationStatus, {
   label: string;
   colorTw: string;
-}> = {
+}> = safeMeta({
   brouillon: { label: "Brouillon", colorTw: "bg-slate-500/15 text-slate-500" },
   validee:   { label: "Validée",    colorTw: "bg-blue-500/15 text-blue-500" },
   payee:     { label: "Payée",      colorTw: "bg-emerald-500/15 text-emerald-500" },
   annulee:   { label: "Annulée",    colorTw: "bg-red-500/15 text-red-500" },
-};
+});
 
 // ─── Stats ────────────────────────────────────────────────────────────────
 export interface PurchaseOrderStats {
