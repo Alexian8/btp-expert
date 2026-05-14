@@ -113,6 +113,23 @@ enum Format {
         return displayLongDate.string(from: d)
     }
 
+    private static let isoDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// Formate une Date en "yyyy-MM-dd" (format attendu par le backend).
+    static func isoDay(_ date: Date) -> String {
+        isoDayFormatter.string(from: date)
+    }
+
+    /// Date du jour au format "yyyy-MM-dd".
+    static func todayISODay() -> String {
+        isoDayFormatter.string(from: Date())
+    }
+
     // ─── Téléphone & SIRET ─────────────────────────────────────────────────
     static func phone(_ raw: String) -> String {
         let digits = raw.filter { $0.isNumber }

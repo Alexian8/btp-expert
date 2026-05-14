@@ -7,6 +7,7 @@ import SwiftUI
 struct SuppliersView: View {
     @StateObject private var vm = ResourceListViewModel<Supplier>(path: "/api/suppliers")
     @State private var search = ""
+    @State private var showCreate = false
 
     private var filtered: [Supplier] {
         guard !search.isEmpty else { return vm.items }
@@ -35,7 +36,9 @@ struct SuppliersView: View {
                     }
                     ForEach(filtered) { supplier in
                         NavigationLink {
-                            SupplierDetailView(supplier: supplier)
+                            SupplierDetailView(supplier: supplier) {
+                                Task { await vm.load() }
+                            }
                         } label: {
                             SupplierRow(supplier: supplier)
                         }
@@ -57,6 +60,21 @@ struct SuppliersView: View {
         .navigationTitle("Fournisseurs")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Rechercher un fournisseur")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Nouveau fournisseur")
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            SupplierFormView { _ in
+                Task { await vm.load() }
+            }
+        }
         .task { await vm.loadIfNeeded() }
     }
 }
@@ -92,7 +110,19 @@ struct SupplierRow: View {
 
 // ─── Détail ───────────────────────────────────────────────────────────────
 struct SupplierDetailView: View {
-    let supplier: Supplier
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var supplier: Supplier
+    let onChanged: () -> Void
+
+    @State private var showEdit = false
+    @State private var showDeleteConfirm = false
+    @State private var actionError: String?
+
+    init(supplier: Supplier, onChanged: @escaping () -> Void = {}) {
+        _supplier = State(initialValue: supplier)
+        self.onChanged = onChanged
+    }
 
     var body: some View {
         ScrollView {
@@ -160,5 +190,62 @@ struct SupplierDetailView: View {
         .background(Theme.background)
         .navigationTitle(supplier.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showEdit = true
+                    } label: {
+                        Label("Modifier", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Supprimer", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            SupplierFormView(editing: supplier) { updated in
+                supplier = updated
+                onChanged()
+            }
+        }
+        .confirmationDialog(
+            "Supprimer ce fournisseur ?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                Task { await performDelete() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action est définitive.")
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
+    }
+
+    private func performDelete() async {
+        do {
+            try await APIClient.shared.delete("/api/suppliers/\(supplier.id)")
+            onChanged()
+            dismiss()
+        } catch {
+            actionError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 }

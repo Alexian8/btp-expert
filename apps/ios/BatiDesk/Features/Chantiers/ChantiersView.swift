@@ -9,6 +9,7 @@ struct ChantiersView: View {
     @StateObject private var vm = ResourceListViewModel<Chantier>(path: "/api/chantiers")
     @State private var search = ""
     @State private var statusFilter: String = "tous"
+    @State private var showCreate = false
 
     private let statuses: [(id: String, label: String)] = [
         ("tous", "Tous"),
@@ -48,7 +49,9 @@ struct ChantiersView: View {
                     statusPicker
                     ForEach(filtered) { chantier in
                         NavigationLink {
-                            ChantierDetailView(chantier: chantier)
+                            ChantierDetailView(chantier: chantier) {
+                                Task { await vm.load() }
+                            }
                         } label: {
                             ChantierRow(
                                 chantier: chantier,
@@ -72,6 +75,21 @@ struct ChantiersView: View {
         .background(Theme.background)
         .navigationTitle("Chantiers")
         .searchable(text: $search, prompt: "Rechercher un chantier")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Nouveau chantier")
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            ChantierFormView { _ in
+                Task { await vm.load() }
+            }
+        }
         .task {
             await vm.loadIfNeeded()
             await clientDirectory.loadIfNeeded()
@@ -136,10 +154,21 @@ struct ChantierRow: View {
 
 // ─── Détail ───────────────────────────────────────────────────────────────
 struct ChantierDetailView: View {
-    let chantier: Chantier
-
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var clientDirectory: ClientDirectory
+
+    @State private var chantier: Chantier
+    let onChanged: () -> Void
+
     @State private var linkedClient: Client?
+    @State private var showEdit = false
+    @State private var showDeleteConfirm = false
+    @State private var actionError: String?
+
+    init(chantier: Chantier, onChanged: @escaping () -> Void = {}) {
+        _chantier = State(initialValue: chantier)
+        self.onChanged = onChanged
+    }
 
     var body: some View {
         ScrollView {
@@ -235,12 +264,74 @@ struct ChantierDetailView: View {
         .background(Theme.background)
         .navigationTitle("Chantier")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if let cached = clientDirectory.client(chantier.clientId) {
-                linkedClient = cached
-            } else if !chantier.clientId.isEmpty {
-                linkedClient = try? await APIClient.shared.get("/api/clients/\(chantier.clientId)")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showEdit = true
+                    } label: {
+                        Label("Modifier", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Supprimer", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
             }
+        }
+        .sheet(isPresented: $showEdit) {
+            ChantierFormView(editing: chantier) { updated in
+                chantier = updated
+                onChanged()
+                Task { await resolveLinkedClient() }
+            }
+        }
+        .confirmationDialog(
+            "Supprimer ce chantier ?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                Task { await performDelete() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action est définitive.")
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
+        .task { await resolveLinkedClient() }
+    }
+
+    private func resolveLinkedClient() async {
+        if let cached = clientDirectory.client(chantier.clientId) {
+            linkedClient = cached
+        } else if !chantier.clientId.isEmpty {
+            linkedClient = try? await APIClient.shared.get("/api/clients/\(chantier.clientId)")
+        } else {
+            linkedClient = nil
+        }
+    }
+
+    private func performDelete() async {
+        do {
+            try await APIClient.shared.delete("/api/chantiers/\(chantier.id)")
+            onChanged()
+            dismiss()
+        } catch {
+            actionError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 }

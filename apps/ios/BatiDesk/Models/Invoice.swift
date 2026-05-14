@@ -2,7 +2,7 @@ import Foundation
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Invoice — facture. Route /api/invoices.
-// (cf packages/types/src/invoices.ts)
+// (cf packages/types/src/invoices.ts ; colonnes : apps/server/src/db.ts)
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct Invoice: Decodable, Identifiable, Equatable {
@@ -16,8 +16,15 @@ struct Invoice: Decodable, Identifiable, Equatable {
     var fromQuoteId: String
     var issueDate: String
     var dueDate: String
+    var paymentTermsDays: Int
     var sentAt: String
     var paidAt: String
+    var items: [QuoteItem]
+    var globalDiscountMode: String   // none | percent | amount
+    var globalDiscountPercent: Double
+    var globalDiscountAmount: Double
+    var introText: String
+    var conditionsText: String
     var totalHT: Double
     var totalTTC: Double
     var totalPaid: Double
@@ -25,8 +32,9 @@ struct Invoice: Decodable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, reference, status, type, title, clientId, chantierId, fromQuoteId
-        case issueDate, dueDate, sentAt, paidAt
-        case totalHT, totalTTC, totalPaid, createdAt
+        case issueDate, dueDate, paymentTermsDays, sentAt, paidAt, items
+        case globalDiscountMode, globalDiscountPercent, globalDiscountAmount
+        case introText, conditionsText, totalHT, totalTTC, totalPaid, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -41,8 +49,16 @@ struct Invoice: Decodable, Identifiable, Equatable {
         fromQuoteId = c.str(.fromQuoteId)
         issueDate = c.str(.issueDate)
         dueDate = c.str(.dueDate)
+        paymentTermsDays = c.intVal(.paymentTermsDays)
         sentAt = c.str(.sentAt)
         paidAt = c.str(.paidAt)
+        items = c.jsonArray(.items, of: QuoteItem.self)
+        let mode = c.str(.globalDiscountMode)
+        globalDiscountMode = mode.isEmpty ? "none" : mode
+        globalDiscountPercent = c.dbl(.globalDiscountPercent)
+        globalDiscountAmount = c.dbl(.globalDiscountAmount)
+        introText = c.str(.introText)
+        conditionsText = c.str(.conditionsText)
         totalHT = c.dbl(.totalHT)
         totalTTC = c.dbl(.totalTTC)
         totalPaid = c.dbl(.totalPaid)
@@ -68,6 +84,8 @@ struct Invoice: Decodable, Identifiable, Equatable {
     }
 
     var remainingDue: Double { max(0, totalTTC - totalPaid) }
+
+    var lineCount: Int { items.filter { !$0.isSection }.count }
 
     /// En retard : envoyée ou partiellement payée + échéance dépassée.
     var isOverdue: Bool {

@@ -2,7 +2,7 @@ import SwiftUI
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QuotesInvoicesView — onglet « Devis & Factures ».
-// Sélecteur segmenté Devis / Factures, recherche, et écrans de détail.
+// Sélecteur segmenté Devis / Factures, recherche, création / édition / détail.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct QuotesInvoicesView: View {
@@ -17,6 +17,7 @@ struct QuotesInvoicesView: View {
     @StateObject private var invoicesVM = ResourceListViewModel<Invoice>(path: "/api/invoices")
     @State private var segment: Segment = .quotes
     @State private var search = ""
+    @State private var showCreate = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,27 @@ struct QuotesInvoicesView: View {
         .navigationTitle("Devis & Factures")
         .searchable(text: $search,
                     prompt: segment == .quotes ? "Rechercher un devis" : "Rechercher une facture")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel(segment == .quotes ? "Nouveau devis" : "Nouvelle facture")
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            if segment == .quotes {
+                QuoteEditorView { _ in
+                    Task { await quotesVM.load() }
+                }
+            } else {
+                InvoiceEditorView { _ in
+                    Task { await invoicesVM.load() }
+                }
+            }
+        }
         .task {
             await clientDirectory.loadIfNeeded()
             await quotesVM.loadIfNeeded()
@@ -60,7 +82,7 @@ struct QuotesInvoicesView: View {
             phase: quotesVM.phase,
             isEmpty: quotesVM.items.isEmpty,
             emptyTitle: "Aucun devis",
-            emptyMessage: "Les devis créés depuis BatiDesk apparaîtront ici.",
+            emptyMessage: "Touche + pour créer ton premier devis.",
             emptyIcon: "doc.text",
             retry: { Task { await quotesVM.load() } }
         ) {
@@ -71,7 +93,9 @@ struct QuotesInvoicesView: View {
                     }
                     ForEach(filteredQuotes) { quote in
                         NavigationLink {
-                            QuoteDetailView(quote: quote)
+                            QuoteDetailView(quote: quote) {
+                                Task { await quotesVM.load() }
+                            }
                         } label: {
                             QuoteRow(quote: quote, clientName: clientDirectory.name(for: quote.clientId))
                         }
@@ -107,7 +131,7 @@ struct QuotesInvoicesView: View {
             phase: invoicesVM.phase,
             isEmpty: invoicesVM.items.isEmpty,
             emptyTitle: "Aucune facture",
-            emptyMessage: "Les factures créées depuis BatiDesk apparaîtront ici.",
+            emptyMessage: "Touche + pour créer ta première facture.",
             emptyIcon: "doc.plaintext",
             retry: { Task { await invoicesVM.load() } }
         ) {
@@ -118,7 +142,9 @@ struct QuotesInvoicesView: View {
                     }
                     ForEach(filteredInvoices) { invoice in
                         NavigationLink {
-                            InvoiceDetailView(invoice: invoice)
+                            InvoiceDetailView(invoice: invoice) {
+                                Task { await invoicesVM.load() }
+                            }
                         } label: {
                             InvoiceRow(invoice: invoice, clientName: clientDirectory.name(for: invoice.clientId))
                         }
@@ -226,10 +252,30 @@ struct InvoiceRow: View {
 
 // ─── Détail devis ─────────────────────────────────────────────────────────
 struct QuoteDetailView: View {
-    let quote: Quote
-
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var clientDirectory: ClientDirectory
+
+    @State private var quote: Quote
+    let onChanged: () -> Void
+
     @State private var linkedClient: Client?
+    @State private var showEdit = false
+    @State private var showDeleteConfirm = false
+    @State private var actionError: String?
+
+    init(quote: Quote, onChanged: @escaping () -> Void = {}) {
+        _quote = State(initialValue: quote)
+        self.onChanged = onChanged
+    }
+
+    private var totals: QuoteMath.Totals {
+        QuoteMath.computeTotals(
+            items: quote.items,
+            globalDiscountMode: quote.globalDiscountMode,
+            globalDiscountPercent: quote.globalDiscountPercent,
+            globalDiscountAmount: quote.globalDiscountAmount
+        )
+    }
 
     var body: some View {
         ScrollView {
@@ -250,11 +296,26 @@ struct QuoteDetailView: View {
 
                 LinkedClientCard(client: linkedClient)
 
-                SectionCard(title: "Montants") {
+                if !quote.items.isEmpty {
+                    SectionCard(title: "Lignes (\(quote.lineCount))") {
+                        VStack(spacing: 12) {
+                            ForEach(quote.items) { item in
+                                QuoteItemRow(item: item)
+                            }
+                        }
+                    }
+                }
+
+                SectionCard(title: "Totaux") {
                     VStack(spacing: 12) {
-                        DetailRow(icon: "sum", label: "Total HT", value: Format.currency(quote.totalHT))
+                        DetailRow(icon: "sum", label: "Total HT", value: Format.currency(totals.totalHT))
+                        ForEach(totals.vatLines) { line in
+                            DetailRow(icon: "percent",
+                                      label: "TVA \(Format.trimNumber(line.rate)) %",
+                                      value: Format.currency(line.tax))
+                        }
                         DetailRow(icon: "eurosign.circle.fill", label: "Total TTC",
-                                  value: Format.currency(quote.totalTTC))
+                                  value: Format.currency(totals.totalTTC))
                     }
                 }
 
@@ -262,7 +323,7 @@ struct QuoteDetailView: View {
                     VStack(spacing: 12) {
                         DetailRow(icon: "calendar", label: "Émis le", value: Format.date(quote.issueDate))
                         DetailRow(icon: "calendar.badge.clock", label: "Valable jusqu'au",
-                                  value: Format.date(quote.validUntil))
+                                  value: Format.date(quote.validUntilDate))
                         if !quote.sentAt.isEmpty {
                             DetailRow(icon: "paperplane", label: "Envoyé le", value: Format.date(quote.sentAt))
                         }
@@ -272,12 +333,67 @@ struct QuoteDetailView: View {
                         }
                     }
                 }
+
+                if !quote.conditionsText.isEmpty {
+                    SectionCard(title: "Conditions") {
+                        DetailRow(icon: "doc.plaintext", label: "Conditions de règlement",
+                                  value: quote.conditionsText, multiline: true)
+                    }
+                }
             }
             .padding(16)
         }
         .background(Theme.background)
         .navigationTitle(quote.displayReference)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showEdit = true
+                    } label: {
+                        Label("Modifier", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Supprimer", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            QuoteEditorView(editing: quote) { updated in
+                quote = updated
+                onChanged()
+                Task { await resolveClient(updated.clientId) }
+            }
+        }
+        .confirmationDialog(
+            "Supprimer ce devis ?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                Task { await performDelete() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action est définitive.")
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
         .task { await resolveClient(quote.clientId) }
     }
 
@@ -286,16 +402,48 @@ struct QuoteDetailView: View {
             linkedClient = cached
         } else if !id.isEmpty {
             linkedClient = try? await APIClient.shared.get("/api/clients/\(id)")
+        } else {
+            linkedClient = nil
+        }
+    }
+
+    private func performDelete() async {
+        do {
+            try await APIClient.shared.delete("/api/quotes/\(quote.id)")
+            onChanged()
+            dismiss()
+        } catch {
+            actionError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 }
 
 // ─── Détail facture ───────────────────────────────────────────────────────
 struct InvoiceDetailView: View {
-    let invoice: Invoice
-
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var clientDirectory: ClientDirectory
+
+    @State private var invoice: Invoice
+    let onChanged: () -> Void
+
     @State private var linkedClient: Client?
+    @State private var showEdit = false
+    @State private var showDeleteConfirm = false
+    @State private var actionError: String?
+
+    init(invoice: Invoice, onChanged: @escaping () -> Void = {}) {
+        _invoice = State(initialValue: invoice)
+        self.onChanged = onChanged
+    }
+
+    private var totals: QuoteMath.Totals {
+        QuoteMath.computeTotals(
+            items: invoice.items,
+            globalDiscountMode: invoice.globalDiscountMode,
+            globalDiscountPercent: invoice.globalDiscountPercent,
+            globalDiscountAmount: invoice.globalDiscountAmount
+        )
+    }
 
     var body: some View {
         ScrollView {
@@ -321,11 +469,26 @@ struct InvoiceDetailView: View {
 
                 LinkedClientCard(client: linkedClient)
 
+                if !invoice.items.isEmpty {
+                    SectionCard(title: "Lignes (\(invoice.lineCount))") {
+                        VStack(spacing: 12) {
+                            ForEach(invoice.items) { item in
+                                QuoteItemRow(item: item)
+                            }
+                        }
+                    }
+                }
+
                 SectionCard(title: "Montants") {
                     VStack(spacing: 12) {
-                        DetailRow(icon: "sum", label: "Total HT", value: Format.currency(invoice.totalHT))
+                        DetailRow(icon: "sum", label: "Total HT", value: Format.currency(totals.totalHT))
+                        ForEach(totals.vatLines) { line in
+                            DetailRow(icon: "percent",
+                                      label: "TVA \(Format.trimNumber(line.rate)) %",
+                                      value: Format.currency(line.tax))
+                        }
                         DetailRow(icon: "eurosign.circle.fill", label: "Total TTC",
-                                  value: Format.currency(invoice.totalTTC))
+                                  value: Format.currency(totals.totalTTC))
                         DetailRow(icon: "checkmark.circle", label: "Déjà payé",
                                   value: Format.currency(invoice.totalPaid))
                         DetailRow(icon: "exclamationmark.circle", label: "Reste dû",
@@ -344,12 +507,67 @@ struct InvoiceDetailView: View {
                         }
                     }
                 }
+
+                if !invoice.conditionsText.isEmpty {
+                    SectionCard(title: "Conditions") {
+                        DetailRow(icon: "doc.plaintext", label: "Conditions de règlement",
+                                  value: invoice.conditionsText, multiline: true)
+                    }
+                }
             }
             .padding(16)
         }
         .background(Theme.background)
         .navigationTitle(invoice.displayReference)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showEdit = true
+                    } label: {
+                        Label("Modifier", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Supprimer", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            InvoiceEditorView(editing: invoice) { updated in
+                invoice = updated
+                onChanged()
+                Task { await resolveClient(updated.clientId) }
+            }
+        }
+        .confirmationDialog(
+            "Supprimer cette facture ?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                Task { await performDelete() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action est définitive.")
+        }
+        .alert(
+            "Action impossible",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
         .task { await resolveClient(invoice.clientId) }
     }
 
@@ -358,6 +576,18 @@ struct InvoiceDetailView: View {
             linkedClient = cached
         } else if !id.isEmpty {
             linkedClient = try? await APIClient.shared.get("/api/clients/\(id)")
+        } else {
+            linkedClient = nil
+        }
+    }
+
+    private func performDelete() async {
+        do {
+            try await APIClient.shared.delete("/api/invoices/\(invoice.id)")
+            onChanged()
+            dismiss()
+        } catch {
+            actionError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 }

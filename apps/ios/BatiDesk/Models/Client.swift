@@ -19,6 +19,7 @@ struct Client: Decodable, Identifiable, Equatable {
     var addressLine2: String
     var postalCode: String
     var city: String
+    var country: String
     var siret: String
     var notes: String
     var createdAt: String
@@ -26,7 +27,7 @@ struct Client: Decodable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, type, civility, firstName, lastName, companyName, email
         case phoneMobile, phoneFixed, addressLine1, addressLine2
-        case postalCode, city, siret, notes, createdAt
+        case postalCode, city, country, siret, notes, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -44,6 +45,7 @@ struct Client: Decodable, Identifiable, Equatable {
         addressLine2 = c.str(.addressLine2)
         postalCode = c.str(.postalCode)
         city = c.str(.city)
+        country = c.str(.country)
         siret = c.str(.siret)
         notes = c.str(.notes)
         createdAt = c.str(.createdAt)
