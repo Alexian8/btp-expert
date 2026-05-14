@@ -50,6 +50,11 @@ jobs:
 
       - name: Build web app
         run: npm run build -w @btp/web
+        env:
+          # Browser DSN is public by design (ships in client JS). Set it as a
+          # repo *variable* (not secret): Settings -> Secrets and variables ->
+          # Actions -> Variables. Empty = Sentry no-op.
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
 
       - name: Verify required secrets
         run: |
