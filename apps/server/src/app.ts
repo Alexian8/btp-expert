@@ -206,6 +206,22 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     res.json({ ok: true });
   });
 
+  // ─── Debug : déclenche une erreur volontaire pour tester Sentry ─────────
+  // Admin only. L'exception remonte jusqu'au handler d'erreur Express où
+  // Sentry la capture (si SENTRY_DSN est configuré). Réponse attendue : 500.
+  // Sert UNIQUEMENT à vérifier que le monitoring fonctionne — aucun effet
+  // de bord, aucune donnée touchée.
+  app.get(
+    "/api/debug/sentry-test",
+    requireAuth(cfg),
+    requireRole("admin"),
+    (_req: Request, _res: Response) => {
+      throw new Error(
+        `Sentry server test — ${new Date().toISOString()} (déclenché volontairement via /api/debug/sentry-test)`
+      );
+    }
+  );
+
   // Rate-limit STRICT sur le login (anti brute-force)
   app.use("/api/auth/login", buildLoginRateLimiter(cfg));
   app.use("/api/auth", buildAuthRouter(pool, cfg));
