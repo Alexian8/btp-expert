@@ -385,7 +385,7 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
 
                 <div>
                   <Label>Format de l'attestation</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-1.5">
+                  <div className="grid grid-cols-3 gap-2 mt-1.5">
                     <button
                       type="button"
                       onClick={() => setAttestationType("simplifiee")}
@@ -410,7 +410,20 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
                       )}
                     >
                       <p className="font-semibold">CERFA 1300-SD</p>
-                      <p className="text-[10.5px] opacity-80">Format officiel DGFIP</p>
+                      <p className="text-[10.5px] opacity-80">Modèle visuel DGFIP</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAttestationType("cerfa_officiel_1301sd")}
+                      className={cn(
+                        "p-2.5 rounded-md border text-xs text-left transition-all",
+                        attestationType === "cerfa_officiel_1301sd"
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
+                          : "border-border bg-card hover:bg-accent text-muted-foreground"
+                      )}
+                    >
+                      <p className="font-semibold">CERFA officiel 1301-SD</p>
+                      <p className="text-[10.5px] opacity-80">N°13948*06 — pré-rempli auto</p>
                     </button>
                   </div>
                 </div>
@@ -674,7 +687,11 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
                   <>
                     <Button variant="outline" size="sm" onClick={handleExportPdfPreview} loading={generatingPdf}>
                       <Eye className="w-3.5 h-3.5" />
-                      {attestationType === "cerfa_1300" ? "Aperçu CERFA + coffre" : "Aperçu PDF + coffre"}
+                      {attestationType === "cerfa_officiel_1301sd"
+                        ? "Aperçu CERFA officiel + coffre"
+                        : attestationType === "cerfa_1300"
+                          ? "Aperçu CERFA + coffre"
+                          : "Aperçu PDF + coffre"}
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleExportPdfSaveAs} loading={generatingPdf}>
                       <Download className="w-3.5 h-3.5" />

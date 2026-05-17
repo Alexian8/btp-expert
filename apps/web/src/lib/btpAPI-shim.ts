@@ -847,6 +847,7 @@ export function installBtpApiShim(): void {
   const adminReceptionPath = "/api/admin-docs/receptions";
   const adminTvaPath = "/api/admin-docs/tva";
   const adminDc4Path = "/api/admin-docs/dc4";
+  const adminDaactPath = "/api/admin-docs/daact";
   const adminRgePath = "/api/admin-docs/rge";
 
   const adminDocs = {
@@ -958,6 +959,34 @@ export function installBtpApiShim(): void {
       wrapAction(http("PATCH", `${adminDc4Path}/${encodeURIComponent(id)}`, data)),
     adminDc4Delete: (id: string) =>
       wrapAction(http("DELETE", `${adminDc4Path}/${encodeURIComponent(id)}`)),
+
+    // ─── DAACT (CERFA 13408*13) ─────────────────────────────────────────
+    adminDaactList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminDaactPath}${qs}`).catch(() => []);
+    },
+    adminDaactGetById: (id: string) =>
+      httpGet(`${adminDaactPath}/${encodeURIComponent(id)}`).catch(() => null),
+    adminDaactCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminDaactPath, ensureId(data))),
+    adminDaactUpdate: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminDaactPath}/${encodeURIComponent(id)}`, data)),
+    adminDaactDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminDaactPath}/${encodeURIComponent(id)}`)),
+    adminDaactExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/daact/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu DAACT"
+    ),
+    adminDaactExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/daact/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer DAACT"
+    ),
 
     // ─── RGE / MaPrimeRénov' ────────────────────────────────────────────
     adminRgeList: (filters?: Record<string, unknown>) => {

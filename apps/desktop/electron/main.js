@@ -1045,6 +1045,44 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_dc4_status ON dc4_declarations(status);
       CREATE INDEX IF NOT EXISTS idx_dc4_reference ON dc4_declarations(reference);
 
+      CREATE TABLE IF NOT EXISTS daact_declarations (
+        id TEXT PRIMARY KEY,
+        reference TEXT NOT NULL DEFAULT '',
+        chantierId TEXT DEFAULT '',
+        permitType TEXT DEFAULT 'permis_construire',
+        permitNumber TEXT DEFAULT '',
+        voiriesDifferees INTEGER DEFAULT 0,
+        voiriesDate TEXT DEFAULT '',
+        titulaireNom TEXT DEFAULT '',
+        titulairePrenom TEXT DEFAULT '',
+        denomination TEXT DEFAULT '',
+        siret TEXT DEFAULT '',
+        representantNom TEXT DEFAULT '',
+        representantPrenom TEXT DEFAULT '',
+        email TEXT DEFAULT '',
+        achievementDate TEXT DEFAULT '',
+        destinationChangeDate TEXT DEFAULT '',
+        partialWorks INTEGER DEFAULT 0,
+        partialWorksDescription TEXT DEFAULT '',
+        surfaceCreated REAL DEFAULT 0,
+        nbLogementsTotal INTEGER DEFAULT 0,
+        nbIndividuels INTEGER DEFAULT 0,
+        nbCollectifs INTEGER DEFAULT 0,
+        signedDate TEXT DEFAULT '',
+        signedLocation TEXT DEFAULT '',
+        declarantSignatureDataUrl TEXT DEFAULT '',
+        architectLocation TEXT DEFAULT '',
+        architectSignedDate TEXT DEFAULT '',
+        architectSignatureDataUrl TEXT DEFAULT '',
+        status TEXT DEFAULT 'brouillon',
+        vaultDocumentId TEXT DEFAULT '',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_daact_chantier ON daact_declarations(chantierId);
+      CREATE INDEX IF NOT EXISTS idx_daact_status ON daact_declarations(status);
+      CREATE INDEX IF NOT EXISTS idx_daact_reference ON daact_declarations(reference);
+
       CREATE TABLE IF NOT EXISTS rge_documents (
         id TEXT PRIMARY KEY,
         reference TEXT NOT NULL DEFAULT '',
@@ -5349,7 +5387,9 @@ ipcMain.handle("msOneDrive:restoreBackup", async (_e, { remoteName }) => {
 const { renderReceptionHtml } = require("./templates/receptionTemplate");
 const { renderTvaAttestationHtml } = require("./templates/tvaAttestationTemplate");
 const { renderTvaAttestationCerfaHtml } = require("./templates/tvaAttestationCerfaTemplate");
+const { renderTvaAttestationCerfaOfficielHtml } = require("./templates/tvaAttestationCerfaOfficielTemplate");
 const { renderDc4Html } = require("./templates/dc4Template");
+const { renderDaactCerfaHtml } = require("./templates/daactCerfaTemplate");
 
 // Helper : génère un PDF à partir d'un HTML
 async function generatePdfFromHtml(html, outputPath) {
@@ -5493,9 +5533,11 @@ async function generateTvaAttestationPdf(attestationId, outputPath) {
   const company = getCompanyData();
 
   // Choisir le template selon attestationType
-  const html = attestation.attestationType === "cerfa_1300"
-    ? renderTvaAttestationCerfaHtml({ attestation, company })
-    : renderTvaAttestationHtml({ attestation, company });
+  const html = attestation.attestationType === "cerfa_officiel_1301sd"
+    ? renderTvaAttestationCerfaOfficielHtml({ attestation, company })
+    : attestation.attestationType === "cerfa_1300"
+      ? renderTvaAttestationCerfaHtml({ attestation, company })
+      : renderTvaAttestationHtml({ attestation, company });
 
   await generatePdfFromHtml(html, outputPath);
   return outputPath;
@@ -5628,6 +5670,73 @@ ipcMain.handle("admin:dc4:exportPdfSaveAs", async (_e, declarationId) => {
     return { success: true, path: result.filePath };
   } catch (e) {
     console.error("[admin:dc4:exportPdfSaveAs]", e);
+    return { success: false, error: e.message };
+  }
+});
+
+// ─── DAACT (CERFA 13408*13) ────────────────────────────────────────────────
+async function generateDaactPdf(declarationId, outputPath) {
+  const declaration = db.prepare("SELECT * FROM daact_declarations WHERE id = ?").get(declarationId);
+  if (!declaration) throw new Error("DAACT introuvable");
+  declaration.voiriesDifferees = !!declaration.voiriesDifferees;
+  declaration.partialWorks = !!declaration.partialWorks;
+  const chantier = declaration.chantierId
+    ? db.prepare("SELECT * FROM chantiers WHERE id = ?").get(declaration.chantierId)
+    : null;
+  const company = getCompanyData();
+  const html = renderDaactCerfaHtml({ declaration, chantier, company });
+  await generatePdfFromHtml(html, outputPath);
+  return outputPath;
+}
+
+ipcMain.handle("admin:daact:exportPdfPreview", async (_e, declarationId) => {
+  try {
+    const row = db.prepare("SELECT reference, chantierId FROM daact_declarations WHERE id = ?").get(declarationId);
+    if (!row) return { success: false, error: "DAACT introuvable" };
+
+    const { fileName, outputPath } = preparePdfPath(`DAACT-${row.reference || declarationId}`);
+    await generateDaactPdf(declarationId, outputPath);
+
+    const vaultResult = await autoStoreInVault({
+      pdfPath: outputPath,
+      fileName,
+      clientId: null,
+      chantierId: row.chantierId,
+      originType: "daact",
+      originId: declarationId,
+      description: `DAACT - ${row.reference}`,
+      tagName: "DAACT (CERFA 13408*13)",
+    });
+
+    if (vaultResult && vaultResult.documentId) {
+      db.prepare("UPDATE daact_declarations SET vaultDocumentId = ?, updatedAt = ? WHERE id = ?")
+        .run(vaultResult.documentId, new Date().toISOString(), declarationId);
+    }
+
+    return { success: true, path: outputPath, vault: vaultResult };
+  } catch (e) {
+    console.error("[admin:daact:exportPdfPreview]", e);
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle("admin:daact:exportPdfSaveAs", async (_e, declarationId) => {
+  try {
+    const row = db.prepare("SELECT reference FROM daact_declarations WHERE id = ?").get(declarationId);
+    if (!row) return { success: false, error: "DAACT introuvable" };
+
+    const defaultName = `DAACT-${row.reference || declarationId}.pdf`.replace(/[/\\:*?"<>|]/g, "_");
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: "Enregistrer la DAACT",
+      defaultPath: defaultName,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false, cancelled: true };
+
+    await generateDaactPdf(declarationId, result.filePath);
+    return { success: true, path: result.filePath };
+  } catch (e) {
+    console.error("[admin:daact:exportPdfSaveAs]", e);
     return { success: false, error: e.message };
   }
 });

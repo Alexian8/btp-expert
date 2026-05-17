@@ -114,8 +114,9 @@ export const RECEPTION_STATUS_META: Record<ReceptionStatus, { label: string; col
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type TvaAttestationType =
-  | "simplifiee"            // modèle libre (signé client)
-  | "cerfa_1300";           // CERFA 1300-SD officiel
+  | "simplifiee"               // modèle libre (signé client)
+  | "cerfa_1300"               // modèle visuel BatiDesk inspiré CERFA 1300-SD
+  | "cerfa_officiel_1301sd";   // reproduction fidèle CERFA officiel 1301-SD / N°13948*06
 
 export type TvaRate = 5.5 | 10;
 
@@ -294,6 +295,75 @@ export const DC4_STATUS_META: Record<Dc4Status, { label: string; colorTw: string
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DAACT — Déclaration Attestant l'Achèvement et la Conformité des Travaux
+// CERFA officiel n°13408*13 — Code de l'urbanisme art. R.462-1 à R.462-9
+// À transmettre à la mairie après l'achèvement d'un projet soumis à
+// permis de construire, d'aménager ou à déclaration préalable.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type DaactPermitType = "permis_construire" | "permis_amenager" | "declaration_prealable";
+export type DaactStatus = "brouillon" | "depose" | "accepte" | "conteste";
+
+export interface DaactDeclaration {
+  id: string;
+  reference: string;
+
+  chantierId: string;
+
+  permitType: DaactPermitType;
+  permitNumber: string;
+  voiriesDifferees: boolean;
+  voiriesDate: string;
+
+  // Déclarant — personne physique
+  titulaireNom: string;
+  titulairePrenom: string;
+  // Déclarant — personne morale
+  denomination: string;
+  siret: string;
+  representantNom: string;
+  representantPrenom: string;
+  email: string;
+
+  // Achèvement
+  achievementDate: string;
+  destinationChangeDate: string;
+  partialWorks: boolean;
+  partialWorksDescription: string;
+  surfaceCreated: number;
+  nbLogementsTotal: number;
+  nbIndividuels: number;
+  nbCollectifs: number;
+
+  // Signatures
+  signedDate: string;
+  signedLocation: string;
+  declarantSignatureDataUrl: string;
+  architectLocation: string;
+  architectSignedDate: string;
+  architectSignatureDataUrl: string;
+
+  status: DaactStatus;
+  vaultDocumentId: string;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const DAACT_PERMIT_TYPE_META: Record<DaactPermitType, { label: string; short: string }> = safeMeta({
+  permis_construire:    { label: "Permis de construire", short: "PC" },
+  permis_amenager:      { label: "Permis d'aménager", short: "PA" },
+  declaration_prealable:{ label: "Déclaration préalable", short: "DP" },
+});
+
+export const DAACT_STATUS_META: Record<DaactStatus, { label: string; colorTw: string }> = safeMeta({
+  brouillon: { label: "Brouillon", colorTw: "bg-slate-500/10 text-slate-600" },
+  depose:    { label: "Déposé en mairie", colorTw: "bg-blue-500/10 text-blue-600" },
+  accepte:   { label: "Accepté (délai écoulé)", colorTw: "bg-emerald-500/10 text-emerald-600" },
+  conteste:  { label: "Contesté", colorTw: "bg-red-500/10 text-red-600" },
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DOCUMENTS RGE / MaPrimeRénov' (préparation 2026)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -364,5 +434,7 @@ export interface AdministrativeDocsStats {
   tvaAttestationsThisYear: number;
   dc4Total: number;
   dc4Pending: number;            // envoyées en attente de réponse
+  daactTotal: number;
+  daactPending: number;          // brouillons + déposées
   rgeDocumentsTotal: number;
 }

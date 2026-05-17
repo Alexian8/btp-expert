@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  FileSignature, ClipboardCheck, Receipt, FileText, Leaf,
+  FileSignature, ClipboardCheck, Receipt, FileText, Leaf, Building2,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -10,14 +10,15 @@ import { useAdministrativeDocsStore } from "@/stores/administrativeDocsStore";
 import { ReceptionsSection } from "./ReceptionsSection";
 import { TvaAttestationsSection } from "./TvaAttestationsSection";
 import { Dc4Section } from "./Dc4Section";
+import { DaactSection } from "./DaactSection";
 import { RgeSection } from "./RgeSection";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AdminDocsPage — Page principale documents administratifs (Session 17)
-// 4 onglets : PV réception / Attestations TVA / DC4 / RGE
+// 5 onglets : PV réception / Attestations TVA / DC4 / DAACT / RGE
 // ═══════════════════════════════════════════════════════════════════════════
 
-type Tab = "reception" | "tva" | "dc4" | "rge";
+type Tab = "reception" | "tva" | "dc4" | "daact" | "rge";
 
 export function AdminDocsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("reception");
@@ -48,6 +49,13 @@ export function AdminDocsPage() {
       icon: FileText,
       description: "Déclarations de sous-traitance (marchés publics)",
       badge: stats.dc4Total,
+    },
+    {
+      key: "daact",
+      label: "DAACT",
+      icon: Building2,
+      description: "Déclaration d'achèvement des travaux — CERFA 13408*13",
+      badge: stats.daactTotal,
     },
     {
       key: "rge",
@@ -110,6 +118,7 @@ export function AdminDocsPage() {
           {activeTab === "reception" && <ReceptionsSection />}
           {activeTab === "tva" && <TvaAttestationsSection />}
           {activeTab === "dc4" && <Dc4Section />}
+          {activeTab === "daact" && <DaactSection />}
           {activeTab === "rge" && <RgeSection />}
         </motion.div>
       </div>

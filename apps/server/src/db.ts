@@ -622,6 +622,52 @@ export async function runMigrations(db: Pool): Promise<void> {
       INDEX idx_dc4_reference (reference)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
+    // ─── Documents administratifs : DAACT (CERFA 13408*13) ────────────────
+    // Déclaration attestant l'achèvement et la conformité des travaux,
+    // adressée à la mairie après l'achèvement d'un projet soumis à permis
+    // de construire, d'aménager ou à déclaration préalable.
+    `CREATE TABLE IF NOT EXISTS daact_declarations (
+      id VARCHAR(64) PRIMARY KEY,
+      reference VARCHAR(64) NOT NULL DEFAULT '',
+      chantierId VARCHAR(64) DEFAULT '',
+      permitType VARCHAR(32) DEFAULT 'permis_construire',
+      permitNumber VARCHAR(64) DEFAULT '',
+      voiriesDifferees TINYINT(1) DEFAULT 0,
+      voiriesDate VARCHAR(32) DEFAULT '',
+      titulaireNom VARCHAR(128) DEFAULT '',
+      titulairePrenom VARCHAR(128) DEFAULT '',
+      denomination VARCHAR(255) DEFAULT '',
+      siret VARCHAR(32) DEFAULT '',
+      representantNom VARCHAR(128) DEFAULT '',
+      representantPrenom VARCHAR(128) DEFAULT '',
+      email VARCHAR(255) DEFAULT '',
+      achievementDate VARCHAR(32) DEFAULT '',
+      destinationChangeDate VARCHAR(32) DEFAULT '',
+      partialWorks TINYINT(1) DEFAULT 0,
+      partialWorksDescription TEXT,
+      surfaceCreated DECIMAL(10,2) DEFAULT 0,
+      nbLogementsTotal INT DEFAULT 0,
+      nbIndividuels INT DEFAULT 0,
+      nbCollectifs INT DEFAULT 0,
+      signedDate VARCHAR(32) DEFAULT '',
+      signedLocation VARCHAR(255) DEFAULT '',
+      declarantSignatureDataUrl MEDIUMTEXT,
+      architectLocation VARCHAR(255) DEFAULT '',
+      architectSignedDate VARCHAR(32) DEFAULT '',
+      architectSignatureDataUrl MEDIUMTEXT,
+      status VARCHAR(32) DEFAULT 'brouillon',
+      vaultDocumentId VARCHAR(64) DEFAULT '',
+      companyId INT NOT NULL DEFAULT 1,
+      createdBy INT NULL,
+      updatedBy INT NULL,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_daact_company (companyId),
+      INDEX idx_daact_chantier (chantierId),
+      INDEX idx_daact_status (status),
+      INDEX idx_daact_reference (reference)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
     // ─── Documents administratifs : RGE / MaPrimeRénov' ───────────────────
     `CREATE TABLE IF NOT EXISTS rge_documents (
       id VARCHAR(64) PRIMARY KEY,

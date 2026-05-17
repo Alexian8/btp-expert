@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   ReceptionReport, ReceptionReserve,
   TvaAttestation, Dc4Declaration, RgeDocument,
+  DaactDeclaration,
   AdministrativeDocsStats,
 } from "@btp/types";
 
@@ -13,6 +14,7 @@ interface State {
   receptions: ReceptionReport[];
   tvaAttestations: TvaAttestation[];
   dc4Declarations: Dc4Declaration[];
+  daactDeclarations: DaactDeclaration[];
   rgeDocuments: RgeDocument[];
   stats: AdministrativeDocsStats;
   isLoading: boolean;
@@ -38,6 +40,13 @@ interface State {
   updateDc4: (id: string, data: Partial<Dc4Declaration>) => Promise<{ success: boolean; error?: string }>;
   removeDc4: (id: string) => Promise<{ success: boolean; error?: string }>;
 
+  // DAACT
+  fetchDaact: (filters?: any) => Promise<void>;
+  getDaactById: (id: string) => Promise<DaactDeclaration | null>;
+  createDaact: (data: Partial<DaactDeclaration>) => Promise<{ success: boolean; id?: string; reference?: string; error?: string }>;
+  updateDaact: (id: string, data: Partial<DaactDeclaration>) => Promise<{ success: boolean; error?: string }>;
+  removeDaact: (id: string) => Promise<{ success: boolean; error?: string }>;
+
   // RGE
   fetchRge: () => Promise<void>;
   createRge: (data: Partial<RgeDocument>) => Promise<{ success: boolean; id?: string; reference?: string; error?: string }>;
@@ -50,6 +59,7 @@ const EMPTY_STATS: AdministrativeDocsStats = {
   receptionsTotal: 0, receptionsWithReserves: 0,
   tvaAttestationsTotal: 0, tvaAttestationsThisYear: 0,
   dc4Total: 0, dc4Pending: 0,
+  daactTotal: 0, daactPending: 0,
   rgeDocumentsTotal: 0,
 };
 
@@ -57,6 +67,7 @@ export const useAdministrativeDocsStore = create<State>((set, get) => ({
   receptions: [],
   tvaAttestations: [],
   dc4Declarations: [],
+  daactDeclarations: [],
   rgeDocuments: [],
   stats: EMPTY_STATS,
   isLoading: false,
@@ -145,6 +156,35 @@ export const useAdministrativeDocsStore = create<State>((set, get) => ({
     if (!window.btpAPI?.adminDc4Delete) return { success: false, error: "API non disponible" };
     const r = await window.btpAPI.adminDc4Delete(id);
     if (r.success) await Promise.all([get().fetchDc4(), get().fetchStats()]);
+    return r;
+  },
+
+  // ─── DAACT ───────────────────────────────────────────────────────────
+  fetchDaact: async (filters) => {
+    if (!window.btpAPI?.adminDaactList) return;
+    const daactDeclarations = await window.btpAPI.adminDaactList(filters);
+    set({ daactDeclarations });
+  },
+  getDaactById: async (id) => {
+    if (!window.btpAPI?.adminDaactGetById) return null;
+    return window.btpAPI.adminDaactGetById(id);
+  },
+  createDaact: async (data) => {
+    if (!window.btpAPI?.adminDaactCreate) return { success: false, error: "API non disponible" };
+    const r = await window.btpAPI.adminDaactCreate(data);
+    if (r.success) await Promise.all([get().fetchDaact(), get().fetchStats()]);
+    return r;
+  },
+  updateDaact: async (id, data) => {
+    if (!window.btpAPI?.adminDaactUpdate) return { success: false, error: "API non disponible" };
+    const r = await window.btpAPI.adminDaactUpdate(id, data);
+    if (r.success) await Promise.all([get().fetchDaact(), get().fetchStats()]);
+    return r;
+  },
+  removeDaact: async (id) => {
+    if (!window.btpAPI?.adminDaactDelete) return { success: false, error: "API non disponible" };
+    const r = await window.btpAPI.adminDaactDelete(id);
+    if (r.success) await Promise.all([get().fetchDaact(), get().fetchStats()]);
     return r;
   },
 

@@ -27,6 +27,21 @@ declare module "./templates/tvaAttestationCerfaTemplate" {
   }): string;
 }
 
+declare module "./templates/tvaAttestationCerfaOfficielTemplate" {
+  export function renderTvaAttestationCerfaOfficielHtml(args: {
+    attestation: Record<string, unknown>;
+    company: Record<string, unknown>;
+  }): string;
+}
+
+declare module "./templates/daactCerfaTemplate" {
+  export function renderDaactCerfaHtml(args: {
+    declaration: Record<string, unknown>;
+    chantier: Record<string, unknown> | null;
+    company: Record<string, unknown>;
+  }): string;
+}
+
 declare module "./templates/dc4Template" {
   export function renderDc4Html(args: {
     declaration: Record<string, unknown>;

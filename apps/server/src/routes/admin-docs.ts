@@ -26,7 +26,9 @@ import { requireAuth } from "../auth";
 import { renderReceptionHtml } from "../templates/receptionTemplate";
 import { renderTvaAttestationHtml } from "../templates/tvaAttestationTemplate";
 import { renderTvaAttestationCerfaHtml } from "../templates/tvaAttestationCerfaTemplate";
+import { renderTvaAttestationCerfaOfficielHtml } from "../templates/tvaAttestationCerfaOfficielTemplate";
 import { renderDc4Html } from "../templates/dc4Template";
+import { renderDaactCerfaHtml } from "../templates/daactCerfaTemplate";
 
 // HTML chrome ajouté autour du template existant : un bouton flottant "Imprimer
 // en PDF" qui déclenche le dialogue d'impression natif du navigateur (Ctrl+P /
@@ -165,6 +167,38 @@ const DC4_COLS = [
   "vaultDocumentId",
 ];
 
+const DAACT_COLS = [
+  "reference",
+  "chantierId",
+  "permitType",
+  "permitNumber",
+  "voiriesDifferees",
+  "voiriesDate",
+  "titulaireNom",
+  "titulairePrenom",
+  "denomination",
+  "siret",
+  "representantNom",
+  "representantPrenom",
+  "email",
+  "achievementDate",
+  "destinationChangeDate",
+  "partialWorks",
+  "partialWorksDescription",
+  "surfaceCreated",
+  "nbLogementsTotal",
+  "nbIndividuels",
+  "nbCollectifs",
+  "signedDate",
+  "signedLocation",
+  "declarantSignatureDataUrl",
+  "architectLocation",
+  "architectSignedDate",
+  "architectSignatureDataUrl",
+  "status",
+  "vaultDocumentId",
+];
+
 const RGE_COLS = [
   "reference",
   "type",
@@ -230,6 +264,16 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
     tenantColumn: "companyId",
   });
 
+  const daact = new MysqlRepository(db, "daact_declarations", {
+    primaryKey: "client",
+    filterableColumns: ["chantierId", "permitType", "status"],
+    sortableColumns: ["achievementDate", "signedDate", "createdAt", "reference"],
+    writableColumns: DAACT_COLS,
+    hasUpdatedAt: true,
+    hasAuditColumns: true,
+    tenantColumn: "companyId",
+  });
+
   const rge = new MysqlRepository(db, "rge_documents", {
     primaryKey: "client",
     filterableColumns: ["chantierId", "clientId", "type"],
@@ -267,6 +311,13 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
          FROM dc4_declarations WHERE companyId = ?`,
         [tenantId]
       );
+      const [[daactStats]] = await db.query<RowDataPacket[]>(
+        `SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN status IN ('brouillon','depose') THEN 1 ELSE 0 END) AS pending
+         FROM daact_declarations WHERE companyId = ?`,
+        [tenantId]
+      );
       const [[rgeStats]] = await db.query<RowDataPacket[]>(
         `SELECT COUNT(*) AS total FROM rge_documents WHERE companyId = ?`,
         [tenantId]
@@ -278,6 +329,8 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
         tvaAttestationsThisYear: Number(tvaStats?.thisYear ?? 0),
         dc4Total: Number(dc4Stats?.total ?? 0),
         dc4Pending: Number(dc4Stats?.pending ?? 0),
+        daactTotal: Number(daactStats?.total ?? 0),
+        daactPending: Number(daactStats?.pending ?? 0),
         rgeDocumentsTotal: Number(rgeStats?.total ?? 0),
       });
     })
@@ -455,9 +508,11 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
       }
       const company = await loadCompany(tenantId);
       const html =
-        attestation.attestationType === "cerfa_1300"
-          ? renderTvaAttestationCerfaHtml({ attestation, company })
-          : renderTvaAttestationHtml({ attestation, company });
+        attestation.attestationType === "cerfa_officiel_1301sd"
+          ? renderTvaAttestationCerfaOfficielHtml({ attestation, company })
+          : attestation.attestationType === "cerfa_1300"
+            ? renderTvaAttestationCerfaHtml({ attestation, company })
+            : renderTvaAttestationHtml({ attestation, company });
       res
         .type("html")
         .send(wrapWithPrintButton(html, `Attestation TVA ${String(attestation.reference ?? "")}`));
@@ -499,10 +554,42 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
     })
   );
 
-  // ─── CRUD générique pour les 4 entités ─────────────────────────────────
+  // GET /daact/:id/html → DAACT CERFA 13408*13
+  router.get(
+    "/daact/:id/html",
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM daact_declarations WHERE id = ? AND companyId = ? LIMIT 1",
+        [req.params.id, tenantId]
+      );
+      const declaration = rows[0] as Record<string, unknown> | undefined;
+      if (!declaration) {
+        res.status(404).type("html").send("<h1>DAACT introuvable</h1>");
+        return;
+      }
+      declaration.voiriesDifferees = !!declaration.voiriesDifferees;
+      declaration.partialWorks = !!declaration.partialWorks;
+      const [chantierRows] = declaration.chantierId
+        ? await db.query<RowDataPacket[]>("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [declaration.chantierId])
+        : [[]];
+      const company = await loadCompany(tenantId);
+      const html = renderDaactCerfaHtml({
+        declaration,
+        chantier: (chantierRows[0] as Record<string, unknown>) ?? null,
+        company,
+      });
+      res
+        .type("html")
+        .send(wrapWithPrintButton(html, `DAACT ${String(declaration.reference ?? "")}`));
+    })
+  );
+
+  // ─── CRUD générique pour les 5 entités ─────────────────────────────────
   router.use("/receptions", buildCrudRouter(receptions, { db, resourceName: "admin_receptions" }));
   router.use("/tva", buildCrudRouter(tva, { db, resourceName: "admin_tva" }));
   router.use("/dc4", buildCrudRouter(dc4, { db, resourceName: "admin_dc4" }));
+  router.use("/daact", buildCrudRouter(daact, { db, resourceName: "admin_daact" }));
   router.use("/rge", buildCrudRouter(rge, { db, resourceName: "admin_rge" }));
 
   return router;

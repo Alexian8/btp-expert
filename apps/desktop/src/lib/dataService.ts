@@ -39,6 +39,7 @@ import type {
   ReceptionReserve,
   TvaAttestation,
   Dc4Declaration,
+  DaactDeclaration,
   RgeDocument,
   AdministrativeDocsStats,
 } from "@btp/types";
@@ -371,6 +372,15 @@ declare global {
       adminDc4Create: (data: Partial<Dc4Declaration>) => Promise<{ success: boolean; id?: string; reference?: string; error?: string }>;
       adminDc4Update: (id: string, data: Partial<Dc4Declaration>) => Promise<{ success: boolean; error?: string }>;
       adminDc4Delete: (id: string) => Promise<{ success: boolean; error?: string }>;
+
+      // DAACT (CERFA 13408*13)
+      adminDaactList: (filters?: { chantierId?: string; permitType?: string; status?: string }) => Promise<DaactDeclaration[]>;
+      adminDaactGetById: (id: string) => Promise<DaactDeclaration | null>;
+      adminDaactCreate: (data: Partial<DaactDeclaration>) => Promise<{ success: boolean; id?: string; reference?: string; error?: string }>;
+      adminDaactUpdate: (id: string, data: Partial<DaactDeclaration>) => Promise<{ success: boolean; error?: string }>;
+      adminDaactDelete: (id: string) => Promise<{ success: boolean; error?: string }>;
+      adminDaactExportPdfPreview: (id: string) => Promise<{ success: boolean; path?: string; vault?: any; error?: string }>;
+      adminDaactExportPdfSaveAs: (id: string) => Promise<{ success: boolean; path?: string; cancelled?: boolean; error?: string }>;
 
       // RGE
       adminRgeList: () => Promise<RgeDocument[]>;

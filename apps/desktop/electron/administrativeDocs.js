@@ -546,10 +546,19 @@ function init({ db }) {
 
       const rgeDocumentsTotal = db.prepare("SELECT COUNT(*) as n FROM rge_documents").get().n || 0;
 
+      let daactTotal = 0, daactPending = 0;
+      try {
+        daactTotal = db.prepare("SELECT COUNT(*) as n FROM daact_declarations").get().n || 0;
+        daactPending = db.prepare("SELECT COUNT(*) as n FROM daact_declarations WHERE status IN ('brouillon','depose')").get().n || 0;
+      } catch {
+        /* table peut ne pas exister sur anciennes DB — migration au prochain boot */
+      }
+
       return {
         receptionsTotal, receptionsWithReserves,
         tvaAttestationsTotal, tvaAttestationsThisYear,
         dc4Total, dc4Pending,
+        daactTotal, daactPending,
         rgeDocumentsTotal,
       };
     } catch (e) {
@@ -557,8 +566,142 @@ function init({ db }) {
         receptionsTotal: 0, receptionsWithReserves: 0,
         tvaAttestationsTotal: 0, tvaAttestationsThisYear: 0,
         dc4Total: 0, dc4Pending: 0,
+        daactTotal: 0, daactPending: 0,
         rgeDocumentsTotal: 0,
       };
+    }
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // DAACT — Déclaration d'achèvement et de conformité (CERFA 13408*13)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  const DAACT_ALLOWED = [
+    "chantierId", "permitType", "permitNumber",
+    "voiriesDifferees", "voiriesDate",
+    "titulaireNom", "titulairePrenom",
+    "denomination", "siret",
+    "representantNom", "representantPrenom", "email",
+    "achievementDate", "destinationChangeDate",
+    "partialWorks", "partialWorksDescription",
+    "surfaceCreated", "nbLogementsTotal", "nbIndividuels", "nbCollectifs",
+    "signedDate", "signedLocation", "declarantSignatureDataUrl",
+    "architectLocation", "architectSignedDate", "architectSignatureDataUrl",
+    "status", "vaultDocumentId",
+  ];
+
+  function rowToDaact(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      voiriesDifferees: !!row.voiriesDifferees,
+      partialWorks: !!row.partialWorks,
+    };
+  }
+
+  ipcMain.handle("admin:daact:list", (_e, filters = {}) => {
+    try {
+      let sql = "SELECT * FROM daact_declarations WHERE 1=1";
+      const params = [];
+      if (filters.chantierId) { sql += " AND chantierId = ?"; params.push(filters.chantierId); }
+      if (filters.permitType) { sql += " AND permitType = ?"; params.push(filters.permitType); }
+      if (filters.status) { sql += " AND status = ?"; params.push(filters.status); }
+      sql += " ORDER BY achievementDate DESC, createdAt DESC";
+      return db.prepare(sql).all(...params).map(rowToDaact);
+    } catch (e) {
+      console.error("[admin:daact:list]", e);
+      return [];
+    }
+  });
+
+  ipcMain.handle("admin:daact:getById", (_e, id) => {
+    try {
+      return rowToDaact(db.prepare("SELECT * FROM daact_declarations WHERE id = ?").get(id));
+    } catch { return null; }
+  });
+
+  ipcMain.handle("admin:daact:create", (_e, data) => {
+    try {
+      const id = generateId("daact");
+      const reference = makeReference(db, "daact_declarations", "DAACT");
+      const now = nowIso();
+      db.prepare(`
+        INSERT INTO daact_declarations (
+          id, reference, chantierId, permitType, permitNumber,
+          voiriesDifferees, voiriesDate,
+          titulaireNom, titulairePrenom,
+          denomination, siret, representantNom, representantPrenom, email,
+          achievementDate, destinationChangeDate,
+          partialWorks, partialWorksDescription,
+          surfaceCreated, nbLogementsTotal, nbIndividuels, nbCollectifs,
+          signedDate, signedLocation, declarantSignatureDataUrl,
+          architectLocation, architectSignedDate, architectSignatureDataUrl,
+          status, vaultDocumentId,
+          createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, reference,
+        data.chantierId || "",
+        data.permitType || "permis_construire",
+        data.permitNumber || "",
+        data.voiriesDifferees ? 1 : 0,
+        data.voiriesDate || "",
+        data.titulaireNom || "",
+        data.titulairePrenom || "",
+        data.denomination || "",
+        data.siret || "",
+        data.representantNom || "",
+        data.representantPrenom || "",
+        data.email || "",
+        data.achievementDate || now.slice(0, 10),
+        data.destinationChangeDate || "",
+        data.partialWorks ? 1 : 0,
+        data.partialWorksDescription || "",
+        Number(data.surfaceCreated) || 0,
+        Number(data.nbLogementsTotal) || 0,
+        Number(data.nbIndividuels) || 0,
+        Number(data.nbCollectifs) || 0,
+        data.signedDate || "",
+        data.signedLocation || "",
+        data.declarantSignatureDataUrl || "",
+        data.architectLocation || "",
+        data.architectSignedDate || "",
+        data.architectSignatureDataUrl || "",
+        data.status || "brouillon",
+        data.vaultDocumentId || "",
+        now, now
+      );
+      return { success: true, id, reference };
+    } catch (e) {
+      console.error("[admin:daact:create]", e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("admin:daact:update", (_e, { id, data }) => {
+    try {
+      const keys = Object.keys(data).filter((k) => DAACT_ALLOWED.includes(k));
+      if (keys.length === 0) return { success: true };
+      const sets = keys.map((k) => `${k} = @${k}`).join(", ");
+      const payload = { id, updatedAt: nowIso() };
+      for (const k of keys) {
+        if (["voiriesDifferees", "partialWorks"].includes(k)) payload[k] = data[k] ? 1 : 0;
+        else if (["surfaceCreated", "nbLogementsTotal", "nbIndividuels", "nbCollectifs"].includes(k)) payload[k] = Number(data[k]) || 0;
+        else payload[k] = data[k] !== undefined ? data[k] : "";
+      }
+      db.prepare(`UPDATE daact_declarations SET ${sets}, updatedAt = @updatedAt WHERE id = @id`).run(payload);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("admin:daact:delete", (_e, id) => {
+    try {
+      db.prepare("DELETE FROM daact_declarations WHERE id = ?").run(id);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
     }
   });
 

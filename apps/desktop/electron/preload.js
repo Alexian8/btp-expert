@@ -333,6 +333,15 @@ contextBridge.exposeInMainWorld("btpAPI", {
   adminDc4Update: (id, data) => ipcRenderer.invoke("admin:dc4:update", { id, data }),
   adminDc4Delete: (id) => ipcRenderer.invoke("admin:dc4:delete", id),
 
+  // DAACT — CERFA 13408*13
+  adminDaactList: (filters) => ipcRenderer.invoke("admin:daact:list", filters || {}),
+  adminDaactGetById: (id) => ipcRenderer.invoke("admin:daact:getById", id),
+  adminDaactCreate: (data) => ipcRenderer.invoke("admin:daact:create", data),
+  adminDaactUpdate: (id, data) => ipcRenderer.invoke("admin:daact:update", { id, data }),
+  adminDaactDelete: (id) => ipcRenderer.invoke("admin:daact:delete", id),
+  adminDaactExportPdfPreview: (id) => ipcRenderer.invoke("admin:daact:exportPdfPreview", id),
+  adminDaactExportPdfSaveAs: (id) => ipcRenderer.invoke("admin:daact:exportPdfSaveAs", id),
+
   // RGE
   adminRgeList: () => ipcRenderer.invoke("admin:rge:list"),
   adminRgeCreate: (data) => ipcRenderer.invoke("admin:rge:create", data),

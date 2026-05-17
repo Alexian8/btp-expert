@@ -26,7 +26,9 @@ const auth_1 = require("../auth");
 const receptionTemplate_1 = require("../templates/receptionTemplate");
 const tvaAttestationTemplate_1 = require("../templates/tvaAttestationTemplate");
 const tvaAttestationCerfaTemplate_1 = require("../templates/tvaAttestationCerfaTemplate");
+const tvaAttestationCerfaOfficielTemplate_1 = require("../templates/tvaAttestationCerfaOfficielTemplate");
 const dc4Template_1 = require("../templates/dc4Template");
+const daactCerfaTemplate_1 = require("../templates/daactCerfaTemplate");
 // HTML chrome ajouté autour du template existant : un bouton flottant "Imprimer
 // en PDF" qui déclenche le dialogue d'impression natif du navigateur (Ctrl+P /
 // Cmd+P), masqué lors de l'impression elle-même via @media print. Permet à
@@ -157,6 +159,37 @@ const DC4_COLS = [
     "status",
     "vaultDocumentId",
 ];
+const DAACT_COLS = [
+    "reference",
+    "chantierId",
+    "permitType",
+    "permitNumber",
+    "voiriesDifferees",
+    "voiriesDate",
+    "titulaireNom",
+    "titulairePrenom",
+    "denomination",
+    "siret",
+    "representantNom",
+    "representantPrenom",
+    "email",
+    "achievementDate",
+    "destinationChangeDate",
+    "partialWorks",
+    "partialWorksDescription",
+    "surfaceCreated",
+    "nbLogementsTotal",
+    "nbIndividuels",
+    "nbCollectifs",
+    "signedDate",
+    "signedLocation",
+    "declarantSignatureDataUrl",
+    "architectLocation",
+    "architectSignedDate",
+    "architectSignatureDataUrl",
+    "status",
+    "vaultDocumentId",
+];
 const RGE_COLS = [
     "reference",
     "type",
@@ -216,6 +249,15 @@ function buildAdminDocsRouter(db, cfg) {
         hasAuditColumns: true,
         tenantColumn: "companyId",
     });
+    const daact = new repository_1.MysqlRepository(db, "daact_declarations", {
+        primaryKey: "client",
+        filterableColumns: ["chantierId", "permitType", "status"],
+        sortableColumns: ["achievementDate", "signedDate", "createdAt", "reference"],
+        writableColumns: DAACT_COLS,
+        hasUpdatedAt: true,
+        hasAuditColumns: true,
+        tenantColumn: "companyId",
+    });
     const rge = new repository_1.MysqlRepository(db, "rge_documents", {
         primaryKey: "client",
         filterableColumns: ["chantierId", "clientId", "type"],
@@ -241,6 +283,10 @@ function buildAdminDocsRouter(db, cfg) {
            COUNT(*) AS total,
            SUM(CASE WHEN status IN ('brouillon','envoye') THEN 1 ELSE 0 END) AS pending
          FROM dc4_declarations WHERE companyId = ?`, [tenantId]);
+        const [[daactStats]] = await db.query(`SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN status IN ('brouillon','depose') THEN 1 ELSE 0 END) AS pending
+         FROM daact_declarations WHERE companyId = ?`, [tenantId]);
         const [[rgeStats]] = await db.query(`SELECT COUNT(*) AS total FROM rge_documents WHERE companyId = ?`, [tenantId]);
         res.json({
             receptionsTotal: Number(rcp?.total ?? 0),
@@ -249,6 +295,8 @@ function buildAdminDocsRouter(db, cfg) {
             tvaAttestationsThisYear: Number(tvaStats?.thisYear ?? 0),
             dc4Total: Number(dc4Stats?.total ?? 0),
             dc4Pending: Number(dc4Stats?.pending ?? 0),
+            daactTotal: Number(daactStats?.total ?? 0),
+            daactPending: Number(daactStats?.pending ?? 0),
             rgeDocumentsTotal: Number(rgeStats?.total ?? 0),
         });
     }));
@@ -383,9 +431,11 @@ function buildAdminDocsRouter(db, cfg) {
             attestation.clientCommitments = [];
         }
         const company = await loadCompany(tenantId);
-        const html = attestation.attestationType === "cerfa_1300"
-            ? (0, tvaAttestationCerfaTemplate_1.renderTvaAttestationCerfaHtml)({ attestation, company })
-            : (0, tvaAttestationTemplate_1.renderTvaAttestationHtml)({ attestation, company });
+        const html = attestation.attestationType === "cerfa_officiel_1301sd"
+            ? (0, tvaAttestationCerfaOfficielTemplate_1.renderTvaAttestationCerfaOfficielHtml)({ attestation, company })
+            : attestation.attestationType === "cerfa_1300"
+                ? (0, tvaAttestationCerfaTemplate_1.renderTvaAttestationCerfaHtml)({ attestation, company })
+                : (0, tvaAttestationTemplate_1.renderTvaAttestationHtml)({ attestation, company });
         res
             .type("html")
             .send(wrapWithPrintButton(html, `Attestation TVA ${String(attestation.reference ?? "")}`));
@@ -418,10 +468,35 @@ function buildAdminDocsRouter(db, cfg) {
             .type("html")
             .send(wrapWithPrintButton(html, `DC4 ${String(declaration.reference ?? "")}`));
     }));
-    // ─── CRUD générique pour les 4 entités ─────────────────────────────────
+    // GET /daact/:id/html → DAACT CERFA 13408*13
+    router.get("/daact/:id/html", wrap(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await db.query("SELECT * FROM daact_declarations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
+        const declaration = rows[0];
+        if (!declaration) {
+            res.status(404).type("html").send("<h1>DAACT introuvable</h1>");
+            return;
+        }
+        declaration.voiriesDifferees = !!declaration.voiriesDifferees;
+        declaration.partialWorks = !!declaration.partialWorks;
+        const [chantierRows] = declaration.chantierId
+            ? await db.query("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [declaration.chantierId])
+            : [[]];
+        const company = await loadCompany(tenantId);
+        const html = (0, daactCerfaTemplate_1.renderDaactCerfaHtml)({
+            declaration,
+            chantier: chantierRows[0] ?? null,
+            company,
+        });
+        res
+            .type("html")
+            .send(wrapWithPrintButton(html, `DAACT ${String(declaration.reference ?? "")}`));
+    }));
+    // ─── CRUD générique pour les 5 entités ─────────────────────────────────
     router.use("/receptions", (0, crud_1.buildCrudRouter)(receptions, { db, resourceName: "admin_receptions" }));
     router.use("/tva", (0, crud_1.buildCrudRouter)(tva, { db, resourceName: "admin_tva" }));
     router.use("/dc4", (0, crud_1.buildCrudRouter)(dc4, { db, resourceName: "admin_dc4" }));
+    router.use("/daact", (0, crud_1.buildCrudRouter)(daact, { db, resourceName: "admin_daact" }));
     router.use("/rge", (0, crud_1.buildCrudRouter)(rge, { db, resourceName: "admin_rge" }));
     return router;
 }
