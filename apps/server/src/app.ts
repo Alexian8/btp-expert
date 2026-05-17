@@ -469,18 +469,70 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     })
   );
 
+  // Whitelist des clés acceptées dans /api/settings. On utilise une regex
+  // permissive plutôt qu'une liste exacte parce que les sections UI ajoutent
+  // régulièrement de nouvelles clés (pdfXxx, emailXxx, etc.). Mais on bloque
+  // les clés "magiques" et la pollution de prototype.
+  const ALLOWED_SETTING_PREFIXES = [
+    "pdf",
+    "invoice",
+    "quote",
+    "email",
+    "company",
+    "rge",
+    "cgv",
+    "theme",
+    "appearance",
+  ];
+  const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
+  const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+  const MAX_SETTINGS_PER_REQUEST = 200;
+  const MAX_SETTING_VALUE_BYTES = 256 * 1024; // 256 KB par valeur
+
+  function isAllowedSettingKey(k: string): boolean {
+    if (!SETTING_KEY_RE.test(k)) return false;
+    if (FORBIDDEN_KEYS.has(k)) return false;
+    return ALLOWED_SETTING_PREFIXES.some((p) => k.startsWith(p));
+  }
+
   app.patch(
     "/api/settings",
     auth,
     asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const entries = Object.entries(body);
+
+      if (entries.length > MAX_SETTINGS_PER_REQUEST) {
+        res
+          .status(400)
+          .json({ message: `Trop de clés (max ${MAX_SETTINGS_PER_REQUEST})` });
+        return;
+      }
+
+      // Pré-valide toutes les clés/valeurs avant d'ouvrir la transaction.
+      // Si une seule clé est invalide, on rejette tout — pas de partial write.
+      const validated: Array<[string, string]> = [];
+      for (const [k, v] of entries) {
+        if (!isAllowedSettingKey(k)) {
+          res.status(400).json({ message: `Clé non autorisée : ${k}` });
+          return;
+        }
+        const serialized = JSON.stringify(v ?? null);
+        if (Buffer.byteLength(serialized, "utf8") > MAX_SETTING_VALUE_BYTES) {
+          res.status(400).json({ message: `Valeur trop grosse pour ${k}` });
+          return;
+        }
+        validated.push([k, serialized]);
+      }
+
       const conn = await pool.getConnection();
       try {
         await conn.beginTransaction();
-        for (const [k, v] of Object.entries(req.body ?? {})) {
+        for (const [k, serialized] of validated) {
           await conn.execute(
             "INSERT INTO settings (`key`, value) VALUES (?, ?) " +
               "ON DUPLICATE KEY UPDATE value = VALUES(value)",
-            [k, JSON.stringify(v)]
+            [k, serialized]
           );
         }
         await conn.commit();
