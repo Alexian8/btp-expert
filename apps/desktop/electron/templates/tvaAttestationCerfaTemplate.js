@@ -394,13 +394,31 @@ function renderTvaAttestationCerfaHtml({ attestation, company }) {
     <div class="sig-title">Le donneur d'ordre</div>
     <div class="sig-info">Fait à ${escapeHtml(attestation.signedLocation || "____________")}</div>
     <div class="sig-info">Le ${formatDate(attestation.signedDate || new Date().toISOString())}</div>
+    ${attestation.clientSignatureDataUrl
+      ? '<img src="' + attestation.clientSignatureDataUrl + '" alt="Signature" style="max-width:55mm;max-height:22mm;object-fit:contain;margin:1mm 0" />'
+      : ""}
     <div class="sig-mention">"Lu et approuvé" — signature</div>
   </div>
   <div class="cerfa-signature-block">
     <div class="sig-title">L'entreprise</div>
     <div class="sig-info">${escapeHtml((company && company.companyName) || "")}</div>
+    ${company && company.siret ? '<div class="sig-info">SIRET : ' + escapeHtml(company.siret) + '</div>' : ""}
+    ${company && company.companyStampDataUrl
+      ? '<img src="' + company.companyStampDataUrl + '" alt="Cachet" style="max-width:40mm;max-height:25mm;object-fit:contain;margin:1mm 0" />'
+      : ""}
+    ${company && company.companySignatureDataUrl
+      ? '<img src="' + company.companySignatureDataUrl + '" alt="Signature" style="max-width:55mm;max-height:22mm;object-fit:contain;margin:1mm 0" />'
+      : ""}
     <div class="sig-mention">Cachet et signature</div>
   </div>
+</div>
+
+<div style="margin-top:4mm;padding:2mm;background:#fef9c3;border-left:3px solid #ca8a04;font-size:8.5pt;color:#713f12">
+  <strong>Conservation obligatoire :</strong> ce document, ses justificatifs et la facture
+  correspondante doivent être conservés <strong>5 ans</strong> par le donneur d'ordre comme
+  par l'entreprise (art. L. 102 B du Livre des procédures fiscales). En cas de contrôle
+  fiscal, l'absence ou l'inexactitude de cette attestation entraîne le rappel du complément
+  de TVA dû au taux normal sur l'ensemble des prestations concernées.
 </div>
 
 <div class="cerfa-footer">

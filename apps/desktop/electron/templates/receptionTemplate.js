@@ -171,16 +171,35 @@ ${!isRefusee && Number(report.retentionAmount) > 0 ? `
   <div class="signature-block">
     <div class="sig-label">Le maître d'ouvrage</div>
     <div class="sig-meta">${escapeHtml(report.ownerPresent || "—")}</div>
+    ${report.ownerSignatureDataUrl
+      ? '<img src="' + report.ownerSignatureDataUrl + '" alt="Signature" style="max-width:60mm;max-height:25mm;object-fit:contain;margin:2mm 0" />'
+      : ""}
     ${report.ownerSigned ? '<div class="sig-meta">Signé le ' + formatDate(report.ownerSignedDate) + '</div>' : ""}
     <div class="sig-mention">"Lu et approuvé"</div>
   </div>
   <div class="signature-block">
     <div class="sig-label">L'entreprise</div>
     <div class="sig-meta">${escapeHtml(report.contractorPresent || (company && company.companyName) || "—")}</div>
+    ${report.contractorSignatureDataUrl
+      ? '<img src="' + report.contractorSignatureDataUrl + '" alt="Signature" style="max-width:60mm;max-height:25mm;object-fit:contain;margin:2mm 0" />'
+      : ""}
     ${report.contractorSigned ? '<div class="sig-meta">Signé le ' + formatDate(report.contractorSignedDate) + '</div>' : ""}
     <div class="sig-mention">Cachet et signature</div>
   </div>
 </div>
+
+${!isRefusee ? `
+<div class="text-block" style="margin-top:4mm;font-size:9pt;color:#475569">
+  <strong>Mentions légales :</strong>
+  <ul style="margin:1mm 0 0 4mm;padding:0">
+    <li>Garantie de parfait achèvement — <span class="law-ref">art. 1792-6 Code civil</span> — 1 an à compter de la réception, couvre tous les désordres signalés.</li>
+    <li>Garantie biennale de bon fonctionnement — <span class="law-ref">art. 1792-3 Code civil</span> — 2 ans, éléments d'équipement dissociables.</li>
+    <li>Garantie décennale — <span class="law-ref">art. 1792 et 2270 Code civil</span> — 10 ans, désordres compromettant la solidité ou rendant l'ouvrage impropre à sa destination.</li>
+    <li>Délai de dénonciation des vices apparents non réservés : <strong>10 jours</strong> à compter de la réception (sauf clause contractuelle différente).</li>
+    <li>Toute réserve consignée au présent procès-verbal est <strong>opposable à l'entrepreneur</strong> au sens de l'<span class="law-ref">art. L. 111-12 du Code de la construction et de l'habitation</span>.</li>
+  </ul>
+</div>
+` : ""}
 
 <div class="legal-footer">
   <span class="law-ref">Norme NF P 03-001</span> · Marché privé de travaux ·
