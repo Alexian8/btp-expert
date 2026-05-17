@@ -15,6 +15,10 @@ build/
 !apps/server/dist/
 !apps/server/dist/**
 
+# Sourcemaps : pas de leak de code source TS en production
+apps/server/dist/**/*.map
+apps/web/dist/**/*.map
+
 # IDE
 .vscode/
 .idea/

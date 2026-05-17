@@ -205,6 +205,17 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   );
   app.use(express.json({ limit: "10mb" }));
 
+  // Defense-in-depth : refuse toute requête sur un .map (au cas où un build
+  // génèrerait des sourcemaps qui se retrouveraient dans public/). Doit être
+  // déclaré avant express.static — sinon le static handler répond en premier.
+  app.use((req, res, next) => {
+    if (req.path.endsWith(".map")) {
+      res.status(404).end();
+      return;
+    }
+    next();
+  });
+
   // Rate-limit global API (anti scraper/bot)
   app.use(buildApiRateLimiter(cfg));
 
