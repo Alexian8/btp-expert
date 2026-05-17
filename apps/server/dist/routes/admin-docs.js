@@ -30,6 +30,21 @@ const tvaAttestationCerfaOfficielTemplate_1 = require("../templates/tvaAttestati
 const dc4Template_1 = require("../templates/dc4Template");
 const daactCerfaTemplate_1 = require("../templates/daactCerfaTemplate");
 const cerfaFiller_1 = require("../cerfaFiller");
+const PDF_LIB_HELP_HTML = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>pdf-lib manquant</title>
+<style>body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:24px;background:#fef3c7;border:1px solid #f59e0b;border-radius:12px}
+code{background:#fff;padding:2px 6px;border-radius:4px;font-family:Menlo,monospace}</style></head>
+<body>
+<h1>⚙️ Une dépendance manque sur le serveur</h1>
+<p>La génération des CERFA officiels nécessite la bibliothèque <code>pdf-lib</code>
+qui n'est pas encore installée sur ce serveur o2switch.</p>
+<p>Pour activer cette fonctionnalité, ouvrez le <strong>Terminal cPanel</strong> et lancez :</p>
+<pre><code>cd ~/intranet.jacobhabitat-dev.fr &amp;&amp; npm install pdf-lib --omit=dev
+mkdir -p tmp &amp;&amp; touch tmp/restart.txt</code></pre>
+<p>Le serveur redémarrera automatiquement et cette page disparaîtra.</p>
+<p style="font-size:13px;color:#666">En attendant, les autres types d'attestations TVA (modèle simplifié,
+CERFA visuel BatiDesk) restent disponibles.</p>
+</body></html>`;
 // Helper : convertit une date ISO (YYYY-MM-DD) en format CERFA jj/mm/aaaa
 function dateToCerfa(iso) {
     if (!iso)
@@ -492,6 +507,10 @@ function buildAdminDocsRouter(db, cfg) {
     // GET /tva/:id/pdf → CERFA officiel 1301-SD pré-rempli (AcroForm)
     // Le navigateur affiche le PDF natif (utile + imprimable + signable à la main).
     router.get("/tva/:id/pdf", wrap(async (req, res) => {
+        if (!(0, cerfaFiller_1.isPdfLibAvailable)()) {
+            res.status(503).type("html").send(PDF_LIB_HELP_HTML);
+            return;
+        }
         const tenantId = req.user?.companyId ?? 1;
         const [rows] = await db.query("SELECT * FROM tva_attestations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
         const a = rows[0];
@@ -528,6 +547,10 @@ function buildAdminDocsRouter(db, cfg) {
     }));
     // GET /daact/:id/pdf → CERFA officiel 13408*13 pré-rempli (AcroForm)
     router.get("/daact/:id/pdf", wrap(async (req, res) => {
+        if (!(0, cerfaFiller_1.isPdfLibAvailable)()) {
+            res.status(503).type("html").send(PDF_LIB_HELP_HTML);
+            return;
+        }
         const tenantId = req.user?.companyId ?? 1;
         const [rows] = await db.query("SELECT * FROM daact_declarations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
         const d = rows[0];

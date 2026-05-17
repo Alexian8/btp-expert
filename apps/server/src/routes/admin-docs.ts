@@ -29,7 +29,23 @@ import { renderTvaAttestationCerfaHtml } from "../templates/tvaAttestationCerfaT
 import { renderTvaAttestationCerfaOfficielHtml } from "../templates/tvaAttestationCerfaOfficielTemplate";
 import { renderDc4Html } from "../templates/dc4Template";
 import { renderDaactCerfaHtml } from "../templates/daactCerfaTemplate";
-import { fillCerfa1301SD, fillCerfa13408 } from "../cerfaFiller";
+import { fillCerfa1301SD, fillCerfa13408, isPdfLibAvailable } from "../cerfaFiller";
+
+const PDF_LIB_HELP_HTML = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>pdf-lib manquant</title>
+<style>body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:24px;background:#fef3c7;border:1px solid #f59e0b;border-radius:12px}
+code{background:#fff;padding:2px 6px;border-radius:4px;font-family:Menlo,monospace}</style></head>
+<body>
+<h1>⚙️ Une dépendance manque sur le serveur</h1>
+<p>La génération des CERFA officiels nécessite la bibliothèque <code>pdf-lib</code>
+qui n'est pas encore installée sur ce serveur o2switch.</p>
+<p>Pour activer cette fonctionnalité, ouvrez le <strong>Terminal cPanel</strong> et lancez :</p>
+<pre><code>cd ~/intranet.jacobhabitat-dev.fr &amp;&amp; npm install pdf-lib --omit=dev
+mkdir -p tmp &amp;&amp; touch tmp/restart.txt</code></pre>
+<p>Le serveur redémarrera automatiquement et cette page disparaîtra.</p>
+<p style="font-size:13px;color:#666">En attendant, les autres types d'attestations TVA (modèle simplifié,
+CERFA visuel BatiDesk) restent disponibles.</p>
+</body></html>`;
 
 // Helper : convertit une date ISO (YYYY-MM-DD) en format CERFA jj/mm/aaaa
 function dateToCerfa(iso: string | null | undefined): string {
@@ -578,6 +594,10 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
   router.get(
     "/tva/:id/pdf",
     wrap(async (req, res) => {
+      if (!isPdfLibAvailable()) {
+        res.status(503).type("html").send(PDF_LIB_HELP_HTML);
+        return;
+      }
       const tenantId = req.user?.companyId ?? 1;
       const [rows] = await db.query<RowDataPacket[]>(
         "SELECT * FROM tva_attestations WHERE id = ? AND companyId = ? LIMIT 1",
@@ -624,6 +644,10 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
   router.get(
     "/daact/:id/pdf",
     wrap(async (req, res) => {
+      if (!isPdfLibAvailable()) {
+        res.status(503).type("html").send(PDF_LIB_HELP_HTML);
+        return;
+      }
       const tenantId = req.user?.companyId ?? 1;
       const [rows] = await db.query<RowDataPacket[]>(
         "SELECT * FROM daact_declarations WHERE id = ? AND companyId = ? LIMIT 1",

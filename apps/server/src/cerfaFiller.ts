@@ -7,7 +7,44 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { PDFDocument } from "pdf-lib";
+
+// pdf-lib est chargé dynamiquement à la première utilisation. Sans cette
+// astuce, l'import statique fait crasher le serveur entier au boot si la
+// dépendance n'est pas installée (cas typique sur o2switch où `npm install`
+// n'est pas lancé automatiquement au déploiement). Avec l'import dynamique,
+// le serveur boote, les autres routes marchent, et SEULES les routes CERFA
+// renvoient une 503 explicite tant que pdf-lib n'est pas installé.
+type PDFDocumentType = import("pdf-lib").PDFDocument;
+type PDFLib = typeof import("pdf-lib");
+let pdfLibCache: PDFLib | null = null;
+let pdfLibError: Error | null = null;
+
+async function getPdfLib(): Promise<PDFLib> {
+  if (pdfLibCache) return pdfLibCache;
+  if (pdfLibError) throw pdfLibError;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    pdfLibCache = require("pdf-lib") as PDFLib;
+    return pdfLibCache;
+  } catch (e) {
+    pdfLibError = new Error(
+      "pdf-lib n'est pas installé sur ce serveur. Lancez : npm install pdf-lib --omit=dev"
+    );
+    throw pdfLibError;
+  }
+}
+
+export function isPdfLibAvailable(): boolean {
+  if (pdfLibCache) return true;
+  if (pdfLibError) return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require.resolve("pdf-lib");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const CERFA_DIR = path.join(__dirname, "cerfa-pdf");
 
@@ -17,7 +54,9 @@ function loadPdf(filename: string): Buffer {
 
 // Helpers tolérants : si un champ n'existe pas ou n'a pas le bon type, on
 // log et on continue — un mapping invalide ne doit pas casser tout le PDF.
-function safeText(form: ReturnType<PDFDocument["getForm"]>, name: string, value: string | undefined | null): void {
+type PDFForm = ReturnType<PDFDocumentType["getForm"]>;
+
+function safeText(form: PDFForm, name: string, value: string | undefined | null): void {
   if (value == null) return;
   try {
     form.getTextField(name).setText(String(value));
@@ -26,7 +65,7 @@ function safeText(form: ReturnType<PDFDocument["getForm"]>, name: string, value:
   }
 }
 
-function safeCheck(form: ReturnType<PDFDocument["getForm"]>, name: string, checked: boolean): void {
+function safeCheck(form: PDFForm, name: string, checked: boolean): void {
   try {
     const cb = form.getCheckBox(name);
     if (checked) cb.check();
@@ -63,6 +102,7 @@ export interface Cerfa1301SDData {
 }
 
 export async function fillCerfa1301SD(data: Cerfa1301SDData): Promise<Uint8Array> {
+  const { PDFDocument } = await getPdfLib();
   const pdf = await PDFDocument.load(loadPdf("cerfa-1301sd.pdf"));
   const form = pdf.getForm();
 
@@ -167,6 +207,7 @@ export interface Cerfa13408Data {
 }
 
 export async function fillCerfa13408(data: Cerfa13408Data): Promise<Uint8Array> {
+  const { PDFDocument } = await getPdfLib();
   const pdf = await PDFDocument.load(loadPdf("cerfa-13408.pdf"));
   const form = pdf.getForm();
 

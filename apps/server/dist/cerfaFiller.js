@@ -9,17 +9,46 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isPdfLibAvailable = isPdfLibAvailable;
 exports.fillCerfa1301SD = fillCerfa1301SD;
 exports.fillCerfa13408 = fillCerfa13408;
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
-const pdf_lib_1 = require("pdf-lib");
+let pdfLibCache = null;
+let pdfLibError = null;
+async function getPdfLib() {
+    if (pdfLibCache)
+        return pdfLibCache;
+    if (pdfLibError)
+        throw pdfLibError;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        pdfLibCache = require("pdf-lib");
+        return pdfLibCache;
+    }
+    catch (e) {
+        pdfLibError = new Error("pdf-lib n'est pas installé sur ce serveur. Lancez : npm install pdf-lib --omit=dev");
+        throw pdfLibError;
+    }
+}
+function isPdfLibAvailable() {
+    if (pdfLibCache)
+        return true;
+    if (pdfLibError)
+        return false;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require.resolve("pdf-lib");
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
 const CERFA_DIR = node_path_1.default.join(__dirname, "cerfa-pdf");
 function loadPdf(filename) {
     return node_fs_1.default.readFileSync(node_path_1.default.join(CERFA_DIR, filename));
 }
-// Helpers tolérants : si un champ n'existe pas ou n'a pas le bon type, on
-// log et on continue — un mapping invalide ne doit pas casser tout le PDF.
 function safeText(form, name, value) {
     if (value == null)
         return;
@@ -43,7 +72,8 @@ function safeCheck(form, name, checked) {
     }
 }
 async function fillCerfa1301SD(data) {
-    const pdf = await pdf_lib_1.PDFDocument.load(loadPdf("cerfa-1301sd.pdf"));
+    const { PDFDocument } = await getPdfLib();
+    const pdf = await PDFDocument.load(loadPdf("cerfa-1301sd.pdf"));
     const form = pdf.getForm();
     // Cadre 1 — Identité (ordre déductible du PDF : nom, prénom, adresse, CP, commune)
     safeText(form, "a1", data.nom);
@@ -86,7 +116,8 @@ async function fillCerfa1301SD(data) {
     return pdf.save();
 }
 async function fillCerfa13408(data) {
-    const pdf = await pdf_lib_1.PDFDocument.load(loadPdf("cerfa-13408.pdf"));
+    const { PDFDocument } = await getPdfLib();
+    const pdf = await PDFDocument.load(loadPdf("cerfa-13408.pdf"));
     const form = pdf.getForm();
     // Permis
     safeCheck(form, "J2Q_PC", data.permitType === "permis_construire");
