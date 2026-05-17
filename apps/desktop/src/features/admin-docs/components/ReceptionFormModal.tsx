@@ -20,6 +20,7 @@ import { useAdministrativeDocsStore } from "@/stores/administrativeDocsStore";
 import { useChantiersStore } from "@/stores/chantiersStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import { useCompanyStore } from "@/stores/companyStore";
+import { DocSignatureField } from "./DocSignatureField";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ReceptionFormModal — Création/édition d'un PV de réception
@@ -63,8 +64,10 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
   const [retentionReleaseDate, setRetentionReleaseDate] = useState("");
   const [ownerSigned, setOwnerSigned] = useState(false);
   const [ownerSignedDate, setOwnerSignedDate] = useState("");
+  const [ownerSignatureDataUrl, setOwnerSignatureDataUrl] = useState("");
   const [contractorSigned, setContractorSigned] = useState(false);
   const [contractorSignedDate, setContractorSignedDate] = useState("");
+  const [contractorSignatureDataUrl, setContractorSignatureDataUrl] = useState("");
   const [status, setStatus] = useState<ReceptionStatus>("brouillon");
 
   const [reserves, setReserves] = useState<DraftReserve[]>([]);
@@ -149,8 +152,10 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
         setRetentionReleaseDate(r.retentionReleaseDate);
         setOwnerSigned(r.ownerSigned);
         setOwnerSignedDate(r.ownerSignedDate);
+        setOwnerSignatureDataUrl((r as { ownerSignatureDataUrl?: string }).ownerSignatureDataUrl ?? "");
         setContractorSigned(r.contractorSigned);
         setContractorSignedDate(r.contractorSignedDate);
+        setContractorSignatureDataUrl((r as { contractorSignatureDataUrl?: string }).contractorSignatureDataUrl ?? "");
         setStatus(r.status);
         setReserves(r.reserves.map((res) => ({
           id: res.id,
@@ -275,8 +280,8 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
       observations: observations.trim(),
       retentionAmount: parseFloat(retentionAmount.replace(",", ".")) || 0,
       retentionReleaseDate,
-      ownerSigned, ownerSignedDate,
-      contractorSigned, contractorSignedDate,
+      ownerSigned, ownerSignedDate, ownerSignatureDataUrl,
+      contractorSigned, contractorSignedDate, contractorSignatureDataUrl,
       status,
       reserves: isAvecReserves ? reserves : [],
     };
@@ -578,32 +583,48 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
 
               {/* Signatures */}
               <Section title="Signatures" icon={Users}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="p-3 rounded-md border border-border">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={ownerSigned} onChange={(e) => setOwnerSigned(e.target.checked)} />
-                      <span className="text-sm font-medium">Maître d'ouvrage</span>
-                    </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <DocSignatureField
+                      label="Signature du maître d'ouvrage"
+                      description="Le client signe pour réceptionner les travaux."
+                      value={ownerSignatureDataUrl}
+                      onChange={(url) => {
+                        setOwnerSignatureDataUrl(url);
+                        setOwnerSigned(!!url);
+                        if (url && !ownerSignedDate) {
+                          setOwnerSignedDate(new Date().toISOString().slice(0, 10));
+                        }
+                      }}
+                    />
                     {ownerSigned && (
                       <Input
                         type="date"
                         value={ownerSignedDate}
                         onChange={(e) => setOwnerSignedDate(e.target.value)}
-                        className="mt-2 text-xs"
+                        className="text-xs"
                       />
                     )}
                   </div>
-                  <div className="p-3 rounded-md border border-border">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={contractorSigned} onChange={(e) => setContractorSigned(e.target.checked)} />
-                      <span className="text-sm font-medium">Entreprise</span>
-                    </label>
+                  <div className="space-y-2">
+                    <DocSignatureField
+                      label="Signature de l'entreprise"
+                      description="Le représentant de l'entreprise atteste de la réception."
+                      value={contractorSignatureDataUrl}
+                      onChange={(url) => {
+                        setContractorSignatureDataUrl(url);
+                        setContractorSigned(!!url);
+                        if (url && !contractorSignedDate) {
+                          setContractorSignedDate(new Date().toISOString().slice(0, 10));
+                        }
+                      }}
+                    />
                     {contractorSigned && (
                       <Input
                         type="date"
                         value={contractorSignedDate}
                         onChange={(e) => setContractorSignedDate(e.target.value)}
-                        className="mt-2 text-xs"
+                        className="text-xs"
                       />
                     )}
                   </div>

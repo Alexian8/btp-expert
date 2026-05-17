@@ -21,6 +21,7 @@ import {
 import { useAdministrativeDocsStore } from "@/stores/administrativeDocsStore";
 import { useChantiersStore } from "@/stores/chantiersStore";
 import { useClientsStore } from "@/stores/clientsStore";
+import { DocSignatureField } from "./DocSignatureField";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TvaAttestationFormModal — Création / édition d'une attestation TVA
@@ -70,6 +71,7 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
   // Signature
   const [signedDate, setSignedDate] = useState("");
   const [signedLocation, setSignedLocation] = useState("");
+  const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState("");
   const [status, setStatus] = useState<TvaAttestationStatus>("brouillon");
 
   const [saving, setSaving] = useState(false);
@@ -158,6 +160,7 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
         setClientCommitments(a.clientCommitments);
         setSignedDate(a.signedDate);
         setSignedLocation(a.signedLocation);
+        setClientSignatureDataUrl((a as { clientSignatureDataUrl?: string }).clientSignatureDataUrl ?? "");
         setStatus(a.status);
       } else {
         setReference("");
@@ -278,7 +281,7 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
       totalAmountHt: parseFloat(totalAmountHt.replace(",", ".")) || 0,
       invoiceReference: invoiceReference.trim(),
       clientCommitments,
-      signedDate, signedLocation: signedLocation.trim(),
+      signedDate, signedLocation: signedLocation.trim(), clientSignatureDataUrl,
       status,
     };
 
@@ -602,7 +605,7 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
 
               {/* Signature */}
               <Section title="Signature" icon={Calendar}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <div>
                     <Label>Date de signature</Label>
                     <Input type="date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} className="mt-1.5" />
@@ -612,6 +615,17 @@ export function TvaAttestationFormModal({ open, attestationId, onClose }: Props)
                     <Input value={signedLocation} onChange={(e) => setSignedLocation(e.target.value)} placeholder="Ville" className="mt-1.5" />
                   </div>
                 </div>
+                <DocSignatureField
+                  label="Signature du donneur d'ordre (client)"
+                  description={`Le client atteste sur l'honneur que les conditions d'application du taux réduit (${tvaRate}%) sont respectées.`}
+                  value={clientSignatureDataUrl}
+                  onChange={(url) => {
+                    setClientSignatureDataUrl(url);
+                    if (url && !signedDate) {
+                      setSignedDate(new Date().toISOString().slice(0, 10));
+                    }
+                  }}
+                />
               </Section>
 
               {/* Statut */}
