@@ -24,9 +24,11 @@ const admin_users_1 = require("./routes/admin-users");
 const admin_logs_1 = require("./routes/admin-logs");
 const super_admin_1 = require("./routes/super-admin");
 const vault_1 = require("./routes/vault");
+const admin_docs_1 = require("./routes/admin-docs");
 const auth_2 = require("./auth");
 const rbac_1 = require("./rbac");
 const rate_limit_1 = require("./rate-limit");
+const token_revocation_1 = require("./token-revocation");
 // ─── Listes de colonnes ──────────────────────────────────────────────────
 const CLIENT_COLS = [
     "type",
@@ -166,6 +168,11 @@ const INVOICE_COLS = [
 async function createApp(cfg, db) {
     const pool = db ?? (0, db_1.createPool)(cfg);
     await (0, db_1.runMigrations)(pool);
+    // Purge périodique des tokens révoqués expirés (idempotent, sans effet
+    // si la table est vide). Démarre seulement si on n'est pas en test.
+    if (cfg.NODE_ENV !== "test") {
+        (0, token_revocation_1.startRevokedTokensPurgeJob)(pool);
+    }
     const app = (0, express_1.default)();
     app.disable("x-powered-by");
     // Trust proxy : Passenger/cPanel met l'IP réelle dans X-Forwarded-For.
@@ -183,6 +190,16 @@ async function createApp(cfg, db) {
         credentials: true,
     }));
     app.use(express_1.default.json({ limit: "10mb" }));
+    // Defense-in-depth : refuse toute requête sur un .map (au cas où un build
+    // génèrerait des sourcemaps qui se retrouveraient dans public/). Doit être
+    // déclaré avant express.static — sinon le static handler répond en premier.
+    app.use((req, res, next) => {
+        if (req.path.endsWith(".map")) {
+            res.status(404).end();
+            return;
+        }
+        next();
+    });
     // Rate-limit global API (anti scraper/bot)
     app.use((0, rate_limit_1.buildApiRateLimiter)(cfg));
     app.get("/api/health", (_req, res) => {
@@ -194,7 +211,7 @@ async function createApp(cfg, db) {
     // Sentry la capture (si SENTRY_DSN est configuré). Réponse attendue : 500.
     // Sert UNIQUEMENT à vérifier que le monitoring fonctionne — aucun effet
     // de bord, aucune donnée touchée.
-    app.get("/api/debug/sentry-test", (0, auth_2.requireAuth)(cfg), (0, rbac_1.requireRole)("admin"), (_req, _res) => {
+    app.get("/api/debug/sentry-test", (0, auth_2.requireAuth)(cfg, pool), (0, rbac_1.requireRole)("admin"), (_req, _res) => {
         throw new Error(`Sentry server test — ${new Date().toISOString()} (déclenché volontairement via /api/debug/sentry-test)`);
     });
     // Rate-limit STRICT sur le login (anti brute-force)
@@ -206,7 +223,7 @@ async function createApp(cfg, db) {
     app.use("/api/admin/logs", (0, admin_logs_1.buildAdminLogsRouter)(pool, cfg));
     // ─── Super-admin : gestion des entreprises clientes (super_admin only) ──
     app.use("/api/super-admin", (0, super_admin_1.buildSuperAdminRouter)(pool, cfg));
-    const auth = (0, auth_2.requireAuth)(cfg);
+    const auth = (0, auth_2.requireAuth)(cfg, pool);
     // ─── Clients ───────────────────────────────────────────────────────────
     const clients = new repository_1.MysqlRepository(pool, "clients", {
         primaryKey: "client",
@@ -410,13 +427,62 @@ async function createApp(cfg, db) {
         }
         res.json(obj);
     }));
+    // Whitelist des clés acceptées dans /api/settings. On utilise une regex
+    // permissive plutôt qu'une liste exacte parce que les sections UI ajoutent
+    // régulièrement de nouvelles clés (pdfXxx, emailXxx, etc.). Mais on bloque
+    // les clés "magiques" et la pollution de prototype.
+    const ALLOWED_SETTING_PREFIXES = [
+        "pdf",
+        "invoice",
+        "quote",
+        "email",
+        "company",
+        "rge",
+        "cgv",
+        "theme",
+        "appearance",
+    ];
+    const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
+    const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+    const MAX_SETTINGS_PER_REQUEST = 200;
+    const MAX_SETTING_VALUE_BYTES = 256 * 1024; // 256 KB par valeur
+    function isAllowedSettingKey(k) {
+        if (!SETTING_KEY_RE.test(k))
+            return false;
+        if (FORBIDDEN_KEYS.has(k))
+            return false;
+        return ALLOWED_SETTING_PREFIXES.some((p) => k.startsWith(p));
+    }
     app.patch("/api/settings", auth, asyncHandler(async (req, res) => {
+        const body = (req.body ?? {});
+        const entries = Object.entries(body);
+        if (entries.length > MAX_SETTINGS_PER_REQUEST) {
+            res
+                .status(400)
+                .json({ message: `Trop de clés (max ${MAX_SETTINGS_PER_REQUEST})` });
+            return;
+        }
+        // Pré-valide toutes les clés/valeurs avant d'ouvrir la transaction.
+        // Si une seule clé est invalide, on rejette tout — pas de partial write.
+        const validated = [];
+        for (const [k, v] of entries) {
+            if (!isAllowedSettingKey(k)) {
+                res.status(400).json({ message: `Clé non autorisée : ${k}` });
+                return;
+            }
+            const serialized = JSON.stringify(v ?? null);
+            if (Buffer.byteLength(serialized, "utf8") > MAX_SETTING_VALUE_BYTES) {
+                res.status(400).json({ message: `Valeur trop grosse pour ${k}` });
+                return;
+            }
+            validated.push([k, serialized]);
+        }
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
-            for (const [k, v] of Object.entries(req.body ?? {})) {
+            for (const [k, serialized] of validated) {
                 await conn.execute("INSERT INTO settings (`key`, value) VALUES (?, ?) " +
-                    "ON DUPLICATE KEY UPDATE value = VALUES(value)", [k, JSON.stringify(v)]);
+                    "ON DUPLICATE KEY UPDATE value = VALUES(value)", [k, serialized]);
             }
             await conn.commit();
         }
@@ -495,6 +561,8 @@ async function createApp(cfg, db) {
     app.use("/api/backup", auth, (0, backup_1.buildBackupRouter)(pool, cfg));
     // ─── Vault (coffre-fort documents) ─────────────────────────────────────
     app.use("/api/vault", (0, vault_1.buildVaultRouter)(pool, cfg));
+    // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
+    app.use("/api/admin-docs", (0, admin_docs_1.buildAdminDocsRouter)(pool, cfg));
     // ─── Static SPA ────────────────────────────────────────────────────────
     const publicDir = node_path_1.default.resolve(process.cwd(), "public");
     if (node_fs_1.default.existsSync(publicDir)) {
@@ -534,4 +602,3 @@ async function createApp(cfg, db) {
 function asyncHandler(handler) {
     return (req, res, next) => handler(req, res).catch(next);
 }
-//# sourceMappingURL=app.js.map

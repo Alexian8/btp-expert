@@ -20,9 +20,11 @@ import { buildAdminUsersRouter } from "./routes/admin-users";
 import { buildAdminLogsRouter } from "./routes/admin-logs";
 import { buildSuperAdminRouter } from "./routes/super-admin";
 import { buildVaultRouter } from "./routes/vault";
+import { buildAdminDocsRouter } from "./routes/admin-docs";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
+import { startRevokedTokensPurgeJob } from "./token-revocation";
 
 export interface AppContext {
   db: DB;
@@ -174,6 +176,12 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   const pool = db ?? createPool(cfg);
   await runMigrations(pool);
 
+  // Purge périodique des tokens révoqués expirés (idempotent, sans effet
+  // si la table est vide). Démarre seulement si on n'est pas en test.
+  if (cfg.NODE_ENV !== "test") {
+    startRevokedTokensPurgeJob(pool);
+  }
+
   const app = express();
   app.disable("x-powered-by");
 
@@ -198,6 +206,17 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   );
   app.use(express.json({ limit: "10mb" }));
 
+  // Defense-in-depth : refuse toute requête sur un .map (au cas où un build
+  // génèrerait des sourcemaps qui se retrouveraient dans public/). Doit être
+  // déclaré avant express.static — sinon le static handler répond en premier.
+  app.use((req, res, next) => {
+    if (req.path.endsWith(".map")) {
+      res.status(404).end();
+      return;
+    }
+    next();
+  });
+
   // Rate-limit global API (anti scraper/bot)
   app.use(buildApiRateLimiter(cfg));
 
@@ -213,7 +232,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // de bord, aucune donnée touchée.
   app.get(
     "/api/debug/sentry-test",
-    requireAuth(cfg),
+    requireAuth(cfg, pool),
     requireRole("admin"),
     (_req: Request, _res: Response) => {
       throw new Error(
@@ -235,7 +254,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // ─── Super-admin : gestion des entreprises clientes (super_admin only) ──
   app.use("/api/super-admin", buildSuperAdminRouter(pool, cfg));
 
-  const auth = requireAuth(cfg);
+  const auth = requireAuth(cfg, pool);
 
   // ─── Clients ───────────────────────────────────────────────────────────
   const clients = new MysqlRepository(pool, "clients", {
@@ -462,18 +481,70 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     })
   );
 
+  // Whitelist des clés acceptées dans /api/settings. On utilise une regex
+  // permissive plutôt qu'une liste exacte parce que les sections UI ajoutent
+  // régulièrement de nouvelles clés (pdfXxx, emailXxx, etc.). Mais on bloque
+  // les clés "magiques" et la pollution de prototype.
+  const ALLOWED_SETTING_PREFIXES = [
+    "pdf",
+    "invoice",
+    "quote",
+    "email",
+    "company",
+    "rge",
+    "cgv",
+    "theme",
+    "appearance",
+  ];
+  const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
+  const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+  const MAX_SETTINGS_PER_REQUEST = 200;
+  const MAX_SETTING_VALUE_BYTES = 256 * 1024; // 256 KB par valeur
+
+  function isAllowedSettingKey(k: string): boolean {
+    if (!SETTING_KEY_RE.test(k)) return false;
+    if (FORBIDDEN_KEYS.has(k)) return false;
+    return ALLOWED_SETTING_PREFIXES.some((p) => k.startsWith(p));
+  }
+
   app.patch(
     "/api/settings",
     auth,
     asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const entries = Object.entries(body);
+
+      if (entries.length > MAX_SETTINGS_PER_REQUEST) {
+        res
+          .status(400)
+          .json({ message: `Trop de clés (max ${MAX_SETTINGS_PER_REQUEST})` });
+        return;
+      }
+
+      // Pré-valide toutes les clés/valeurs avant d'ouvrir la transaction.
+      // Si une seule clé est invalide, on rejette tout — pas de partial write.
+      const validated: Array<[string, string]> = [];
+      for (const [k, v] of entries) {
+        if (!isAllowedSettingKey(k)) {
+          res.status(400).json({ message: `Clé non autorisée : ${k}` });
+          return;
+        }
+        const serialized = JSON.stringify(v ?? null);
+        if (Buffer.byteLength(serialized, "utf8") > MAX_SETTING_VALUE_BYTES) {
+          res.status(400).json({ message: `Valeur trop grosse pour ${k}` });
+          return;
+        }
+        validated.push([k, serialized]);
+      }
+
       const conn = await pool.getConnection();
       try {
         await conn.beginTransaction();
-        for (const [k, v] of Object.entries(req.body ?? {})) {
+        for (const [k, serialized] of validated) {
           await conn.execute(
             "INSERT INTO settings (`key`, value) VALUES (?, ?) " +
               "ON DUPLICATE KEY UPDATE value = VALUES(value)",
-            [k, JSON.stringify(v)]
+            [k, serialized]
           );
         }
         await conn.commit();
@@ -590,6 +661,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // ─── Vault (coffre-fort documents) ─────────────────────────────────────
   app.use("/api/vault", buildVaultRouter(pool, cfg));
+
+  // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
+  app.use("/api/admin-docs", buildAdminDocsRouter(pool, cfg));
 
   // ─── Static SPA ────────────────────────────────────────────────────────
   const publicDir = path.resolve(process.cwd(), "public");

@@ -234,4 +234,3 @@ async function listMailboxes(cfg) {
         return { emails: [], error: e instanceof Error ? e.message : String(e) };
     }
 }
-//# sourceMappingURL=cpanel-email.js.map

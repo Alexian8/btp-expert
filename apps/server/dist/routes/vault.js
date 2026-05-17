@@ -102,7 +102,7 @@ const DocUpdateSchema = zod_1.z.object({
 });
 function buildVaultRouter(db, cfg) {
     const router = (0, express_1.Router)();
-    router.use((0, auth_1.requireAuth)(cfg));
+    router.use((0, auth_1.requireAuth)(cfg, db));
     // ─── Folders ──────────────────────────────────────────────────────────
     router.get("/folders", wrap(async (req, res) => {
         const tenantId = req.user?.companyId ?? 1;
@@ -439,4 +439,3 @@ function hydrate(row) {
     // VaultDocumentWithTags. Les tags réels seront fetchés à part.
     return { ...row, tags: [], isEncrypted: false, iv: "" };
 }
-//# sourceMappingURL=vault.js.map

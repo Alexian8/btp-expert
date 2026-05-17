@@ -298,6 +298,7 @@ export const DC4_STATUS_META: Record<Dc4Status, { label: string; colorTw: string
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type RgeDocumentType =
+  | "qualification"           // certificat de qualification (Qualibat, Qualibois…)
   | "devis_rge"               // devis avec mentions RGE obligatoires
   | "facture_rge"             // facture avec mentions
   | "attestation_rge"         // attestation de fin de travaux RGE
@@ -315,10 +316,12 @@ export interface RgeDocument {
 
   rgeQualification: string;     // Qualibat, Qualibois...
   rgeQualificationNumber: string;
+  rgeValidUntil: string;        // ISO date — date de fin de validité
 
   worksDescription: string;
   totalAmountTtc: number;
   primeRenovExpected: number;   // estimation aide MaPrimeRénov'
+  primeRenovActual: number;     // montant effectivement versé
 
   notes: string;
   vaultDocumentId: string;
@@ -328,12 +331,27 @@ export interface RgeDocument {
 }
 
 export const RGE_DOCUMENT_TYPE_META: Record<RgeDocumentType, { label: string }> = safeMeta({
+  qualification:    { label: "Qualification RGE" },
   devis_rge:        { label: "Devis RGE" },
   facture_rge:      { label: "Facture RGE" },
   attestation_rge:  { label: "Attestation fin de travaux RGE" },
   fiche_technique:  { label: "Fiche technique" },
   autre:            { label: "Autre" },
 });
+
+/** Référentiel des qualifications RGE reconnues par France Rénov'. */
+export const RGE_QUALIFICATIONS = [
+  "Qualibat RGE",
+  "Qualifelec RGE",
+  "Qualibois",
+  "QualiPV",
+  "QualiSol",
+  "Qualipac",
+  "Chauffage+",
+  "Ventilation+",
+  "Autre",
+] as const;
+export type RgeQualification = (typeof RGE_QUALIFICATIONS)[number];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Stats globales

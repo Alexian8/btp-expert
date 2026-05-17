@@ -179,26 +179,49 @@ ${declaration.publicMarketObject ? `
     à l'article F. Il sollicite à cet effet l'<strong>acceptation du sous-traitant</strong> ainsi
     que l'<strong>agrément des conditions de paiement</strong> auprès du pouvoir adjudicateur.
   </p>
+  ${declaration.acteSpecialNumber ? `
+    <p style="margin-top:2mm"><strong>N° de l'acte spécial :</strong> ${escapeHtml(declaration.acteSpecialNumber)}</p>
+  ` : ""}
+  ${declaration.acceptanceDeadline ? `
+    <p><strong>Date limite d'acceptation par le pouvoir adjudicateur :</strong> ${formatDate(declaration.acceptanceDeadline)}</p>
+  ` : ""}
+  <p style="font-size:9pt;color:#6b7280;margin-top:2mm">
+    Le sous-traitant ne peut entreprendre l'exécution de ses prestations qu'après acceptation
+    par le pouvoir adjudicateur. Conformément à l'article L. 2193-3 du Code de la commande
+    publique, le sous-traitant <strong>ne peut réclamer aucune somme</strong> directement au
+    maître d'ouvrage pour les prestations exécutées en sous-traitance dès lors que celles-ci
+    n'ont pas été préalablement acceptées et que ses conditions de paiement n'ont pas été
+    agréées par le pouvoir adjudicateur.
+  </p>
 </div>
 
 <div class="signature-zone">
   <div class="signature-block">
-    <div class="sig-label">L'entrepreneur principal</div>
+    <div class="sig-label">L'entrepreneur principal (titulaire)</div>
     <div class="sig-meta">${escapeHtml((company && company.companyName) || "—")}</div>
     <div class="sig-meta">Fait à ${escapeHtml(declaration.signedLocation) || "____________"}, le ${formatDate(declaration.signedDate || new Date().toISOString())}</div>
+    ${declaration.contractorSignatureDataUrl
+      ? '<img src="' + declaration.contractorSignatureDataUrl + '" alt="Signature" style="max-width:60mm;max-height:25mm;object-fit:contain;margin:2mm 0" />'
+      : ""}
     <div class="sig-mention">Cachet et signature</div>
   </div>
   <div class="signature-block">
     <div class="sig-label">Le sous-traitant</div>
     <div class="sig-meta">${escapeHtml((subcontractor && subcontractor.companyName) || declaration.subcontractorName || "—")}</div>
+    ${declaration.ownerSignatureDataUrl
+      ? '<img src="' + declaration.ownerSignatureDataUrl + '" alt="Signature" style="max-width:60mm;max-height:25mm;object-fit:contain;margin:2mm 0" />'
+      : ""}
     <div class="sig-mention">"Lu et approuvé" — Cachet et signature</div>
   </div>
 </div>
 
 <div class="signature-block" style="margin-top:4mm">
-  <div class="sig-label">Acceptation du pouvoir adjudicateur</div>
+  <div class="sig-label">Acceptation du pouvoir adjudicateur (maître d'ouvrage public)</div>
   <div class="sig-meta">${escapeHtml(declaration.publicAuthorityName) || "—"}</div>
-  <div class="sig-mention">Date et cachet du pouvoir adjudicateur — réservé à l'administration</div>
+  ${declaration.authoritySignatureDataUrl
+    ? '<img src="' + declaration.authoritySignatureDataUrl + '" alt="Signature" style="max-width:60mm;max-height:25mm;object-fit:contain;margin:2mm 0" />'
+    : ""}
+  <div class="sig-mention">Date, cachet et signature du pouvoir adjudicateur — réservé à l'administration</div>
 </div>
 
 <div class="legal-footer">

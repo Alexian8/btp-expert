@@ -10,6 +10,7 @@ import type { DB, RowDataPacket, ResultSetHeader } from "../db";
 import { signToken, verifyToken, type AuthPayload } from "../auth";
 import { writeAudit } from "../audit";
 import { changeMailboxPassword, isCpanelConfigured } from "../cpanel-email";
+import { revokeToken } from "../token-revocation";
 import type { Config } from "../config";
 
 const SALT_LEN = 16;
@@ -265,13 +266,49 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         meta: { mailboxSynced, mailboxSyncError },
       });
 
+      // Révoque le token courant : après un changement de mot de passe, il
+      // faut reseigner pour obtenir un nouveau token. Empêche la persistance
+      // d'une session sur un appareil potentiellement compromis.
+      try {
+        await revokeToken(db, header.slice(7).trim(), payload);
+      } catch (e) {
+        console.warn("[auth] revokeToken failed at change-password:", e);
+      }
+
       res.status(204).end();
     })
   );
 
-  router.post("/logout", (_req: Request, res: Response) => {
-    res.status(204).end();
-  });
+  router.post(
+    "/logout",
+    wrap(async (req, res) => {
+      // Révoque le token courant (si présent et valide). Best-effort : on
+      // répond 204 même si la révocation échoue, pour ne pas bloquer la
+      // déconnexion côté client.
+      const header = req.headers.authorization;
+      if (header?.startsWith("Bearer ")) {
+        const token = header.slice(7).trim();
+        const payload = verifyToken(token, cfg);
+        if (payload) {
+          try {
+            await revokeToken(db, token, payload);
+            void writeAudit(db, {
+              userId: payload.sub,
+              username: payload.username,
+              companyId: payload.companyId ?? null,
+              action: "logout",
+              ip: req.ip ?? "",
+              userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+              meta: {},
+            });
+          } catch (e) {
+            console.warn("[auth] revokeToken failed at logout:", e);
+          }
+        }
+      }
+      res.status(204).end();
+    })
+  );
 
   router.get(
     "/me",

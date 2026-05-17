@@ -119,7 +119,7 @@ const DocUpdateSchema = z.object({
 
 export function buildVaultRouter(db: DB, cfg: Config): Router {
   const router = Router();
-  router.use(requireAuth(cfg));
+  router.use(requireAuth(cfg, db));
 
   // ─── Folders ──────────────────────────────────────────────────────────
   router.get(

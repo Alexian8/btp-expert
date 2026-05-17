@@ -5,6 +5,8 @@
 import jwt, { type SignOptions } from "jsonwebtoken";
 import type { NextFunction, Request, Response } from "express";
 import type { Config } from "./config";
+import type { DB } from "./db";
+import { isTokenRevoked } from "./token-revocation";
 
 export interface AuthPayload {
   sub: number;
@@ -12,6 +14,10 @@ export interface AuthPayload {
   role: string;
   /** Multi-tenant : ID de l'entreprise du user. Sert à isoler les données. */
   companyId: number;
+  /** `exp` standard JWT (epoch en secondes). Présent après jwt.verify. */
+  exp?: number;
+  /** `iat` standard JWT (epoch en secondes). Présent après jwt.verify. */
+  iat?: number;
 }
 
 export function signToken(payload: AuthPayload, cfg: Config): string {
@@ -30,11 +36,13 @@ export function verifyToken(token: string, cfg: Config): AuthPayload | null {
 declare module "express-serve-static-core" {
   interface Request {
     user?: AuthPayload;
+    /** Token brut tel qu'envoyé dans l'en-tête Authorization, sans le préfixe Bearer. */
+    authToken?: string;
   }
 }
 
-export function requireAuth(cfg: Config) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+export function requireAuth(cfg: Config, db?: DB) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) {
       res.status(401).json({ message: "Token manquant" });
@@ -46,7 +54,25 @@ export function requireAuth(cfg: Config) {
       res.status(401).json({ message: "Token invalide ou expiré" });
       return;
     }
+    // Vérification de la blacklist (logout, password-change). Si la DB n'est
+    // pas fournie (tests legacy), on saute — le contrôle reste solide là où
+    // ça compte (production utilise toujours db).
+    if (db) {
+      try {
+        if (await isTokenRevoked(db, token)) {
+          res.status(401).json({ message: "Token révoqué" });
+          return;
+        }
+      } catch (e) {
+        // En cas de panne DB on log mais on n'expose pas l'API : on rejette
+        // par sécurité, mieux vaut un 503 qu'un token révoqué accepté.
+        console.error("[auth] isTokenRevoked failed:", e);
+        res.status(503).json({ message: "Service auth indisponible" });
+        return;
+      }
+    }
     req.user = payload;
+    req.authToken = token;
     next();
   };
 }

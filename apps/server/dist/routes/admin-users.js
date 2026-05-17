@@ -92,7 +92,7 @@ function publicUser(row) {
 function buildAdminUsersRouter(db, cfg) {
     const router = (0, express_1.Router)();
     // Toutes les routes ici exigent admin
-    router.use((0, auth_1.requireAuth)(cfg), (0, rbac_1.requireRole)("admin"));
+    router.use((0, auth_1.requireAuth)(cfg, db), (0, rbac_1.requireRole)("admin"));
     // ─── Liste (scopée par tenant) ────────────────────────────────────────
     router.get("/", wrap(async (req, res) => {
         const tenantId = req.user?.companyId ?? 1;
@@ -486,4 +486,3 @@ function buildAdminUsersRouter(db, cfg) {
 }
 // Pour qu'un autre service (login) puisse vérifier qu'un user n'est pas disabled
 exports.__helpers = { hashPassword, generateTempPassword, isValidRole: rbac_1.isValidRole };
-//# sourceMappingURL=admin-users.js.map

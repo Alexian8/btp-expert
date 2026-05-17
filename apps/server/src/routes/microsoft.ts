@@ -156,20 +156,66 @@ function cleanupExpiredStates() {
   }
 }
 
+// ─── Tickets éphémères pour démarrer le flow OAuth sans exposer le JWT ─────
+// Le web client appelle POST /api/auth/microsoft/start avec son JWT en
+// Authorization header → reçoit un ticket à usage unique → redirige sur
+// GET /api/auth/microsoft/login?ticket=... Le ticket expire en 30s.
+const pendingTickets = new Map<string, { userId: number; expiresAt: number }>();
+function cleanupExpiredTickets() {
+  const now = Date.now();
+  for (const [k, v] of pendingTickets) {
+    if (v.expiresAt < now) pendingTickets.delete(k);
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────
 export function buildMicrosoftRouter(db: DB, cfg: Config): Router {
   const router = Router();
+
+  // POST /start : reçoit le JWT en header Authorization, retourne un ticket
+  // éphémère à usage unique pour démarrer le flow OAuth sans exposer le JWT
+  // dans une URL (historique navigateur, logs serveur, referer).
+  router.post(
+    "/start",
+    wrap(async (req, res) => {
+      const payload = userFromAuthHeader(req, cfg);
+      if (!payload) {
+        res.status(401).json({ message: "Non authentifié" });
+        return;
+      }
+      cleanupExpiredTickets();
+      const ticket = crypto.randomBytes(24).toString("base64url");
+      pendingTickets.set(ticket, {
+        userId: payload.sub,
+        expiresAt: Date.now() + 30_000, // 30s — juste le temps de cliquer
+      });
+      res.json({ loginUrl: `/api/auth/microsoft/login?ticket=${encodeURIComponent(ticket)}` });
+    })
+  );
 
   // Démarre le flow : génère state + code_verifier (PKCE), enregistre, redirige
   router.get(
     "/login",
     wrap(async (req, res) => {
-      // Le user JWT est passé en query (?token=...) parce que les redirects
-      // ne portent pas l'header Authorization
+      // Auth via ticket éphémère (recommandé). On accepte aussi l'ancien
+      // ?token=<JWT> en query pour la rétrocompat avec les builds desktop
+      // déjà déployés, mais ce chemin sera retiré ultérieurement.
+      const ticketParam = String(req.query.ticket || "");
       const tokenParam = String(req.query.token || "");
-      const payload = tokenParam ? verifyToken(tokenParam, cfg) : null;
+      let payload: AuthPayload | null = null;
+      if (ticketParam) {
+        cleanupExpiredTickets();
+        const t = pendingTickets.get(ticketParam);
+        if (t && t.expiresAt >= Date.now()) {
+          pendingTickets.delete(ticketParam); // single-use
+          payload = { sub: t.userId, username: "", role: "", companyId: 0 };
+        }
+      } else if (tokenParam) {
+        console.warn("[ms-oauth] /login appelé avec ?token= legacy — migrer vers ?ticket=");
+        payload = verifyToken(tokenParam, cfg);
+      }
       if (!payload) {
-        res.status(401).json({ message: "Token utilisateur manquant" });
+        res.status(401).json({ message: "Ticket invalide ou expiré" });
         return;
       }
       if (!cfg.MS_CLIENT_ID) {

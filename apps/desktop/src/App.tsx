@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 
 import { AppRouter } from "@/app/Router";
 import { ChangePasswordModal } from "@/features/auth/components/ChangePasswordModal";
@@ -30,13 +30,14 @@ export function App() {
   const loadUsers = useUsersStore((s) => s.load);
 
   useEffect(() => {
-    // Appliquer le thème au démarrage
+    // Appliquer le thème au démarrage (synchrone, sans I/O)
     applyTheme();
-    // Restaure la session (mode web : JWT en localStorage → /api/auth/me).
-    // En parallèle de checkSetup (sont indépendants).
-    void restoreSession();
-    // Vérifier si c'est la 1ère utilisation
-    checkSetup();
+    // Restoration de session + check setup en parallèle, mais on attend les
+    // deux avant de laisser le router décider de la page à afficher. Avant,
+    // le `void restoreSession()` partait sans attendre et `checkSetup()` se
+    // résolvait souvent en premier → l'UI montrait l'écran "Créer le 1er
+    // admin" pendant 200ms avant de basculer sur la page authentifiée.
+    void Promise.all([restoreSession(), checkSetup()]);
     // Démarre la détection device (mobile / standalone PWA / iOS)
     const cleanup = initDeviceDetection();
 
@@ -47,9 +48,34 @@ export function App() {
     };
     window.addEventListener("btp:auth-required", onAuthRequired);
 
+    // Le shim web émet "btp:api-error" pour les pannes réseau, timeouts, 5xx,
+    // 429. Avant ça les erreurs étaient avalées silencieusement (catch +
+    // valeur par défaut) et l'utilisateur voyait juste une UI vide.
+    // On déduplique par message pour ne pas spammer si plusieurs requêtes
+    // tombent en même temps.
+    let lastErrorAt = 0;
+    let lastErrorMsg = "";
+    const onApiError = (e: Event): void => {
+      const detail = (e as CustomEvent<{ message: string; kind: string; status?: number }>).detail;
+      if (!detail) return;
+      const now = Date.now();
+      if (detail.message === lastErrorMsg && now - lastErrorAt < 3000) return;
+      lastErrorMsg = detail.message;
+      lastErrorAt = now;
+      const title =
+        detail.kind === "timeout"
+          ? "Le serveur met du temps à répondre"
+          : detail.kind === "network"
+            ? "Pas de réseau"
+            : "Erreur serveur";
+      toast.error(title, { description: detail.message });
+    };
+    window.addEventListener("btp:api-error", onApiError as EventListener);
+
     return () => {
       cleanup?.();
       window.removeEventListener("btp:auth-required", onAuthRequired);
+      window.removeEventListener("btp:api-error", onApiError as EventListener);
     };
   }, [applyTheme, checkSetup, restoreSession]);
 

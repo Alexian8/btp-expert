@@ -169,7 +169,10 @@ export const useAdministrativeDocsStore = create<State>((set, get) => ({
 
   fetchStats: async () => {
     if (!window.btpAPI?.adminGetStats) return;
-    const stats = await window.btpAPI.adminGetStats();
-    set({ stats });
+    const raw = await window.btpAPI.adminGetStats();
+    // Le shim web peut renvoyer {} (méthode stubbée) — on merge avec
+    // EMPTY_STATS pour ne jamais propager d'undefined dans l'UI (sinon
+    // String(undefined) affiche "undefined" et les soustractions donnent NaN).
+    set({ stats: { ...EMPTY_STATS, ...(raw ?? {}) } });
   },
 }));

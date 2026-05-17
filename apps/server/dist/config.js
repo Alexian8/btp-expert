@@ -75,4 +75,3 @@ function loadConfig(env = process.env) {
     }
     return result.data;
 }
-//# sourceMappingURL=config.js.map

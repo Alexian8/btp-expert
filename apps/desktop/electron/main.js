@@ -371,6 +371,32 @@ async function initDB() {
       console.warn("[migration chantier_documents]", e.message);
     }
 
+    // Migration admin-docs : colonnes signatures embarquées + nouveaux champs
+    // DC4 (acte spécial, date d'acceptation). Idempotent (PRAGMA check).
+    function addColIfMissing(table, name, def) {
+      try {
+        const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+        if (!cols.some((c) => c.name === name)) {
+          db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`);
+        }
+      } catch (e) {
+        console.warn(`[migration ${table}.${name}]`, e.message);
+      }
+    }
+    addColIfMissing("reception_reports", "ownerSignatureDataUrl", "TEXT DEFAULT ''");
+    addColIfMissing("reception_reports", "contractorSignatureDataUrl", "TEXT DEFAULT ''");
+    addColIfMissing("tva_attestations", "clientSignatureDataUrl", "TEXT DEFAULT ''");
+    addColIfMissing("tva_attestations", "ownerSiret", "TEXT DEFAULT ''");
+    addColIfMissing("tva_attestations", "interventionType", "TEXT DEFAULT 'amelioration'");
+    addColIfMissing("dc4_declarations", "acteSpecialNumber", "TEXT DEFAULT ''");
+    addColIfMissing("dc4_declarations", "subcontractorSiret", "TEXT DEFAULT ''");
+    addColIfMissing("dc4_declarations", "acceptanceDeadline", "TEXT DEFAULT ''");
+    addColIfMissing("dc4_declarations", "contractorSignatureDataUrl", "TEXT DEFAULT ''");
+    addColIfMissing("dc4_declarations", "ownerSignatureDataUrl", "TEXT DEFAULT ''");
+    addColIfMissing("dc4_declarations", "authoritySignatureDataUrl", "TEXT DEFAULT ''");
+    addColIfMissing("rge_documents", "rgeValidUntil", "TEXT DEFAULT ''");
+    addColIfMissing("rge_documents", "primeRenovActual", "REAL DEFAULT 0");
+
     // ─── Session 21 : Catégories de documents chantier personnalisables ─
     db.exec(`
       CREATE TABLE IF NOT EXISTS chantier_doc_categories (

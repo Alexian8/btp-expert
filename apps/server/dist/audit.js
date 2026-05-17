@@ -106,4 +106,3 @@ async function listAuditLogs(db, q) {
     }
     return { rows, total };
 }
-//# sourceMappingURL=audit.js.map

@@ -24,6 +24,28 @@ function setToken(token: string | null): void {
   } catch {}
 }
 
+// Timeout par défaut : 30s. Suffisant pour les exports PDF lourds, mais
+// empêche une requête pendue indéfiniment si le serveur ne répond plus.
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
+
+// Émet un event global que l'UI peut écouter pour afficher un toast d'erreur.
+// On le fait uniquement pour les vraies erreurs API (5xx, network, timeout),
+// pas pour les 401 (déjà gérés via btp:auth-required) ni les 4xx attendus
+// par les composants (les composants devraient catcher et afficher eux-mêmes).
+function emitApiError(detail: {
+  method: string;
+  path: string;
+  status?: number;
+  message: string;
+  kind: "network" | "timeout" | "server";
+}): void {
+  try {
+    window.dispatchEvent(new CustomEvent("btp:api-error", { detail }));
+  } catch {
+    /* dispatch ne devrait jamais throw, mais defensive */
+  }
+}
+
 async function http<T = unknown>(
   method: string,
   path: string,
@@ -33,11 +55,37 @@ async function http<T = unknown>(
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_HTTP_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    const isTimeout =
+      err instanceof DOMException && err.name === "AbortError";
+    const message = isTimeout
+      ? `Délai d'attente dépassé (${Math.round(DEFAULT_HTTP_TIMEOUT_MS / 1000)}s)`
+      : err instanceof Error
+        ? err.message
+        : "Erreur réseau";
+    emitApiError({
+      method,
+      path,
+      message,
+      kind: isTimeout ? "timeout" : "network",
+    });
+    throw new Error(message);
+  }
+  clearTimeout(timeoutId);
+
   if (res.status === 401) {
     setToken(null);
     window.dispatchEvent(new CustomEvent("btp:auth-required"));
@@ -57,6 +105,11 @@ async function http<T = unknown>(
       payload && typeof payload === "object" && "message" in payload
         ? String((payload as { message: unknown }).message)
         : `HTTP ${res.status}`;
+    // 5xx et 429 sont des problèmes d'infra/serveur → utile pour l'UI globale.
+    // 4xx (sauf 429) sont des erreurs métier → on laisse l'appelant les gérer.
+    if (res.status >= 500 || res.status === 429) {
+      emitApiError({ method, path, status: res.status, message: msg, kind: "server" });
+    }
     throw new Error(msg);
   }
   return payload as T;
@@ -304,8 +357,24 @@ export function installBtpApiShim(): void {
     try {
       const parts = t.split(".");
       if (parts.length < 2) return null;
-      const json = atob(parts[1]!.replace(/-/g, "+").replace(/_/g, "/"));
-      const decoded = JSON.parse(json) as { sub?: number; role?: string };
+      // base64url → base64 standard. La taille du payload n'est pas toujours
+      // multiple de 4 → atob() levait alors une InvalidCharacterError silencieuse
+      // (catch en bas) et le rôle worker n'était jamais appliqué côté UI.
+      let b64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4) b64 += "=";
+      const json = atob(b64);
+      const decoded = JSON.parse(json) as {
+        sub?: number;
+        role?: string;
+        exp?: number;
+      };
+      // Si le JWT a un `exp` et qu'il est dépassé, on considère le payload
+      // comme illisible — l'UI ne doit pas faire confiance à un token expiré
+      // (le serveur rejettera de toute façon, mais autant ne pas afficher
+      // d'infos basées dessus en attendant).
+      if (typeof decoded.exp === "number" && decoded.exp * 1000 < Date.now()) {
+        return null;
+      }
       if (typeof decoded.sub !== "number" || typeof decoded.role !== "string") {
         return null;
       }
@@ -736,20 +805,131 @@ export function installBtpApiShim(): void {
     getLocalDbHash: stub("getLocalDbHash", null),
   };
 
+  // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
+  // Câblés sur /api/admin-docs/* (côté serveur, MysqlRepository + buildCrudRouter).
+  // Le format de retour reste celui attendu par le desktop ({ success, id }) pour
+  // ne pas modifier le store administrativeDocsStore.
+  const adminReceptionPath = "/api/admin-docs/receptions";
+  const adminTvaPath = "/api/admin-docs/tva";
+  const adminDc4Path = "/api/admin-docs/dc4";
+  const adminRgePath = "/api/admin-docs/rge";
+
+  const adminDocs = {
+    // ─── PV de réception ────────────────────────────────────────────────
+    adminReceptionList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminReceptionPath}${qs}`).catch(() => []);
+    },
+    adminReceptionGetById: (id: string) =>
+      httpGet(`${adminReceptionPath}/${encodeURIComponent(id)}`).catch(() => null),
+    adminReceptionCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminReceptionPath, ensureId(data))),
+    adminReceptionUpdate: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminReceptionPath}/${encodeURIComponent(id)}`, data)),
+    adminReceptionDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminReceptionPath}/${encodeURIComponent(id)}`)),
+    adminReceptionGetReserves: (id: string) =>
+      httpGet(`${adminReceptionPath}/${encodeURIComponent(id)}/reserves`).catch(() => []),
+    adminReceptionSetReserves: (id: string, reserves: unknown[]) =>
+      wrapAction(http("PUT", `${adminReceptionPath}/${encodeURIComponent(id)}/reserves`, reserves)),
+
+    // ─── Attestations TVA ───────────────────────────────────────────────
+    adminTvaList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminTvaPath}${qs}`).catch(() => []);
+    },
+    adminTvaGetById: (id: string) =>
+      httpGet(`${adminTvaPath}/${encodeURIComponent(id)}`).catch(() => null),
+    adminTvaCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminTvaPath, ensureId(data))),
+    adminTvaUpdate: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminTvaPath}/${encodeURIComponent(id)}`, data)),
+    adminTvaDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminTvaPath}/${encodeURIComponent(id)}`)),
+
+    // ─── DC4 ────────────────────────────────────────────────────────────
+    adminDc4List: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminDc4Path}${qs}`).catch(() => []);
+    },
+    adminDc4GetById: (id: string) =>
+      httpGet(`${adminDc4Path}/${encodeURIComponent(id)}`).catch(() => null),
+    adminDc4Create: (data: unknown) =>
+      wrapCreate(http("POST", adminDc4Path, ensureId(data))),
+    adminDc4Update: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminDc4Path}/${encodeURIComponent(id)}`, data)),
+    adminDc4Delete: (id: string) =>
+      wrapAction(http("DELETE", `${adminDc4Path}/${encodeURIComponent(id)}`)),
+
+    // ─── RGE / MaPrimeRénov' ────────────────────────────────────────────
+    adminRgeList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminRgePath}${qs}`).catch(() => []);
+    },
+    adminRgeCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminRgePath, ensureId(data))),
+    adminRgeDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminRgePath}/${encodeURIComponent(id)}`)),
+
+    // ─── Stats globales ─────────────────────────────────────────────────
+    adminGetStats: () =>
+      http("GET", "/api/admin-docs/stats").catch(() => ({
+        receptionsTotal: 0,
+        receptionsWithReserves: 0,
+        tvaAttestationsTotal: 0,
+        tvaAttestationsThisYear: 0,
+        dc4Total: 0,
+        dc4Pending: 0,
+        rgeDocumentsTotal: 0,
+      })),
+  };
+
   // ─── Microsoft (Outlook via /api/auth/microsoft/* + /api/email/*) ─────
   const microsoft = {
     // Démarre le flow OAuth web : redirige vers Microsoft.
-    // ⚠️ Cette fonction NE retourne jamais (la page change).
-    msLogin: async (): Promise<{ success: boolean; account?: unknown }> => {
+    // ⚠️ Cette fonction NE retourne jamais en cas de succès (la page change).
+    //
+    // SÉCURITÉ : on échange d'abord le JWT contre un ticket éphémère via
+    // POST /start (authentifié par header Authorization), puis on redirige
+    // avec ?ticket=... — le JWT ne se retrouve jamais dans une URL, donc
+    // pas de fuite via l'historique navigateur, les logs serveur ou le referer.
+    msLogin: async (): Promise<{ success: boolean; account?: unknown; error?: string }> => {
       const token = getToken();
-      if (!token) {
-        return { success: false } as { success: boolean; error?: string; account?: unknown } & {
-          error: string;
-        };
+      if (!token) return { success: false, error: "Non authentifié" };
+      try {
+        const { loginUrl } = await http<{ loginUrl: string }>(
+          "POST",
+          "/api/auth/microsoft/start"
+        );
+        window.location.href = loginUrl;
+        return new Promise(() => {}); // la page se recharge
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur OAuth" };
       }
-      window.location.href = `/api/auth/microsoft/login?token=${encodeURIComponent(token)}`;
-      // Promise qui ne se résout pas — la page va se recharger
-      return new Promise(() => {});
     },
 
     msLogout: async (): Promise<{ success: boolean }> => {
@@ -1190,26 +1370,9 @@ export function installBtpApiShim(): void {
     "statsGetOverdueInvoices",
     "statsGetYoYComparison",
     "statsGetSeasonality",
-    // Admin docs
-    "adminReceptionList",
-    "adminReceptionGetById",
-    "adminReceptionCreate",
-    "adminReceptionUpdate",
-    "adminReceptionDelete",
-    "adminTvaList",
-    "adminTvaGetById",
-    "adminTvaCreate",
-    "adminTvaUpdate",
-    "adminTvaDelete",
-    "adminDc4List",
-    "adminDc4GetById",
-    "adminDc4Create",
-    "adminDc4Update",
-    "adminDc4Delete",
-    "adminRgeList",
-    "adminRgeCreate",
-    "adminRgeDelete",
-    "adminGetStats",
+    // Admin docs — CRUD est câblé via `adminDocs` (HTTP réel). Seuls les
+    // exports PDF restent stubés en mode web (générés côté Electron uniquement
+    // pour le moment ; portage serveur prévu en vague C).
     "adminReceptionExportPdfPreview",
     "adminReceptionExportPdfSaveAs",
     "adminTvaExportPdfPreview",
@@ -1239,6 +1402,7 @@ export function installBtpApiShim(): void {
     ...vaultAPI,
     ...backup,
     ...microsoft,
+    ...adminDocs,
     ...allOtherStubs,
     platform: "web" as const,
     isElectron: false as const,

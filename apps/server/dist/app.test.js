@@ -219,4 +219,3 @@ if (!hasMysql) {
         vitest_1.it.skip("tests skippés (MYSQL_TEST_* non défini)", () => { });
     });
 }
-//# sourceMappingURL=app.test.js.map

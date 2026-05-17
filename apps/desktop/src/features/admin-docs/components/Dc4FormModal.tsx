@@ -19,6 +19,7 @@ import { useAdministrativeDocsStore } from "@/stores/administrativeDocsStore";
 import { usePurchaseOrdersStore } from "@/stores/purchaseOrdersStore";
 import { useSubcontractorsStore } from "@/stores/subcontractorsStore";
 import { useChantiersStore } from "@/stores/chantiersStore";
+import { DocSignatureField } from "./DocSignatureField";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Dc4FormModal — Création / édition d'un DC4
@@ -67,6 +68,11 @@ export function Dc4FormModal({ open, declarationId, onClose }: Props) {
   // Signature
   const [signedDate, setSignedDate] = useState("");
   const [signedLocation, setSignedLocation] = useState("");
+  const [acteSpecialNumber, setActeSpecialNumber] = useState("");
+  const [acceptanceDeadline, setAcceptanceDeadline] = useState("");
+  const [contractorSignatureDataUrl, setContractorSignatureDataUrl] = useState("");
+  const [ownerSignatureDataUrl, setOwnerSignatureDataUrl] = useState("");
+  const [authoritySignatureDataUrl, setAuthoritySignatureDataUrl] = useState("");
   const [status, setStatus] = useState<Dc4Status>("brouillon");
 
   const [saving, setSaving] = useState(false);
@@ -152,6 +158,18 @@ export function Dc4FormModal({ open, declarationId, onClose }: Props) {
         setCautionReceived(d.cautionReceived);
         setSignedDate(d.signedDate);
         setSignedLocation(d.signedLocation);
+        const dExt = d as {
+          acteSpecialNumber?: string;
+          acceptanceDeadline?: string;
+          contractorSignatureDataUrl?: string;
+          ownerSignatureDataUrl?: string;
+          authoritySignatureDataUrl?: string;
+        };
+        setActeSpecialNumber(dExt.acteSpecialNumber ?? "");
+        setAcceptanceDeadline(dExt.acceptanceDeadline ?? "");
+        setContractorSignatureDataUrl(dExt.contractorSignatureDataUrl ?? "");
+        setOwnerSignatureDataUrl(dExt.ownerSignatureDataUrl ?? "");
+        setAuthoritySignatureDataUrl(dExt.authoritySignatureDataUrl ?? "");
         setStatus(d.status);
       } else {
         const today = new Date().toISOString().slice(0, 10);
@@ -225,6 +243,11 @@ export function Dc4FormModal({ open, declarationId, onClose }: Props) {
       cautionReceived,
       signedDate,
       signedLocation: signedLocation.trim(),
+      acteSpecialNumber: acteSpecialNumber.trim(),
+      acceptanceDeadline,
+      contractorSignatureDataUrl,
+      ownerSignatureDataUrl,
+      authoritySignatureDataUrl,
       status,
     };
 
@@ -497,9 +520,33 @@ export function Dc4FormModal({ open, declarationId, onClose }: Props) {
                 </div>
               </Section>
 
+              {/* Acte spécial */}
+              <Section title="Acte spécial" icon={FileText}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>N° de l'acte spécial</Label>
+                    <Input
+                      value={acteSpecialNumber}
+                      onChange={(e) => setActeSpecialNumber(e.target.value)}
+                      placeholder="ex : AS-2025-001"
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label>Date limite d'acceptation par le pouvoir adjudicateur</Label>
+                    <Input
+                      type="date"
+                      value={acceptanceDeadline}
+                      onChange={(e) => setAcceptanceDeadline(e.target.value)}
+                      className="mt-1.5"
+                    />
+                  </div>
+                </div>
+              </Section>
+
               {/* Signature */}
               <Section title="Signature" icon={Calendar}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                   <div>
                     <Label>Date de signature</Label>
                     <Input type="date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} className="mt-1.5" />
@@ -508,6 +555,24 @@ export function Dc4FormModal({ open, declarationId, onClose }: Props) {
                     <Label>Lieu</Label>
                     <Input value={signedLocation} onChange={(e) => setSignedLocation(e.target.value)} placeholder="Ville" className="mt-1.5" />
                   </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  <DocSignatureField
+                    label="Signature de l'entrepreneur principal (titulaire du marché)"
+                    value={contractorSignatureDataUrl}
+                    onChange={setContractorSignatureDataUrl}
+                  />
+                  <DocSignatureField
+                    label="Signature du sous-traitant"
+                    value={ownerSignatureDataUrl}
+                    onChange={setOwnerSignatureDataUrl}
+                  />
+                  <DocSignatureField
+                    label="Signature du pouvoir adjudicateur (maître d'ouvrage public)"
+                    description="Réservée à l'administration. Marque l'acceptation officielle du sous-traitant et l'agrément des conditions de paiement (art. L. 2193-3 Code de la commande publique)."
+                    value={authoritySignatureDataUrl}
+                    onChange={setAuthoritySignatureDataUrl}
+                  />
                 </div>
               </Section>
 

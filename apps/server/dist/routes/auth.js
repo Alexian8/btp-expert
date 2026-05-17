@@ -15,6 +15,7 @@ const node_crypto_1 = __importDefault(require("node:crypto"));
 const auth_1 = require("../auth");
 const audit_1 = require("../audit");
 const cpanel_email_1 = require("../cpanel-email");
+const token_revocation_1 = require("../token-revocation");
 const SALT_LEN = 16;
 const KEY_LEN = 64;
 function hashPassword(password) {
@@ -210,11 +211,45 @@ function buildAuthRouter(db, cfg) {
             userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
             meta: { mailboxSynced, mailboxSyncError },
         });
+        // Révoque le token courant : après un changement de mot de passe, il
+        // faut reseigner pour obtenir un nouveau token. Empêche la persistance
+        // d'une session sur un appareil potentiellement compromis.
+        try {
+            await (0, token_revocation_1.revokeToken)(db, header.slice(7).trim(), payload);
+        }
+        catch (e) {
+            console.warn("[auth] revokeToken failed at change-password:", e);
+        }
         res.status(204).end();
     }));
-    router.post("/logout", (_req, res) => {
+    router.post("/logout", wrap(async (req, res) => {
+        // Révoque le token courant (si présent et valide). Best-effort : on
+        // répond 204 même si la révocation échoue, pour ne pas bloquer la
+        // déconnexion côté client.
+        const header = req.headers.authorization;
+        if (header?.startsWith("Bearer ")) {
+            const token = header.slice(7).trim();
+            const payload = (0, auth_1.verifyToken)(token, cfg);
+            if (payload) {
+                try {
+                    await (0, token_revocation_1.revokeToken)(db, token, payload);
+                    void (0, audit_1.writeAudit)(db, {
+                        userId: payload.sub,
+                        username: payload.username,
+                        companyId: payload.companyId ?? null,
+                        action: "logout",
+                        ip: req.ip ?? "",
+                        userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+                        meta: {},
+                    });
+                }
+                catch (e) {
+                    console.warn("[auth] revokeToken failed at logout:", e);
+                }
+            }
+        }
         res.status(204).end();
-    });
+    }));
     router.get("/me", wrap(async (req, res) => {
         const header = req.headers.authorization;
         if (!header?.startsWith("Bearer ")) {
@@ -280,4 +315,3 @@ function buildAuthRouter(db, cfg) {
     return router;
 }
 exports.__testHelpers = { hashPassword, verifyPassword };
-//# sourceMappingURL=auth.js.map

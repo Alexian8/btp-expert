@@ -86,4 +86,3 @@ function buildApiRateLimiter(cfg) {
         message: "Trop de requêtes. Réessayez plus tard.",
     });
 }
-//# sourceMappingURL=rate-limit.js.map

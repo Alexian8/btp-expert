@@ -11,7 +11,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "declaration": false,
-    "sourceMap": true,
+    "sourceMap": false,
     "resolveJsonModule": true,
     "paths": {
       "@btp/types": ["../../packages/types/src"],
