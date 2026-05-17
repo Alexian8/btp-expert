@@ -30,13 +30,14 @@ export function App() {
   const loadUsers = useUsersStore((s) => s.load);
 
   useEffect(() => {
-    // Appliquer le thème au démarrage
+    // Appliquer le thème au démarrage (synchrone, sans I/O)
     applyTheme();
-    // Restaure la session (mode web : JWT en localStorage → /api/auth/me).
-    // En parallèle de checkSetup (sont indépendants).
-    void restoreSession();
-    // Vérifier si c'est la 1ère utilisation
-    checkSetup();
+    // Restoration de session + check setup en parallèle, mais on attend les
+    // deux avant de laisser le router décider de la page à afficher. Avant,
+    // le `void restoreSession()` partait sans attendre et `checkSetup()` se
+    // résolvait souvent en premier → l'UI montrait l'écran "Créer le 1er
+    // admin" pendant 200ms avant de basculer sur la page authentifiée.
+    void Promise.all([restoreSession(), checkSetup()]);
     // Démarre la détection device (mobile / standalone PWA / iOS)
     const cleanup = initDeviceDetection();
 
