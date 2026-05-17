@@ -805,6 +805,41 @@ export function installBtpApiShim(): void {
     getLocalDbHash: stub("getLocalDbHash", null),
   };
 
+  // ─── Helper : ouvre une URL HTML authentifiée dans un nouvel onglet ────
+  // Utilisé par les exports PDF — on ne peut pas faire window.open(url)
+  // directement parce que le navigateur n'enverrait pas le header
+  // Authorization. On fetch le HTML, on en fait un Blob URL, on l'ouvre.
+  async function openHtmlForPrint(
+    path: string,
+    label: string
+  ): Promise<{ success: boolean; error?: string; cancelled?: boolean }> {
+    try {
+      const token = getToken();
+      const res = await fetch(path, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        return { success: false, error: `Erreur ${res.status} lors du chargement (${label})` };
+      }
+      const html = await res.text();
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        URL.revokeObjectURL(url);
+        return {
+          success: false,
+          error: "Le navigateur a bloqué l'ouverture du PDF. Autorisez les popups pour ce site.",
+        };
+      }
+      // Libère le blob après 5 min — laisse le temps à l'utilisateur d'imprimer.
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+    }
+  }
+
   // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
   // Câblés sur /api/admin-docs/* (côté serveur, MysqlRepository + buildCrudRouter).
   // Le format de retour reste celui attendu par le desktop ({ success, id }) pour
@@ -940,34 +975,38 @@ export function installBtpApiShim(): void {
     adminRgeDelete: (id: string) =>
       wrapAction(http("DELETE", `${adminRgePath}/${encodeURIComponent(id)}`)),
 
-    // ─── Exports PDF (pas encore portés côté serveur — vague C2) ────────
-    // On retourne un { success: false, error } explicite pour que les
-    // composants puissent afficher un message clair à l'utilisateur au
-    // lieu d'un crash "undefined.success" ou d'un comportement silencieux.
-    adminReceptionExportPdfPreview: async () => ({
-      success: false as const,
-      error: "L'export PDF n'est pas encore disponible en mode web — utilisez l'application desktop pour générer le PDF.",
-    }),
-    adminReceptionExportPdfSaveAs: async () => ({
-      success: false as const,
-      error: "L'export PDF n'est pas encore disponible en mode web.",
-    }),
-    adminTvaExportPdfPreview: async () => ({
-      success: false as const,
-      error: "L'export PDF n'est pas encore disponible en mode web — utilisez l'application desktop pour générer le CERFA 1300.",
-    }),
-    adminTvaExportPdfSaveAs: async () => ({
-      success: false as const,
-      error: "L'export PDF n'est pas encore disponible en mode web.",
-    }),
-    adminDc4ExportPdfPreview: async () => ({
-      success: false as const,
-      error: "L'export PDF n'est pas encore disponible en mode web — utilisez l'application desktop.",
-    }),
-    adminDc4ExportPdfSaveAs: async () => ({
-      success: false as const,
-      error: "L'export PDF n'est pas encore disponible en mode web.",
-    }),
+    // ─── Exports PDF via impression navigateur native ────────────────────
+    // Le serveur génère le HTML stylé du document, on l'ouvre dans un onglet
+    // qui déclenche automatiquement window.print() — l'utilisateur choisit
+    // "Enregistrer en PDF" dans le dialogue d'impression natif du navigateur.
+    // Gratuit, zéro dépendance, fonctionne sur tous les navigateurs modernes.
+    // On utilise un Blob URL plutôt que d'ouvrir l'URL directement parce que
+    // window.open() n'envoie pas le header Authorization (et on ne veut pas
+    // exposer le JWT en query string).
+    adminReceptionExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/receptions/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu PV"
+    ),
+    adminReceptionExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/receptions/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer PV"
+    ),
+    adminTvaExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu attestation TVA"
+    ),
+    adminTvaExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer attestation TVA"
+    ),
+    adminDc4ExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/dc4/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu DC4"
+    ),
+    adminDc4ExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/dc4/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer DC4"
+    ),
 
     // ─── Stats globales ─────────────────────────────────────────────────
     adminGetStats: () =>
