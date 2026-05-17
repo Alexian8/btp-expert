@@ -487,22 +487,24 @@ function init({ db }) {
       db.prepare(`
         INSERT INTO rge_documents (
           id, reference, type, chantierId, clientId, clientName,
-          rgeQualification, rgeQualificationNumber,
-          worksDescription, totalAmountTtc, primeRenovExpected,
+          rgeQualification, rgeQualificationNumber, rgeValidUntil,
+          worksDescription, totalAmountTtc, primeRenovExpected, primeRenovActual,
           notes, vaultDocumentId,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, reference,
-        data.type || "devis_rge",
+        data.type || "qualification",
         data.chantierId || "",
         data.clientId || "",
         data.clientName || "",
         data.rgeQualification || "",
         data.rgeQualificationNumber || "",
+        data.rgeValidUntil || "",
         data.worksDescription || "",
         Number(data.totalAmountTtc) || 0,
         Number(data.primeRenovExpected) || 0,
+        Number(data.primeRenovActual) || 0,
         data.notes || "",
         data.vaultDocumentId || "",
         now, now
