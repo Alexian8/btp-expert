@@ -805,6 +805,41 @@ export function installBtpApiShim(): void {
     getLocalDbHash: stub("getLocalDbHash", null),
   };
 
+  // ─── Helper : ouvre une URL HTML authentifiée dans un nouvel onglet ────
+  // Utilisé par les exports PDF — on ne peut pas faire window.open(url)
+  // directement parce que le navigateur n'enverrait pas le header
+  // Authorization. On fetch le HTML, on en fait un Blob URL, on l'ouvre.
+  async function openHtmlForPrint(
+    path: string,
+    label: string
+  ): Promise<{ success: boolean; error?: string; cancelled?: boolean }> {
+    try {
+      const token = getToken();
+      const res = await fetch(path, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        return { success: false, error: `Erreur ${res.status} lors du chargement (${label})` };
+      }
+      const html = await res.text();
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        URL.revokeObjectURL(url);
+        return {
+          success: false,
+          error: "Le navigateur a bloqué l'ouverture du PDF. Autorisez les popups pour ce site.",
+        };
+      }
+      // Libère le blob après 5 min — laisse le temps à l'utilisateur d'imprimer.
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+    }
+  }
+
   // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
   // Câblés sur /api/admin-docs/* (côté serveur, MysqlRepository + buildCrudRouter).
   // Le format de retour reste celui attendu par le desktop ({ success, id }) pour
@@ -826,12 +861,57 @@ export function installBtpApiShim(): void {
         : "";
       return httpGetList(`${adminReceptionPath}${qs}`).catch(() => []);
     },
-    adminReceptionGetById: (id: string) =>
-      httpGet(`${adminReceptionPath}/${encodeURIComponent(id)}`).catch(() => null),
-    adminReceptionCreate: (data: unknown) =>
-      wrapCreate(http("POST", adminReceptionPath, ensureId(data))),
-    adminReceptionUpdate: (id: string, data: unknown) =>
-      wrapAction(http("PATCH", `${adminReceptionPath}/${encodeURIComponent(id)}`, data)),
+    adminReceptionGetById: async (id: string) => {
+      // Les réserves sont une sous-ressource séparée côté serveur, mais le
+      // contrat desktop renvoie le PV avec un champ `reserves` peuplé.
+      // On charge les deux en parallèle et on les fusionne pour que le
+      // formulaire React puisse faire r.reserves.map() sans crasher.
+      const [report, reserves] = await Promise.all([
+        httpGet<Record<string, unknown> | null>(
+          `${adminReceptionPath}/${encodeURIComponent(id)}`
+        ).catch(() => null),
+        httpGet<unknown[]>(
+          `${adminReceptionPath}/${encodeURIComponent(id)}/reserves`
+        ).catch(() => []),
+      ]);
+      if (!report) return null;
+      return { ...report, reserves: Array.isArray(reserves) ? reserves : [] };
+    },
+    adminReceptionCreate: async (data: unknown) => {
+      // Le formulaire envoie un seul payload avec un champ `reserves`. Côté
+      // serveur on a deux routes (PV principal + sous-ressource réserves),
+      // donc on splitte ici pour respecter le contrat de l'UI.
+      const { reserves, ...payload } = (data ?? {}) as {
+        reserves?: unknown[];
+        [k: string]: unknown;
+      };
+      try {
+        const created = (await http("POST", adminReceptionPath, ensureId(payload))) as {
+          id?: string;
+        };
+        if (created?.id && Array.isArray(reserves) && reserves.length > 0) {
+          await http("PUT", `${adminReceptionPath}/${encodeURIComponent(created.id)}/reserves`, reserves);
+        }
+        return { success: true, id: created?.id };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    adminReceptionUpdate: async (id: string, data: unknown) => {
+      const { reserves, ...payload } = (data ?? {}) as {
+        reserves?: unknown[];
+        [k: string]: unknown;
+      };
+      try {
+        await http("PATCH", `${adminReceptionPath}/${encodeURIComponent(id)}`, payload);
+        if (Array.isArray(reserves)) {
+          await http("PUT", `${adminReceptionPath}/${encodeURIComponent(id)}/reserves`, reserves);
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
     adminReceptionDelete: (id: string) =>
       wrapAction(http("DELETE", `${adminReceptionPath}/${encodeURIComponent(id)}`)),
     adminReceptionGetReserves: (id: string) =>
@@ -894,6 +974,39 @@ export function installBtpApiShim(): void {
       wrapCreate(http("POST", adminRgePath, ensureId(data))),
     adminRgeDelete: (id: string) =>
       wrapAction(http("DELETE", `${adminRgePath}/${encodeURIComponent(id)}`)),
+
+    // ─── Exports PDF via impression navigateur native ────────────────────
+    // Le serveur génère le HTML stylé du document, on l'ouvre dans un onglet
+    // qui déclenche automatiquement window.print() — l'utilisateur choisit
+    // "Enregistrer en PDF" dans le dialogue d'impression natif du navigateur.
+    // Gratuit, zéro dépendance, fonctionne sur tous les navigateurs modernes.
+    // On utilise un Blob URL plutôt que d'ouvrir l'URL directement parce que
+    // window.open() n'envoie pas le header Authorization (et on ne veut pas
+    // exposer le JWT en query string).
+    adminReceptionExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/receptions/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu PV"
+    ),
+    adminReceptionExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/receptions/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer PV"
+    ),
+    adminTvaExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu attestation TVA"
+    ),
+    adminTvaExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer attestation TVA"
+    ),
+    adminDc4ExportPdfPreview: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/dc4/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Aperçu DC4"
+    ),
+    adminDc4ExportPdfSaveAs: async (id: string) => openHtmlForPrint(
+      `/api/admin-docs/dc4/${encodeURIComponent(id)}/html?autoprint=1`,
+      "Enregistrer DC4"
+    ),
 
     // ─── Stats globales ─────────────────────────────────────────────────
     adminGetStats: () =>
@@ -1370,15 +1483,9 @@ export function installBtpApiShim(): void {
     "statsGetOverdueInvoices",
     "statsGetYoYComparison",
     "statsGetSeasonality",
-    // Admin docs — CRUD est câblé via `adminDocs` (HTTP réel). Seuls les
-    // exports PDF restent stubés en mode web (générés côté Electron uniquement
-    // pour le moment ; portage serveur prévu en vague C).
-    "adminReceptionExportPdfPreview",
-    "adminReceptionExportPdfSaveAs",
-    "adminTvaExportPdfPreview",
-    "adminTvaExportPdfSaveAs",
-    "adminDc4ExportPdfPreview",
-    "adminDc4ExportPdfSaveAs",
+    // Admin docs — CRUD est câblé via `adminDocs` (HTTP réel). Exports PDF
+    // explicitement implémentés plus bas (pas dans les stubs) pour renvoyer
+    // un message clair "indisponible en web" plutôt que {} silencieux.
     "adminOpenPdfExternal",
     // Misc
     "getDbInitError",

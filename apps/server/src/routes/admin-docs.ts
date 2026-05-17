@@ -23,6 +23,52 @@ import type { Config } from "../config";
 import { MysqlRepository } from "../repository";
 import { buildCrudRouter } from "./crud";
 import { requireAuth } from "../auth";
+import { renderReceptionHtml } from "../templates/receptionTemplate";
+import { renderTvaAttestationHtml } from "../templates/tvaAttestationTemplate";
+import { renderTvaAttestationCerfaHtml } from "../templates/tvaAttestationCerfaTemplate";
+import { renderDc4Html } from "../templates/dc4Template";
+
+// HTML chrome ajouté autour du template existant : un bouton flottant "Imprimer
+// en PDF" qui déclenche le dialogue d'impression natif du navigateur (Ctrl+P /
+// Cmd+P), masqué lors de l'impression elle-même via @media print. Permet à
+// l'utilisateur de sauvegarder le PDF sans dépendance externe, gratuitement.
+function wrapWithPrintButton(html: string, title: string): string {
+  const inject = `
+<style>
+  @media print {
+    .print-toolbar { display: none !important; }
+  }
+  .print-toolbar {
+    position: fixed; top: 12px; right: 12px; z-index: 9999;
+    display: flex; gap: 8px;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  .print-toolbar button {
+    background: #2563eb; color: white; border: 0; padding: 8px 14px;
+    border-radius: 8px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15); cursor: pointer;
+  }
+  .print-toolbar button:hover { background: #1d4ed8; }
+  .print-toolbar button.secondary { background: #6b7280; }
+  .print-toolbar button.secondary:hover { background: #4b5563; }
+</style>
+<div class="print-toolbar">
+  <button onclick="window.print()" title="Cmd/Ctrl + P">Imprimer / Enregistrer en PDF</button>
+  <button class="secondary" onclick="window.close()">Fermer</button>
+</div>
+<script>
+  // Auto-déclenche le dialogue d'impression au chargement si on a été ouvert
+  // avec ?autoprint=1 (depuis le bouton "Aperçu PDF" de l'app). L'utilisateur
+  // choisit "Enregistrer comme PDF" dans le dialogue natif du navigateur.
+  if (new URLSearchParams(location.search).has("autoprint")) {
+    window.addEventListener("load", () => setTimeout(() => window.print(), 400));
+  }
+  document.title = ${JSON.stringify(title)};
+</script>
+`;
+  // On insère juste après <body> pour que le bouton reste accessible.
+  return html.replace(/<body([^>]*)>/i, `<body$1>${inject}`);
+}
 
 const wrap =
   (handler: (req: Request, res: Response) => Promise<void>) =>
@@ -313,6 +359,143 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
         [req.params.id]
       );
       res.json(rows);
+    })
+  );
+
+  // ─── Récupère le profil entreprise (utilisé pour les en-têtes PDF) ─────
+  async function loadCompany(tenantId: number): Promise<Record<string, unknown>> {
+    const [rows] = await db.query<RowDataPacket[]>(
+      "SELECT data, name FROM company WHERE id = ? LIMIT 1",
+      [tenantId]
+    );
+    const row = rows[0] as { data?: string; name?: string } | undefined;
+    if (!row) return {};
+    let data: Record<string, unknown> = {};
+    try {
+      data = row.data ? (JSON.parse(row.data) as Record<string, unknown>) : {};
+    } catch {
+      data = {};
+    }
+    // Charge aussi le cachet/signature depuis settings (whitelist déjà filtrée).
+    const [stampRows] = await db.query<RowDataPacket[]>(
+      "SELECT `key`, value FROM settings WHERE `key` IN ('companyStampDataUrl','companySignatureDataUrl')"
+    );
+    for (const r of stampRows as Array<{ key: string; value: string }>) {
+      try {
+        data[r.key] = JSON.parse(r.value);
+      } catch {
+        data[r.key] = r.value;
+      }
+    }
+    return { ...data, companyName: data.companyName ?? row.name ?? "" };
+  }
+
+  // ─── Aperçu HTML / impression PDF natif navigateur ─────────────────────
+  // GET /receptions/:id/html → PV de réception
+  router.get(
+    "/receptions/:id/html",
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [reportRows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM reception_reports WHERE id = ? AND companyId = ? LIMIT 1",
+        [req.params.id, tenantId]
+      );
+      const report = reportRows[0];
+      if (!report) {
+        res.status(404).type("html").send("<h1>PV introuvable</h1>");
+        return;
+      }
+      const [reserveRows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM reception_reserves WHERE reportId = ? ORDER BY sortOrder ASC",
+        [req.params.id]
+      );
+      const [clientRows] = report.clientId
+        ? await db.query<RowDataPacket[]>("SELECT * FROM clients WHERE id = ? LIMIT 1", [report.clientId])
+        : [[]];
+      const [chantierRows] = report.chantierId
+        ? await db.query<RowDataPacket[]>("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [report.chantierId])
+        : [[]];
+      const company = await loadCompany(tenantId);
+      const html = renderReceptionHtml({
+        report: { ...report, ownerSigned: !!report.ownerSigned, contractorSigned: !!report.contractorSigned } as Record<string, unknown>,
+        reserves: (reserveRows ?? []).map((r) => ({ ...r, fixed: !!(r as { fixed?: number }).fixed })),
+        client: (clientRows[0] as Record<string, unknown>) ?? null,
+        chantier: (chantierRows[0] as Record<string, unknown>) ?? null,
+        company,
+      });
+      res
+        .type("html")
+        .send(wrapWithPrintButton(html, `PV ${String(report.reference ?? "")}`));
+    })
+  );
+
+  // GET /tva/:id/html → Attestation TVA (CERFA 1300 ou modèle libre)
+  router.get(
+    "/tva/:id/html",
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM tva_attestations WHERE id = ? AND companyId = ? LIMIT 1",
+        [req.params.id, tenantId]
+      );
+      const attestation = rows[0] as Record<string, unknown> | undefined;
+      if (!attestation) {
+        res.status(404).type("html").send("<h1>Attestation introuvable</h1>");
+        return;
+      }
+      // Normalise booléen + parse JSON commitments (le template attend des
+      // tableaux JS, pas du JSON sérialisé).
+      attestation.logementBuiltOver2Years = !!attestation.logementBuiltOver2Years;
+      try {
+        attestation.clientCommitments = JSON.parse(
+          String(attestation.clientCommitments ?? "[]")
+        );
+      } catch {
+        attestation.clientCommitments = [];
+      }
+      const company = await loadCompany(tenantId);
+      const html =
+        attestation.attestationType === "cerfa_1300"
+          ? renderTvaAttestationCerfaHtml({ attestation, company })
+          : renderTvaAttestationHtml({ attestation, company });
+      res
+        .type("html")
+        .send(wrapWithPrintButton(html, `Attestation TVA ${String(attestation.reference ?? "")}`));
+    })
+  );
+
+  // GET /dc4/:id/html → DC4 sous-traitance
+  router.get(
+    "/dc4/:id/html",
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM dc4_declarations WHERE id = ? AND companyId = ? LIMIT 1",
+        [req.params.id, tenantId]
+      );
+      const declaration = rows[0] as Record<string, unknown> | undefined;
+      if (!declaration) {
+        res.status(404).type("html").send("<h1>DC4 introuvable</h1>");
+        return;
+      }
+      declaration.cautionRequired = !!declaration.cautionRequired;
+      declaration.cautionReceived = !!declaration.cautionReceived;
+      const [stRows] = declaration.subcontractorId
+        ? await db.query<RowDataPacket[]>("SELECT * FROM subcontractors WHERE id = ? LIMIT 1", [declaration.subcontractorId])
+        : [[]];
+      const [chantierRows] = declaration.chantierId
+        ? await db.query<RowDataPacket[]>("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [declaration.chantierId])
+        : [[]];
+      const company = await loadCompany(tenantId);
+      const html = renderDc4Html({
+        declaration,
+        subcontractor: (stRows[0] as Record<string, unknown>) ?? null,
+        chantier: (chantierRows[0] as Record<string, unknown>) ?? null,
+        company,
+      });
+      res
+        .type("html")
+        .send(wrapWithPrintButton(html, `DC4 ${String(declaration.reference ?? "")}`));
     })
   );
 

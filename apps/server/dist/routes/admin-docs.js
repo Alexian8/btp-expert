@@ -23,6 +23,51 @@ const zod_1 = require("zod");
 const repository_1 = require("../repository");
 const crud_1 = require("./crud");
 const auth_1 = require("../auth");
+const receptionTemplate_1 = require("../templates/receptionTemplate");
+const tvaAttestationTemplate_1 = require("../templates/tvaAttestationTemplate");
+const tvaAttestationCerfaTemplate_1 = require("../templates/tvaAttestationCerfaTemplate");
+const dc4Template_1 = require("../templates/dc4Template");
+// HTML chrome ajouté autour du template existant : un bouton flottant "Imprimer
+// en PDF" qui déclenche le dialogue d'impression natif du navigateur (Ctrl+P /
+// Cmd+P), masqué lors de l'impression elle-même via @media print. Permet à
+// l'utilisateur de sauvegarder le PDF sans dépendance externe, gratuitement.
+function wrapWithPrintButton(html, title) {
+    const inject = `
+<style>
+  @media print {
+    .print-toolbar { display: none !important; }
+  }
+  .print-toolbar {
+    position: fixed; top: 12px; right: 12px; z-index: 9999;
+    display: flex; gap: 8px;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  .print-toolbar button {
+    background: #2563eb; color: white; border: 0; padding: 8px 14px;
+    border-radius: 8px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15); cursor: pointer;
+  }
+  .print-toolbar button:hover { background: #1d4ed8; }
+  .print-toolbar button.secondary { background: #6b7280; }
+  .print-toolbar button.secondary:hover { background: #4b5563; }
+</style>
+<div class="print-toolbar">
+  <button onclick="window.print()" title="Cmd/Ctrl + P">Imprimer / Enregistrer en PDF</button>
+  <button class="secondary" onclick="window.close()">Fermer</button>
+</div>
+<script>
+  // Auto-déclenche le dialogue d'impression au chargement si on a été ouvert
+  // avec ?autoprint=1 (depuis le bouton "Aperçu PDF" de l'app). L'utilisateur
+  // choisit "Enregistrer comme PDF" dans le dialogue natif du navigateur.
+  if (new URLSearchParams(location.search).has("autoprint")) {
+    window.addEventListener("load", () => setTimeout(() => window.print(), 400));
+  }
+  document.title = ${JSON.stringify(title)};
+</script>
+`;
+    // On insère juste après <body> pour que le bouton reste accessible.
+    return html.replace(/<body([^>]*)>/i, `<body$1>${inject}`);
+}
 const wrap = (handler) => (req, res, next) => {
     handler(req, res).catch(next);
 };
@@ -264,6 +309,114 @@ function buildAdminDocsRouter(db, cfg) {
         }
         const [rows] = await db.query("SELECT * FROM reception_reserves WHERE reportId = ? ORDER BY sortOrder ASC, id ASC", [req.params.id]);
         res.json(rows);
+    }));
+    // ─── Récupère le profil entreprise (utilisé pour les en-têtes PDF) ─────
+    async function loadCompany(tenantId) {
+        const [rows] = await db.query("SELECT data, name FROM company WHERE id = ? LIMIT 1", [tenantId]);
+        const row = rows[0];
+        if (!row)
+            return {};
+        let data = {};
+        try {
+            data = row.data ? JSON.parse(row.data) : {};
+        }
+        catch {
+            data = {};
+        }
+        // Charge aussi le cachet/signature depuis settings (whitelist déjà filtrée).
+        const [stampRows] = await db.query("SELECT `key`, value FROM settings WHERE `key` IN ('companyStampDataUrl','companySignatureDataUrl')");
+        for (const r of stampRows) {
+            try {
+                data[r.key] = JSON.parse(r.value);
+            }
+            catch {
+                data[r.key] = r.value;
+            }
+        }
+        return { ...data, companyName: data.companyName ?? row.name ?? "" };
+    }
+    // ─── Aperçu HTML / impression PDF natif navigateur ─────────────────────
+    // GET /receptions/:id/html → PV de réception
+    router.get("/receptions/:id/html", wrap(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [reportRows] = await db.query("SELECT * FROM reception_reports WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
+        const report = reportRows[0];
+        if (!report) {
+            res.status(404).type("html").send("<h1>PV introuvable</h1>");
+            return;
+        }
+        const [reserveRows] = await db.query("SELECT * FROM reception_reserves WHERE reportId = ? ORDER BY sortOrder ASC", [req.params.id]);
+        const [clientRows] = report.clientId
+            ? await db.query("SELECT * FROM clients WHERE id = ? LIMIT 1", [report.clientId])
+            : [[]];
+        const [chantierRows] = report.chantierId
+            ? await db.query("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [report.chantierId])
+            : [[]];
+        const company = await loadCompany(tenantId);
+        const html = (0, receptionTemplate_1.renderReceptionHtml)({
+            report: { ...report, ownerSigned: !!report.ownerSigned, contractorSigned: !!report.contractorSigned },
+            reserves: (reserveRows ?? []).map((r) => ({ ...r, fixed: !!r.fixed })),
+            client: clientRows[0] ?? null,
+            chantier: chantierRows[0] ?? null,
+            company,
+        });
+        res
+            .type("html")
+            .send(wrapWithPrintButton(html, `PV ${String(report.reference ?? "")}`));
+    }));
+    // GET /tva/:id/html → Attestation TVA (CERFA 1300 ou modèle libre)
+    router.get("/tva/:id/html", wrap(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await db.query("SELECT * FROM tva_attestations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
+        const attestation = rows[0];
+        if (!attestation) {
+            res.status(404).type("html").send("<h1>Attestation introuvable</h1>");
+            return;
+        }
+        // Normalise booléen + parse JSON commitments (le template attend des
+        // tableaux JS, pas du JSON sérialisé).
+        attestation.logementBuiltOver2Years = !!attestation.logementBuiltOver2Years;
+        try {
+            attestation.clientCommitments = JSON.parse(String(attestation.clientCommitments ?? "[]"));
+        }
+        catch {
+            attestation.clientCommitments = [];
+        }
+        const company = await loadCompany(tenantId);
+        const html = attestation.attestationType === "cerfa_1300"
+            ? (0, tvaAttestationCerfaTemplate_1.renderTvaAttestationCerfaHtml)({ attestation, company })
+            : (0, tvaAttestationTemplate_1.renderTvaAttestationHtml)({ attestation, company });
+        res
+            .type("html")
+            .send(wrapWithPrintButton(html, `Attestation TVA ${String(attestation.reference ?? "")}`));
+    }));
+    // GET /dc4/:id/html → DC4 sous-traitance
+    router.get("/dc4/:id/html", wrap(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await db.query("SELECT * FROM dc4_declarations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
+        const declaration = rows[0];
+        if (!declaration) {
+            res.status(404).type("html").send("<h1>DC4 introuvable</h1>");
+            return;
+        }
+        declaration.cautionRequired = !!declaration.cautionRequired;
+        declaration.cautionReceived = !!declaration.cautionReceived;
+        const [stRows] = declaration.subcontractorId
+            ? await db.query("SELECT * FROM subcontractors WHERE id = ? LIMIT 1", [declaration.subcontractorId])
+            : [[]];
+        const [chantierRows] = declaration.chantierId
+            ? await db.query("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [declaration.chantierId])
+            : [[]];
+        const company = await loadCompany(tenantId);
+        const html = (0, dc4Template_1.renderDc4Html)({
+            declaration,
+            subcontractor: stRows[0] ?? null,
+            chantier: chantierRows[0] ?? null,
+            company,
+        });
+        res
+            .type("html")
+            .send(wrapWithPrintButton(html, `DC4 ${String(declaration.reference ?? "")}`));
     }));
     // ─── CRUD générique pour les 4 entités ─────────────────────────────────
     router.use("/receptions", (0, crud_1.buildCrudRouter)(receptions, { db, resourceName: "admin_receptions" }));

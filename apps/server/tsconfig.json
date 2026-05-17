@@ -13,6 +13,7 @@
     "declaration": false,
     "sourceMap": false,
     "resolveJsonModule": true,
+    "allowJs": true,
     "paths": {
       "@btp/types": ["../../packages/types/src"],
       "@btp/core": ["../../packages/core/src"]
