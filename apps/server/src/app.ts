@@ -23,6 +23,7 @@ import { buildVaultRouter } from "./routes/vault";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
+import { startRevokedTokensPurgeJob } from "./token-revocation";
 
 export interface AppContext {
   db: DB;
@@ -174,6 +175,12 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   const pool = db ?? createPool(cfg);
   await runMigrations(pool);
 
+  // Purge périodique des tokens révoqués expirés (idempotent, sans effet
+  // si la table est vide). Démarre seulement si on n'est pas en test.
+  if (cfg.NODE_ENV !== "test") {
+    startRevokedTokensPurgeJob(pool);
+  }
+
   const app = express();
   app.disable("x-powered-by");
 
@@ -213,7 +220,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // de bord, aucune donnée touchée.
   app.get(
     "/api/debug/sentry-test",
-    requireAuth(cfg),
+    requireAuth(cfg, pool),
     requireRole("admin"),
     (_req: Request, _res: Response) => {
       throw new Error(
@@ -235,7 +242,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // ─── Super-admin : gestion des entreprises clientes (super_admin only) ──
   app.use("/api/super-admin", buildSuperAdminRouter(pool, cfg));
 
-  const auth = requireAuth(cfg);
+  const auth = requireAuth(cfg, pool);
 
   // ─── Clients ───────────────────────────────────────────────────────────
   const clients = new MysqlRepository(pool, "clients", {

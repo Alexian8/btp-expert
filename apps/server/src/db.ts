@@ -472,6 +472,18 @@ export async function runMigrations(db: Pool): Promise<void> {
       INDEX idx_agenda_client (clientId),
       INDEX idx_agenda_chantier (chantierId)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    // ─── JWT révoqués (logout, password-change, etc.) ─────────────────────
+    // On stocke un hash sha256 du token (pas le token brut) pour ne pas
+    // matérialiser des credentials valides en DB. expiresAt = exp du JWT,
+    // un job de purge supprime les lignes expirées.
+    `CREATE TABLE IF NOT EXISTS revoked_tokens (
+      tokenHash CHAR(64) PRIMARY KEY,
+      userId INT NULL,
+      revokedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expiresAt DATETIME NOT NULL,
+      INDEX idx_revoked_expires (expiresAt)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   ];
 
   for (const sql of statements) {

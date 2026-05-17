@@ -115,7 +115,7 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
   const router = Router();
 
   // Toutes les routes ici exigent admin
-  router.use(requireAuth(cfg), requireRole("admin"));
+  router.use(requireAuth(cfg, db), requireRole("admin"));
 
   // ─── Liste (scopée par tenant) ────────────────────────────────────────
   router.get(

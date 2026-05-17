@@ -34,7 +34,7 @@ const wrap =
 
 export function buildAdminLogsRouter(db: DB, cfg: Config): Router {
   const router = Router();
-  router.use(requireAuth(cfg), requireRole("admin"));
+  router.use(requireAuth(cfg, db), requireRole("admin"));
 
   /**
    * Détermine le scope tenant à appliquer en lecture :

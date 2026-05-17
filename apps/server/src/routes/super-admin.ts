@@ -100,7 +100,7 @@ function safeJson(s: string): unknown {
 
 export function buildSuperAdminRouter(db: DB, cfg: Config): Router {
   const router = Router();
-  router.use(requireAuth(cfg), requireRole("super_admin"));
+  router.use(requireAuth(cfg, db), requireRole("super_admin"));
 
   // ─── Liste toutes les entreprises ─────────────────────────────────────
   router.get(
