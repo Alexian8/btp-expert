@@ -357,8 +357,24 @@ export function installBtpApiShim(): void {
     try {
       const parts = t.split(".");
       if (parts.length < 2) return null;
-      const json = atob(parts[1]!.replace(/-/g, "+").replace(/_/g, "/"));
-      const decoded = JSON.parse(json) as { sub?: number; role?: string };
+      // base64url → base64 standard. La taille du payload n'est pas toujours
+      // multiple de 4 → atob() levait alors une InvalidCharacterError silencieuse
+      // (catch en bas) et le rôle worker n'était jamais appliqué côté UI.
+      let b64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4) b64 += "=";
+      const json = atob(b64);
+      const decoded = JSON.parse(json) as {
+        sub?: number;
+        role?: string;
+        exp?: number;
+      };
+      // Si le JWT a un `exp` et qu'il est dépassé, on considère le payload
+      // comme illisible — l'UI ne doit pas faire confiance à un token expiré
+      // (le serveur rejettera de toute façon, mais autant ne pas afficher
+      // d'infos basées dessus en attendant).
+      if (typeof decoded.exp === "number" && decoded.exp * 1000 < Date.now()) {
+        return null;
+      }
       if (typeof decoded.sub !== "number" || typeof decoded.role !== "string") {
         return null;
       }
