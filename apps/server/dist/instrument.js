@@ -61,4 +61,3 @@ function setupExpressErrorHandler(app) {
         console.warn(`[sentry] express handler skipped: ${msg}`);
     }
 }
-//# sourceMappingURL=instrument.js.map

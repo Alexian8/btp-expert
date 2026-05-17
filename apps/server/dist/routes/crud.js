@@ -141,4 +141,3 @@ function extractKeyFields(data, resource) {
     }
     return out;
 }
-//# sourceMappingURL=crud.js.map

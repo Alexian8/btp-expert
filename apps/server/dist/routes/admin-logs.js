@@ -30,7 +30,7 @@ const wrap = (handler) => (req, res, next) => {
 };
 function buildAdminLogsRouter(db, cfg) {
     const router = (0, express_1.Router)();
-    router.use((0, auth_1.requireAuth)(cfg), (0, rbac_1.requireRole)("admin"));
+    router.use((0, auth_1.requireAuth)(cfg, db), (0, rbac_1.requireRole)("admin"));
     /**
      * Détermine le scope tenant à appliquer en lecture :
      *   - super_admin → undefined (= tous les tenants)
@@ -99,4 +99,3 @@ function buildAdminLogsRouter(db, cfg) {
     }));
     return router;
 }
-//# sourceMappingURL=admin-logs.js.map

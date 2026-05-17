@@ -81,7 +81,7 @@ function safeJson(s) {
 }
 function buildSuperAdminRouter(db, cfg) {
     const router = (0, express_1.Router)();
-    router.use((0, auth_1.requireAuth)(cfg), (0, rbac_1.requireRole)("super_admin"));
+    router.use((0, auth_1.requireAuth)(cfg, db), (0, rbac_1.requireRole)("super_admin"));
     // ─── Liste toutes les entreprises ─────────────────────────────────────
     router.get("/companies", wrap(async (_req, res) => {
         const [companies] = await db.query("SELECT id, name, data, isSetupComplete, isActive, createdAt FROM company ORDER BY id ASC");
@@ -294,4 +294,3 @@ function buildSuperAdminRouter(db, cfg) {
     }));
     return router;
 }
-//# sourceMappingURL=super-admin.js.map

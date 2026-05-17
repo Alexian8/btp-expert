@@ -78,4 +78,3 @@ function requireRole(minimum) {
 function canSeeAllData(role) {
     return roleAtLeast(role, "accountant");
 }
-//# sourceMappingURL=rbac.js.map

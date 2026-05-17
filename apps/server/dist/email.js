@@ -510,4 +510,3 @@ function buildMailboxBlock(mb) {
                 <strong>💡 Astuce :</strong> mettez votre email pro sur <strong>tous</strong> vos appareils (PC + téléphone). Comme c'est de l'IMAP, les emails sont synchronisés partout : si vous lisez un email sur le téléphone, il apparaît comme lu sur le PC.
               </p>`;
 }
-//# sourceMappingURL=email.js.map
