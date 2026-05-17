@@ -19,7 +19,7 @@ import { Dc4FormModal } from "./Dc4FormModal";
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function Dc4Section() {
-  const { dc4Declarations, stats, fetchDc4 } = useAdministrativeDocsStore();
+  const { dc4Declarations, stats, fetchDc4, fetchStats } = useAdministrativeDocsStore();
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<Dc4Status | "">("");
@@ -29,6 +29,7 @@ export function Dc4Section() {
 
   useEffect(() => {
     fetchDc4();
+    fetchStats();
   }, []);
 
   const filtered = useMemo(() => {

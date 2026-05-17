@@ -20,7 +20,7 @@ import { ReceptionFormModal } from "./ReceptionFormModal";
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function ReceptionsSection() {
-  const { receptions, stats, fetchReceptions } = useAdministrativeDocsStore();
+  const { receptions, stats, fetchReceptions, fetchStats } = useAdministrativeDocsStore();
   const { chantiers, fetch: fetchChantiers } = useChantiersStore();
 
   const [search, setSearch] = useState("");
@@ -32,6 +32,7 @@ export function ReceptionsSection() {
   useEffect(() => {
     fetchReceptions();
     fetchChantiers();
+    fetchStats();
   }, []);
 
   const chantierMap = useMemo(() => {

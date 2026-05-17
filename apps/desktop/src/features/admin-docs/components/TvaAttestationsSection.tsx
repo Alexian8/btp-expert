@@ -19,7 +19,7 @@ import { TvaAttestationFormModal } from "./TvaAttestationFormModal";
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function TvaAttestationsSection() {
-  const { tvaAttestations, stats, fetchTvaAttestations } = useAdministrativeDocsStore();
+  const { tvaAttestations, stats, fetchTvaAttestations, fetchStats } = useAdministrativeDocsStore();
 
   const [search, setSearch] = useState("");
   const [filterRate, setFilterRate] = useState<TvaRate | 0>(0);
@@ -29,6 +29,7 @@ export function TvaAttestationsSection() {
 
   useEffect(() => {
     fetchTvaAttestations();
+    fetchStats();
   }, []);
 
   const filtered = useMemo(() => {
