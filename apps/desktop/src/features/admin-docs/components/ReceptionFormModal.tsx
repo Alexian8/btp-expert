@@ -157,7 +157,7 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
         setContractorSignedDate(r.contractorSignedDate);
         setContractorSignatureDataUrl((r as { contractorSignatureDataUrl?: string }).contractorSignatureDataUrl ?? "");
         setStatus(r.status);
-        setReserves(r.reserves.map((res) => ({
+        setReserves((r.reserves ?? []).map((res) => ({
           id: res.id,
           description: res.description,
           location: res.location,

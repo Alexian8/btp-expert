@@ -826,12 +826,57 @@ export function installBtpApiShim(): void {
         : "";
       return httpGetList(`${adminReceptionPath}${qs}`).catch(() => []);
     },
-    adminReceptionGetById: (id: string) =>
-      httpGet(`${adminReceptionPath}/${encodeURIComponent(id)}`).catch(() => null),
-    adminReceptionCreate: (data: unknown) =>
-      wrapCreate(http("POST", adminReceptionPath, ensureId(data))),
-    adminReceptionUpdate: (id: string, data: unknown) =>
-      wrapAction(http("PATCH", `${adminReceptionPath}/${encodeURIComponent(id)}`, data)),
+    adminReceptionGetById: async (id: string) => {
+      // Les réserves sont une sous-ressource séparée côté serveur, mais le
+      // contrat desktop renvoie le PV avec un champ `reserves` peuplé.
+      // On charge les deux en parallèle et on les fusionne pour que le
+      // formulaire React puisse faire r.reserves.map() sans crasher.
+      const [report, reserves] = await Promise.all([
+        httpGet<Record<string, unknown> | null>(
+          `${adminReceptionPath}/${encodeURIComponent(id)}`
+        ).catch(() => null),
+        httpGet<unknown[]>(
+          `${adminReceptionPath}/${encodeURIComponent(id)}/reserves`
+        ).catch(() => []),
+      ]);
+      if (!report) return null;
+      return { ...report, reserves: Array.isArray(reserves) ? reserves : [] };
+    },
+    adminReceptionCreate: async (data: unknown) => {
+      // Le formulaire envoie un seul payload avec un champ `reserves`. Côté
+      // serveur on a deux routes (PV principal + sous-ressource réserves),
+      // donc on splitte ici pour respecter le contrat de l'UI.
+      const { reserves, ...payload } = (data ?? {}) as {
+        reserves?: unknown[];
+        [k: string]: unknown;
+      };
+      try {
+        const created = (await http("POST", adminReceptionPath, ensureId(payload))) as {
+          id?: string;
+        };
+        if (created?.id && Array.isArray(reserves) && reserves.length > 0) {
+          await http("PUT", `${adminReceptionPath}/${encodeURIComponent(created.id)}/reserves`, reserves);
+        }
+        return { success: true, id: created?.id };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    adminReceptionUpdate: async (id: string, data: unknown) => {
+      const { reserves, ...payload } = (data ?? {}) as {
+        reserves?: unknown[];
+        [k: string]: unknown;
+      };
+      try {
+        await http("PATCH", `${adminReceptionPath}/${encodeURIComponent(id)}`, payload);
+        if (Array.isArray(reserves)) {
+          await http("PUT", `${adminReceptionPath}/${encodeURIComponent(id)}/reserves`, reserves);
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
     adminReceptionDelete: (id: string) =>
       wrapAction(http("DELETE", `${adminReceptionPath}/${encodeURIComponent(id)}`)),
     adminReceptionGetReserves: (id: string) =>
@@ -894,6 +939,35 @@ export function installBtpApiShim(): void {
       wrapCreate(http("POST", adminRgePath, ensureId(data))),
     adminRgeDelete: (id: string) =>
       wrapAction(http("DELETE", `${adminRgePath}/${encodeURIComponent(id)}`)),
+
+    // ─── Exports PDF (pas encore portés côté serveur — vague C2) ────────
+    // On retourne un { success: false, error } explicite pour que les
+    // composants puissent afficher un message clair à l'utilisateur au
+    // lieu d'un crash "undefined.success" ou d'un comportement silencieux.
+    adminReceptionExportPdfPreview: async () => ({
+      success: false as const,
+      error: "L'export PDF n'est pas encore disponible en mode web — utilisez l'application desktop pour générer le PDF.",
+    }),
+    adminReceptionExportPdfSaveAs: async () => ({
+      success: false as const,
+      error: "L'export PDF n'est pas encore disponible en mode web.",
+    }),
+    adminTvaExportPdfPreview: async () => ({
+      success: false as const,
+      error: "L'export PDF n'est pas encore disponible en mode web — utilisez l'application desktop pour générer le CERFA 1300.",
+    }),
+    adminTvaExportPdfSaveAs: async () => ({
+      success: false as const,
+      error: "L'export PDF n'est pas encore disponible en mode web.",
+    }),
+    adminDc4ExportPdfPreview: async () => ({
+      success: false as const,
+      error: "L'export PDF n'est pas encore disponible en mode web — utilisez l'application desktop.",
+    }),
+    adminDc4ExportPdfSaveAs: async () => ({
+      success: false as const,
+      error: "L'export PDF n'est pas encore disponible en mode web.",
+    }),
 
     // ─── Stats globales ─────────────────────────────────────────────────
     adminGetStats: () =>
@@ -1370,15 +1444,9 @@ export function installBtpApiShim(): void {
     "statsGetOverdueInvoices",
     "statsGetYoYComparison",
     "statsGetSeasonality",
-    // Admin docs — CRUD est câblé via `adminDocs` (HTTP réel). Seuls les
-    // exports PDF restent stubés en mode web (générés côté Electron uniquement
-    // pour le moment ; portage serveur prévu en vague C).
-    "adminReceptionExportPdfPreview",
-    "adminReceptionExportPdfSaveAs",
-    "adminTvaExportPdfPreview",
-    "adminTvaExportPdfSaveAs",
-    "adminDc4ExportPdfPreview",
-    "adminDc4ExportPdfSaveAs",
+    // Admin docs — CRUD est câblé via `adminDocs` (HTTP réel). Exports PDF
+    // explicitement implémentés plus bas (pas dans les stubs) pour renvoyer
+    // un message clair "indisponible en web" plutôt que {} silencieux.
     "adminOpenPdfExternal",
     // Misc
     "getDbInitError",
