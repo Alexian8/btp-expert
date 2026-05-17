@@ -103,10 +103,11 @@ function init({ db }) {
           location, ownerPresent, contractorPresent,
           worksDescription, observations,
           retentionAmount, retentionReleaseDate,
-          ownerSigned, ownerSignedDate, contractorSigned, contractorSignedDate,
+          ownerSigned, ownerSignedDate, ownerSignatureDataUrl,
+          contractorSigned, contractorSignedDate, contractorSignatureDataUrl,
           status, vaultDocumentId,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, reference,
         data.chantierId || "",
@@ -124,8 +125,10 @@ function init({ db }) {
         data.retentionReleaseDate || "",
         data.ownerSigned ? 1 : 0,
         data.ownerSignedDate || "",
+        data.ownerSignatureDataUrl || "",
         data.contractorSigned ? 1 : 0,
         data.contractorSignedDate || "",
+        data.contractorSignatureDataUrl || "",
         data.status || "brouillon",
         data.vaultDocumentId || "",
         now, now
@@ -169,7 +172,8 @@ function init({ db }) {
         "location", "ownerPresent", "contractorPresent",
         "worksDescription", "observations",
         "retentionAmount", "retentionReleaseDate",
-        "ownerSigned", "ownerSignedDate", "contractorSigned", "contractorSignedDate",
+        "ownerSigned", "ownerSignedDate", "ownerSignatureDataUrl",
+        "contractorSigned", "contractorSignedDate", "contractorSignatureDataUrl",
         "status", "vaultDocumentId",
       ];
       const keys = Object.keys(data).filter((k) => allowed.includes(k));
@@ -260,14 +264,14 @@ function init({ db }) {
           id, reference, attestationType, tvaRate,
           chantierId, clientId, clientName,
           logementType, logementBuiltOver2Years, logementYearOfConstruction, logementAddress,
-          ownerCivilite, ownerLastName, ownerFirstName, ownerEmail, ownerPhone,
-          category, worksDescription, worksStartDate, worksEndDate,
+          ownerCivilite, ownerLastName, ownerFirstName, ownerEmail, ownerPhone, ownerSiret,
+          interventionType, category, worksDescription, worksStartDate, worksEndDate,
           totalAmountHt, invoiceReference,
           clientCommitments,
-          signedDate, signedLocation,
+          signedDate, signedLocation, clientSignatureDataUrl,
           status, vaultDocumentId,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, reference,
         data.attestationType || "simplifiee",
@@ -284,6 +288,8 @@ function init({ db }) {
         data.ownerFirstName || "",
         data.ownerEmail || "",
         data.ownerPhone || "",
+        data.ownerSiret || "",
+        data.interventionType || "amelioration",
         data.category || "amelioration_qualite",
         data.worksDescription || "",
         data.worksStartDate || "",
@@ -293,6 +299,7 @@ function init({ db }) {
         JSON.stringify(data.clientCommitments || []),
         data.signedDate || "",
         data.signedLocation || "",
+        data.clientSignatureDataUrl || "",
         data.status || "brouillon",
         data.vaultDocumentId || "",
         now, now
@@ -310,11 +317,11 @@ function init({ db }) {
         "attestationType", "tvaRate",
         "chantierId", "clientId", "clientName",
         "logementType", "logementBuiltOver2Years", "logementYearOfConstruction", "logementAddress",
-        "ownerCivilite", "ownerLastName", "ownerFirstName", "ownerEmail", "ownerPhone",
-        "category", "worksDescription", "worksStartDate", "worksEndDate",
+        "ownerCivilite", "ownerLastName", "ownerFirstName", "ownerEmail", "ownerPhone", "ownerSiret",
+        "interventionType", "category", "worksDescription", "worksStartDate", "worksEndDate",
         "totalAmountHt", "invoiceReference",
         "clientCommitments",
-        "signedDate", "signedLocation",
+        "signedDate", "signedLocation", "clientSignatureDataUrl",
         "status", "vaultDocumentId",
       ];
       const keys = Object.keys(data).filter((k) => allowed.includes(k));
@@ -375,21 +382,24 @@ function init({ db }) {
       const now = nowIso();
       db.prepare(`
         INSERT INTO dc4_declarations (
-          id, reference,
-          purchaseOrderId, subcontractorId, subcontractorName, chantierId,
+          id, reference, acteSpecialNumber,
+          purchaseOrderId, subcontractorId, subcontractorName, subcontractorSiret, chantierId,
           publicMarketReference, publicMarketObject, publicAuthorityName, publicAuthorityAddress,
           subcontractedWorksDescription, subcontractedAmountHt, subcontractedAmountTtc, subcontractedDuration,
           paymentMethod, paymentDelay,
           cautionType, cautionRequired, cautionReceived,
-          signedDate, signedLocation,
+          acceptanceDeadline, signedDate, signedLocation,
+          contractorSignatureDataUrl, ownerSignatureDataUrl, authoritySignatureDataUrl,
           status, vaultDocumentId,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, reference,
+        data.acteSpecialNumber || "",
         data.purchaseOrderId || "",
         data.subcontractorId || "",
         data.subcontractorName || "",
+        data.subcontractorSiret || "",
         data.chantierId || "",
         data.publicMarketReference || "",
         data.publicMarketObject || "",
@@ -404,8 +414,12 @@ function init({ db }) {
         data.cautionType || "Aucune",
         data.cautionRequired ? 1 : 0,
         data.cautionReceived ? 1 : 0,
+        data.acceptanceDeadline || "",
         data.signedDate || "",
         data.signedLocation || "",
+        data.contractorSignatureDataUrl || "",
+        data.ownerSignatureDataUrl || "",
+        data.authoritySignatureDataUrl || "",
         data.status || "brouillon",
         data.vaultDocumentId || "",
         now, now
@@ -420,12 +434,14 @@ function init({ db }) {
   ipcMain.handle("admin:dc4:update", (_e, { id, data }) => {
     try {
       const allowed = [
-        "purchaseOrderId", "subcontractorId", "subcontractorName", "chantierId",
+        "acteSpecialNumber",
+        "purchaseOrderId", "subcontractorId", "subcontractorName", "subcontractorSiret", "chantierId",
         "publicMarketReference", "publicMarketObject", "publicAuthorityName", "publicAuthorityAddress",
         "subcontractedWorksDescription", "subcontractedAmountHt", "subcontractedAmountTtc", "subcontractedDuration",
         "paymentMethod", "paymentDelay",
         "cautionType", "cautionRequired", "cautionReceived",
-        "signedDate", "signedLocation",
+        "acceptanceDeadline", "signedDate", "signedLocation",
+        "contractorSignatureDataUrl", "ownerSignatureDataUrl", "authoritySignatureDataUrl",
         "status", "vaultDocumentId",
       ];
       const keys = Object.keys(data).filter((k) => allowed.includes(k));
