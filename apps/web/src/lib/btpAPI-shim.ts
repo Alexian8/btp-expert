@@ -805,6 +805,109 @@ export function installBtpApiShim(): void {
     getLocalDbHash: stub("getLocalDbHash", null),
   };
 
+  // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
+  // Câblés sur /api/admin-docs/* (côté serveur, MysqlRepository + buildCrudRouter).
+  // Le format de retour reste celui attendu par le desktop ({ success, id }) pour
+  // ne pas modifier le store administrativeDocsStore.
+  const adminReceptionPath = "/api/admin-docs/receptions";
+  const adminTvaPath = "/api/admin-docs/tva";
+  const adminDc4Path = "/api/admin-docs/dc4";
+  const adminRgePath = "/api/admin-docs/rge";
+
+  const adminDocs = {
+    // ─── PV de réception ────────────────────────────────────────────────
+    adminReceptionList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminReceptionPath}${qs}`).catch(() => []);
+    },
+    adminReceptionGetById: (id: string) =>
+      httpGet(`${adminReceptionPath}/${encodeURIComponent(id)}`).catch(() => null),
+    adminReceptionCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminReceptionPath, ensureId(data))),
+    adminReceptionUpdate: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminReceptionPath}/${encodeURIComponent(id)}`, data)),
+    adminReceptionDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminReceptionPath}/${encodeURIComponent(id)}`)),
+    adminReceptionGetReserves: (id: string) =>
+      httpGet(`${adminReceptionPath}/${encodeURIComponent(id)}/reserves`).catch(() => []),
+    adminReceptionSetReserves: (id: string, reserves: unknown[]) =>
+      wrapAction(http("PUT", `${adminReceptionPath}/${encodeURIComponent(id)}/reserves`, reserves)),
+
+    // ─── Attestations TVA ───────────────────────────────────────────────
+    adminTvaList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminTvaPath}${qs}`).catch(() => []);
+    },
+    adminTvaGetById: (id: string) =>
+      httpGet(`${adminTvaPath}/${encodeURIComponent(id)}`).catch(() => null),
+    adminTvaCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminTvaPath, ensureId(data))),
+    adminTvaUpdate: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminTvaPath}/${encodeURIComponent(id)}`, data)),
+    adminTvaDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminTvaPath}/${encodeURIComponent(id)}`)),
+
+    // ─── DC4 ────────────────────────────────────────────────────────────
+    adminDc4List: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminDc4Path}${qs}`).catch(() => []);
+    },
+    adminDc4GetById: (id: string) =>
+      httpGet(`${adminDc4Path}/${encodeURIComponent(id)}`).catch(() => null),
+    adminDc4Create: (data: unknown) =>
+      wrapCreate(http("POST", adminDc4Path, ensureId(data))),
+    adminDc4Update: (id: string, data: unknown) =>
+      wrapAction(http("PATCH", `${adminDc4Path}/${encodeURIComponent(id)}`, data)),
+    adminDc4Delete: (id: string) =>
+      wrapAction(http("DELETE", `${adminDc4Path}/${encodeURIComponent(id)}`)),
+
+    // ─── RGE / MaPrimeRénov' ────────────────────────────────────────────
+    adminRgeList: (filters?: Record<string, unknown>) => {
+      const qs = filters
+        ? "?" + new URLSearchParams(
+            Object.entries(filters)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "")
+              .map(([k, v]) => [k, String(v)])
+          ).toString()
+        : "";
+      return httpGetList(`${adminRgePath}${qs}`).catch(() => []);
+    },
+    adminRgeCreate: (data: unknown) =>
+      wrapCreate(http("POST", adminRgePath, ensureId(data))),
+    adminRgeDelete: (id: string) =>
+      wrapAction(http("DELETE", `${adminRgePath}/${encodeURIComponent(id)}`)),
+
+    // ─── Stats globales ─────────────────────────────────────────────────
+    adminGetStats: () =>
+      http("GET", "/api/admin-docs/stats").catch(() => ({
+        receptionsTotal: 0,
+        receptionsWithReserves: 0,
+        tvaAttestationsTotal: 0,
+        tvaAttestationsThisYear: 0,
+        dc4Total: 0,
+        dc4Pending: 0,
+        rgeDocumentsTotal: 0,
+      })),
+  };
+
   // ─── Microsoft (Outlook via /api/auth/microsoft/* + /api/email/*) ─────
   const microsoft = {
     // Démarre le flow OAuth web : redirige vers Microsoft.
@@ -1267,26 +1370,9 @@ export function installBtpApiShim(): void {
     "statsGetOverdueInvoices",
     "statsGetYoYComparison",
     "statsGetSeasonality",
-    // Admin docs
-    "adminReceptionList",
-    "adminReceptionGetById",
-    "adminReceptionCreate",
-    "adminReceptionUpdate",
-    "adminReceptionDelete",
-    "adminTvaList",
-    "adminTvaGetById",
-    "adminTvaCreate",
-    "adminTvaUpdate",
-    "adminTvaDelete",
-    "adminDc4List",
-    "adminDc4GetById",
-    "adminDc4Create",
-    "adminDc4Update",
-    "adminDc4Delete",
-    "adminRgeList",
-    "adminRgeCreate",
-    "adminRgeDelete",
-    "adminGetStats",
+    // Admin docs — CRUD est câblé via `adminDocs` (HTTP réel). Seuls les
+    // exports PDF restent stubés en mode web (générés côté Electron uniquement
+    // pour le moment ; portage serveur prévu en vague C).
     "adminReceptionExportPdfPreview",
     "adminReceptionExportPdfSaveAs",
     "adminTvaExportPdfPreview",
@@ -1316,6 +1402,7 @@ export function installBtpApiShim(): void {
     ...vaultAPI,
     ...backup,
     ...microsoft,
+    ...adminDocs,
     ...allOtherStubs,
     platform: "web" as const,
     isElectron: false as const,

@@ -20,6 +20,7 @@ import { buildAdminUsersRouter } from "./routes/admin-users";
 import { buildAdminLogsRouter } from "./routes/admin-logs";
 import { buildSuperAdminRouter } from "./routes/super-admin";
 import { buildVaultRouter } from "./routes/vault";
+import { buildAdminDocsRouter } from "./routes/admin-docs";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
@@ -660,6 +661,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // ─── Vault (coffre-fort documents) ─────────────────────────────────────
   app.use("/api/vault", buildVaultRouter(pool, cfg));
+
+  // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
+  app.use("/api/admin-docs", buildAdminDocsRouter(pool, cfg));
 
   // ─── Static SPA ────────────────────────────────────────────────────────
   const publicDir = path.resolve(process.cwd(), "public");
