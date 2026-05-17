@@ -739,17 +739,25 @@ export function installBtpApiShim(): void {
   // ─── Microsoft (Outlook via /api/auth/microsoft/* + /api/email/*) ─────
   const microsoft = {
     // Démarre le flow OAuth web : redirige vers Microsoft.
-    // ⚠️ Cette fonction NE retourne jamais (la page change).
-    msLogin: async (): Promise<{ success: boolean; account?: unknown }> => {
+    // ⚠️ Cette fonction NE retourne jamais en cas de succès (la page change).
+    //
+    // SÉCURITÉ : on échange d'abord le JWT contre un ticket éphémère via
+    // POST /start (authentifié par header Authorization), puis on redirige
+    // avec ?ticket=... — le JWT ne se retrouve jamais dans une URL, donc
+    // pas de fuite via l'historique navigateur, les logs serveur ou le referer.
+    msLogin: async (): Promise<{ success: boolean; account?: unknown; error?: string }> => {
       const token = getToken();
-      if (!token) {
-        return { success: false } as { success: boolean; error?: string; account?: unknown } & {
-          error: string;
-        };
+      if (!token) return { success: false, error: "Non authentifié" };
+      try {
+        const { loginUrl } = await http<{ loginUrl: string }>(
+          "POST",
+          "/api/auth/microsoft/start"
+        );
+        window.location.href = loginUrl;
+        return new Promise(() => {}); // la page se recharge
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur OAuth" };
       }
-      window.location.href = `/api/auth/microsoft/login?token=${encodeURIComponent(token)}`;
-      // Promise qui ne se résout pas — la page va se recharger
-      return new Promise(() => {});
     },
 
     msLogout: async (): Promise<{ success: boolean }> => {
