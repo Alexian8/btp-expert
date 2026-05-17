@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 
 import { AppRouter } from "@/app/Router";
 import { ChangePasswordModal } from "@/features/auth/components/ChangePasswordModal";
@@ -47,9 +47,34 @@ export function App() {
     };
     window.addEventListener("btp:auth-required", onAuthRequired);
 
+    // Le shim web émet "btp:api-error" pour les pannes réseau, timeouts, 5xx,
+    // 429. Avant ça les erreurs étaient avalées silencieusement (catch +
+    // valeur par défaut) et l'utilisateur voyait juste une UI vide.
+    // On déduplique par message pour ne pas spammer si plusieurs requêtes
+    // tombent en même temps.
+    let lastErrorAt = 0;
+    let lastErrorMsg = "";
+    const onApiError = (e: Event): void => {
+      const detail = (e as CustomEvent<{ message: string; kind: string; status?: number }>).detail;
+      if (!detail) return;
+      const now = Date.now();
+      if (detail.message === lastErrorMsg && now - lastErrorAt < 3000) return;
+      lastErrorMsg = detail.message;
+      lastErrorAt = now;
+      const title =
+        detail.kind === "timeout"
+          ? "Le serveur met du temps à répondre"
+          : detail.kind === "network"
+            ? "Pas de réseau"
+            : "Erreur serveur";
+      toast.error(title, { description: detail.message });
+    };
+    window.addEventListener("btp:api-error", onApiError as EventListener);
+
     return () => {
       cleanup?.();
       window.removeEventListener("btp:auth-required", onAuthRequired);
+      window.removeEventListener("btp:api-error", onApiError as EventListener);
     };
   }, [applyTheme, checkSetup, restoreSession]);
 

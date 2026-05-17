@@ -24,6 +24,28 @@ function setToken(token: string | null): void {
   } catch {}
 }
 
+// Timeout par défaut : 30s. Suffisant pour les exports PDF lourds, mais
+// empêche une requête pendue indéfiniment si le serveur ne répond plus.
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
+
+// Émet un event global que l'UI peut écouter pour afficher un toast d'erreur.
+// On le fait uniquement pour les vraies erreurs API (5xx, network, timeout),
+// pas pour les 401 (déjà gérés via btp:auth-required) ni les 4xx attendus
+// par les composants (les composants devraient catcher et afficher eux-mêmes).
+function emitApiError(detail: {
+  method: string;
+  path: string;
+  status?: number;
+  message: string;
+  kind: "network" | "timeout" | "server";
+}): void {
+  try {
+    window.dispatchEvent(new CustomEvent("btp:api-error", { detail }));
+  } catch {
+    /* dispatch ne devrait jamais throw, mais defensive */
+  }
+}
+
 async function http<T = unknown>(
   method: string,
   path: string,
@@ -33,11 +55,37 @@ async function http<T = unknown>(
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_HTTP_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    const isTimeout =
+      err instanceof DOMException && err.name === "AbortError";
+    const message = isTimeout
+      ? `Délai d'attente dépassé (${Math.round(DEFAULT_HTTP_TIMEOUT_MS / 1000)}s)`
+      : err instanceof Error
+        ? err.message
+        : "Erreur réseau";
+    emitApiError({
+      method,
+      path,
+      message,
+      kind: isTimeout ? "timeout" : "network",
+    });
+    throw new Error(message);
+  }
+  clearTimeout(timeoutId);
+
   if (res.status === 401) {
     setToken(null);
     window.dispatchEvent(new CustomEvent("btp:auth-required"));
@@ -57,6 +105,11 @@ async function http<T = unknown>(
       payload && typeof payload === "object" && "message" in payload
         ? String((payload as { message: unknown }).message)
         : `HTTP ${res.status}`;
+    // 5xx et 429 sont des problèmes d'infra/serveur → utile pour l'UI globale.
+    // 4xx (sauf 429) sont des erreurs métier → on laisse l'appelant les gérer.
+    if (res.status >= 500 || res.status === 429) {
+      emitApiError({ method, path, status: res.status, message: msg, kind: "server" });
+    }
     throw new Error(msg);
   }
   return payload as T;
