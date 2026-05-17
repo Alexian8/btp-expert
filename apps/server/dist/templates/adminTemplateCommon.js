@@ -306,6 +306,118 @@ const BASE_CSS = `
     font-size: 9pt;
     letter-spacing: 0.3px;
   }
+
+  /* ──────────────────────────────────────────────────────────────────────
+   * Variante COMPACT-A4 — force tout le document à tenir sur une seule
+   * feuille A4. Active via <body class="compact-a4"> (utilisé par le PV
+   * de réception). TVA / DC4 gardent leur layout aéré multi-pages.
+   * Les overrides réduisent uniformément tailles de police, marges et
+   * paddings pour gagner ~40% de hauteur.
+   * ─────────────────────────────────────────────────────────────────── */
+  body.compact-a4 {
+    font-size: 8.5pt;
+    line-height: 1.3;
+  }
+  body.compact-a4 h1 { font-size: 13pt; margin: 0 0 2mm 0; }
+  body.compact-a4 h2 {
+    font-size: 9.5pt;
+    margin: 3mm 0 1mm 0;
+    padding-bottom: 0.5mm;
+  }
+  body.compact-a4 h3 { font-size: 9pt; margin: 2mm 0 0.5mm 0; }
+  body.compact-a4 p { margin: 0.5mm 0; }
+
+  body.compact-a4 .doc-header {
+    padding-bottom: 2mm;
+    margin-bottom: 3mm;
+  }
+  body.compact-a4 .doc-header .company { font-size: 8pt; line-height: 1.25; }
+  body.compact-a4 .doc-header .company .company-name {
+    font-size: 9.5pt;
+    margin-bottom: 0.5mm;
+  }
+  body.compact-a4 .doc-header .reference { font-size: 8pt; }
+  body.compact-a4 .doc-header .reference .ref-value { font-size: 9.5pt; }
+
+  body.compact-a4 .info-grid { gap: 2mm; margin: 1.5mm 0; }
+  body.compact-a4 .info-block { padding: 2mm; }
+  body.compact-a4 .info-block .label { font-size: 7.5pt; margin-bottom: 0.5mm; }
+  body.compact-a4 .info-block .content { font-size: 8.5pt; }
+
+  body.compact-a4 .text-block { padding: 2mm; margin: 1mm 0; }
+
+  body.compact-a4 .important-notice {
+    padding: 2mm;
+    margin: 2mm 0;
+    font-size: 8pt;
+  }
+  body.compact-a4 .important-notice strong { font-size: 8.5pt; }
+
+  body.compact-a4 .reserve-item { padding: 1.5mm; margin: 1mm 0; }
+  body.compact-a4 .reserve-item .reserve-num { font-size: 8pt; }
+  body.compact-a4 .reserve-item .reserve-desc { font-size: 8.5pt; margin-bottom: 0.5mm; }
+  body.compact-a4 .reserve-item .reserve-meta { font-size: 7.5pt; }
+
+  body.compact-a4 .signature-zone {
+    margin: 4mm 0 2mm 0;
+    gap: 4mm;
+  }
+  body.compact-a4 .signature-block {
+    padding: 2mm;
+    min-height: 22mm;
+  }
+  body.compact-a4 .signature-block .sig-label { font-size: 8pt; margin-bottom: 0.5mm; }
+  body.compact-a4 .signature-block .sig-meta { font-size: 7.5pt; }
+  body.compact-a4 .signature-block .sig-mention { font-size: 7pt; margin-top: 0.5mm; }
+  body.compact-a4 .signature-block img {
+    max-width: 50mm !important;
+    max-height: 18mm !important;
+    margin: 1mm 0 !important;
+  }
+
+  body.compact-a4 .legal-footer {
+    position: static;
+    margin-top: 3mm;
+    padding-top: 1mm;
+    font-size: 6.5pt;
+    left: auto;
+    right: auto;
+    bottom: auto;
+  }
+
+  /* Bloc "Mentions légales" en fin de page — liste à puces compactée */
+  body.compact-a4 .text-block ul {
+    margin: 0.5mm 0 0 4mm;
+    padding: 0;
+    font-size: 7.5pt;
+    line-height: 1.25;
+  }
+  body.compact-a4 .text-block ul li { margin: 0.2mm 0; }
+
+  /* Évite qu'un bloc principal soit cassé en deux pages si jamais le
+   * contenu déborde malgré la compaction. */
+  body.compact-a4 .info-block,
+  body.compact-a4 .signature-block,
+  body.compact-a4 .reserve-item,
+  body.compact-a4 .important-notice {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Marges @page plus serrées pour la variante compacte */
+  @media print {
+    body.compact-a4 { font-size: 8.5pt; }
+  }
+`;
+// Marges @page spécifiques pour la variante compact-a4 (override @page racine).
+// On exporte un bloc CSS séparé que le template peut insérer dans son <style>
+// pour que les règles @page prennent effet (les @page imbriquées ne marchent
+// pas — il faut les déclarer au niveau racine du document).
+const COMPACT_A4_PAGE_CSS = `
+  @page {
+    size: A4;
+    margin: 10mm 12mm 12mm 12mm;
+  }
 `;
 function renderCompanyHeader(company) {
     const c = company || {};
@@ -357,6 +469,7 @@ module.exports = {
     formatEuro,
     nl2br,
     BASE_CSS,
+    COMPACT_A4_PAGE_CSS,
     renderCompanyHeader,
     renderClientName,
     renderClientAddress,

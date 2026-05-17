@@ -4,7 +4,7 @@
 
 const {
   escapeHtml, formatDate, formatEuro, nl2br,
-  BASE_CSS, renderCompanyHeader, renderClientName, renderClientAddress,
+  BASE_CSS, COMPACT_A4_PAGE_CSS, renderCompanyHeader, renderClientName, renderClientAddress,
 } = require("./adminTemplateCommon");
 
 const RECEPTION_TYPE_LABELS = {
@@ -43,9 +43,9 @@ function renderReceptionHtml({ report, reserves, client, chantier, company }) {
 <head>
 <meta charset="UTF-8">
 <title>PV de réception ${escapeHtml(report.reference)}</title>
-<style>${BASE_CSS}</style>
+<style>${COMPACT_A4_PAGE_CSS}${BASE_CSS}</style>
 </head>
-<body>
+<body class="compact-a4">
 
 <div class="doc-header">
   <div class="company">

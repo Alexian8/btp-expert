@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // receptionTemplate.js — PV de réception de chantier (norme NF P 03-001)
 // ═══════════════════════════════════════════════════════════════════════════
-const { escapeHtml, formatDate, formatEuro, nl2br, BASE_CSS, renderCompanyHeader, renderClientName, renderClientAddress, } = require("./adminTemplateCommon");
+const { escapeHtml, formatDate, formatEuro, nl2br, BASE_CSS, COMPACT_A4_PAGE_CSS, renderCompanyHeader, renderClientName, renderClientAddress, } = require("./adminTemplateCommon");
 const RECEPTION_TYPE_LABELS = {
     sans_reserves: { label: "Sans réserves", badge: "badge-success" },
     avec_reserves: { label: "Avec réserves", badge: "badge-warning" },
@@ -35,9 +35,9 @@ function renderReceptionHtml({ report, reserves, client, chantier, company }) {
 <head>
 <meta charset="UTF-8">
 <title>PV de réception ${escapeHtml(report.reference)}</title>
-<style>${BASE_CSS}</style>
+<style>${COMPACT_A4_PAGE_CSS}${BASE_CSS}</style>
 </head>
-<body>
+<body class="compact-a4">
 
 <div class="doc-header">
   <div class="company">
