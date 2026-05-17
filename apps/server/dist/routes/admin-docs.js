@@ -29,6 +29,27 @@ const tvaAttestationCerfaTemplate_1 = require("../templates/tvaAttestationCerfaT
 const tvaAttestationCerfaOfficielTemplate_1 = require("../templates/tvaAttestationCerfaOfficielTemplate");
 const dc4Template_1 = require("../templates/dc4Template");
 const daactCerfaTemplate_1 = require("../templates/daactCerfaTemplate");
+const cerfaFiller_1 = require("../cerfaFiller");
+// Helper : convertit une date ISO (YYYY-MM-DD) en format CERFA jj/mm/aaaa
+function dateToCerfa(iso) {
+    if (!iso)
+        return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime()))
+        return iso;
+    return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+// Helper : extrait CP/ville depuis "12 rue X, 75001 Paris"
+function splitAddress(full) {
+    const s = String(full || "").trim();
+    if (!s)
+        return { street: "", postal: "", city: "" };
+    const m = s.match(/^(.*?)[,\n]\s*(\d{5})\s+(.+)$/);
+    if (m)
+        return { street: m[1].trim(), postal: m[2], city: m[3].trim() };
+    const postal = (s.match(/\b(\d{5})\b/) || [])[1] || "";
+    return { street: s, postal, city: "" };
+}
 // HTML chrome ajouté autour du template existant : un bouton flottant "Imprimer
 // en PDF" qui déclenche le dialogue d'impression natif du navigateur (Ctrl+P /
 // Cmd+P), masqué lors de l'impression elle-même via @media print. Permet à
@@ -467,6 +488,92 @@ function buildAdminDocsRouter(db, cfg) {
         res
             .type("html")
             .send(wrapWithPrintButton(html, `DC4 ${String(declaration.reference ?? "")}`));
+    }));
+    // GET /tva/:id/pdf → CERFA officiel 1301-SD pré-rempli (AcroForm)
+    // Le navigateur affiche le PDF natif (utile + imprimable + signable à la main).
+    router.get("/tva/:id/pdf", wrap(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await db.query("SELECT * FROM tva_attestations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
+        const a = rows[0];
+        if (!a) {
+            res.status(404).type("html").send("<h1>Attestation introuvable</h1>");
+            return;
+        }
+        const addr = splitAddress(String(a.logementAddress ?? ""));
+        const typeMap = {
+            maison: "maison",
+            residence_principale: "maison",
+            immeuble_collectif: "immeuble_collectif",
+            appartement: "appartement",
+        };
+        const pdfBytes = await (0, cerfaFiller_1.fillCerfa1301SD)({
+            nom: String(a.ownerLastName ?? ""),
+            prenom: String(a.ownerFirstName ?? ""),
+            adresse: addr.street,
+            codePostal: addr.postal,
+            commune: addr.city,
+            typeLogement: typeMap[String(a.logementType ?? "")] ?? "maison",
+            adresseLogement: addr.street,
+            communeLogement: addr.city,
+            codePostalLogement: addr.postal,
+            qualite: "proprietaire",
+            tauxReduit: Number(a.tvaRate) === 5.5 ? "5.5" : "10",
+            faitA: String(a.signedLocation ?? ""),
+            faitLe: dateToCerfa(a.signedDate),
+        });
+        res
+            .type("application/pdf")
+            .setHeader("Content-Disposition", `inline; filename="CERFA-1301SD-${String(a.reference ?? "attestation")}.pdf"`)
+            .send(Buffer.from(pdfBytes));
+    }));
+    // GET /daact/:id/pdf → CERFA officiel 13408*13 pré-rempli (AcroForm)
+    router.get("/daact/:id/pdf", wrap(async (req, res) => {
+        const tenantId = req.user?.companyId ?? 1;
+        const [rows] = await db.query("SELECT * FROM daact_declarations WHERE id = ? AND companyId = ? LIMIT 1", [req.params.id, tenantId]);
+        const d = rows[0];
+        if (!d) {
+            res.status(404).type("html").send("<h1>DAACT introuvable</h1>");
+            return;
+        }
+        const [chRows] = d.chantierId
+            ? await db.query("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [d.chantierId])
+            : [[]];
+        const ch = chRows[0] ?? {};
+        const company = await loadCompany(tenantId);
+        const pdfBytes = await (0, cerfaFiller_1.fillCerfa13408)({
+            permitType: d.permitType ?? "permis_construire",
+            permitNumber: String(d.permitNumber ?? ""),
+            voiriesDifferees: !!d.voiriesDifferees,
+            voiriesDate: dateToCerfa(d.voiriesDate),
+            declarantNom: String(d.titulaireNom ?? ""),
+            declarantPrenom: String(d.titulairePrenom ?? ""),
+            denomination: String(d.denomination ?? company.companyName ?? ""),
+            siret: String(d.siret ?? company.siret ?? ""),
+            typeSociete: String(company.legalForm ?? ""),
+            representantNom: String(d.representantNom ?? company.leaderLastName ?? ""),
+            representantPrenom: String(d.representantPrenom ?? company.leaderFirstName ?? ""),
+            adresseNumero: "",
+            adresseVoie: String(ch.addressLine1 ?? ""),
+            adresseLocalite: String(ch.city ?? ""),
+            adresseCodePostal: String(ch.postalCode ?? ""),
+            email1: String(d.email ?? company.email ?? ""),
+            achievementDate: dateToCerfa(d.achievementDate),
+            destinationChangeDate: dateToCerfa(d.destinationChangeDate),
+            totalTravaux: !d.partialWorks,
+            trancheTravaux: !!d.partialWorks,
+            precisAchevement: String(d.partialWorksDescription ?? ""),
+            surfacePlancher: String(d.surfaceCreated ?? ""),
+            nbLogementsTotal: String(d.nbLogementsTotal ?? ""),
+            nbIndividuels: String(d.nbIndividuels ?? ""),
+            nbCollectifs: String(d.nbCollectifs ?? ""),
+            signatureLieu: String(d.signedLocation ?? ""),
+            signatureDate: dateToCerfa(d.signedDate),
+            signatureNom: String(d.representantNom ?? ""),
+        });
+        res
+            .type("application/pdf")
+            .setHeader("Content-Disposition", `inline; filename="CERFA-13408-${String(d.reference ?? "daact")}.pdf"`)
+            .send(Buffer.from(pdfBytes));
     }));
     // GET /daact/:id/html → DAACT CERFA 13408*13
     router.get("/daact/:id/html", wrap(async (req, res) => {

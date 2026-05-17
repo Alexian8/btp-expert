@@ -29,6 +29,25 @@ import { renderTvaAttestationCerfaHtml } from "../templates/tvaAttestationCerfaT
 import { renderTvaAttestationCerfaOfficielHtml } from "../templates/tvaAttestationCerfaOfficielTemplate";
 import { renderDc4Html } from "../templates/dc4Template";
 import { renderDaactCerfaHtml } from "../templates/daactCerfaTemplate";
+import { fillCerfa1301SD, fillCerfa13408 } from "../cerfaFiller";
+
+// Helper : convertit une date ISO (YYYY-MM-DD) en format CERFA jj/mm/aaaa
+function dateToCerfa(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Helper : extrait CP/ville depuis "12 rue X, 75001 Paris"
+function splitAddress(full: string): { street: string; postal: string; city: string } {
+  const s = String(full || "").trim();
+  if (!s) return { street: "", postal: "", city: "" };
+  const m = s.match(/^(.*?)[,\n]\s*(\d{5})\s+(.+)$/);
+  if (m) return { street: m[1].trim(), postal: m[2], city: m[3].trim() };
+  const postal = (s.match(/\b(\d{5})\b/) || [])[1] || "";
+  return { street: s, postal, city: "" };
+}
 
 // HTML chrome ajouté autour du template existant : un bouton flottant "Imprimer
 // en PDF" qui déclenche le dialogue d'impression natif du navigateur (Ctrl+P /
@@ -551,6 +570,113 @@ export function buildAdminDocsRouter(db: DB, cfg: Config): Router {
       res
         .type("html")
         .send(wrapWithPrintButton(html, `DC4 ${String(declaration.reference ?? "")}`));
+    })
+  );
+
+  // GET /tva/:id/pdf → CERFA officiel 1301-SD pré-rempli (AcroForm)
+  // Le navigateur affiche le PDF natif (utile + imprimable + signable à la main).
+  router.get(
+    "/tva/:id/pdf",
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM tva_attestations WHERE id = ? AND companyId = ? LIMIT 1",
+        [req.params.id, tenantId]
+      );
+      const a = rows[0] as Record<string, unknown> | undefined;
+      if (!a) {
+        res.status(404).type("html").send("<h1>Attestation introuvable</h1>");
+        return;
+      }
+      const addr = splitAddress(String(a.logementAddress ?? ""));
+      const typeMap: Record<string, "maison" | "immeuble_collectif" | "appartement" | "autre"> = {
+        maison: "maison",
+        residence_principale: "maison",
+        immeuble_collectif: "immeuble_collectif",
+        appartement: "appartement",
+      };
+      const pdfBytes = await fillCerfa1301SD({
+        nom: String(a.ownerLastName ?? ""),
+        prenom: String(a.ownerFirstName ?? ""),
+        adresse: addr.street,
+        codePostal: addr.postal,
+        commune: addr.city,
+        typeLogement: typeMap[String(a.logementType ?? "")] ?? "maison",
+        adresseLogement: addr.street,
+        communeLogement: addr.city,
+        codePostalLogement: addr.postal,
+        qualite: "proprietaire",
+        tauxReduit: Number(a.tvaRate) === 5.5 ? "5.5" : "10",
+        faitA: String(a.signedLocation ?? ""),
+        faitLe: dateToCerfa(a.signedDate as string),
+      });
+      res
+        .type("application/pdf")
+        .setHeader(
+          "Content-Disposition",
+          `inline; filename="CERFA-1301SD-${String(a.reference ?? "attestation")}.pdf"`
+        )
+        .send(Buffer.from(pdfBytes));
+    })
+  );
+
+  // GET /daact/:id/pdf → CERFA officiel 13408*13 pré-rempli (AcroForm)
+  router.get(
+    "/daact/:id/pdf",
+    wrap(async (req, res) => {
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await db.query<RowDataPacket[]>(
+        "SELECT * FROM daact_declarations WHERE id = ? AND companyId = ? LIMIT 1",
+        [req.params.id, tenantId]
+      );
+      const d = rows[0] as Record<string, unknown> | undefined;
+      if (!d) {
+        res.status(404).type("html").send("<h1>DAACT introuvable</h1>");
+        return;
+      }
+      const [chRows] = d.chantierId
+        ? await db.query<RowDataPacket[]>("SELECT * FROM chantiers WHERE id = ? LIMIT 1", [d.chantierId])
+        : [[]];
+      const ch = (chRows[0] as Record<string, unknown>) ?? {};
+      const company = await loadCompany(tenantId);
+
+      const pdfBytes = await fillCerfa13408({
+        permitType: (d.permitType as "permis_construire" | "permis_amenager" | "declaration_prealable") ?? "permis_construire",
+        permitNumber: String(d.permitNumber ?? ""),
+        voiriesDifferees: !!d.voiriesDifferees,
+        voiriesDate: dateToCerfa(d.voiriesDate as string),
+        declarantNom: String(d.titulaireNom ?? ""),
+        declarantPrenom: String(d.titulairePrenom ?? ""),
+        denomination: String(d.denomination ?? company.companyName ?? ""),
+        siret: String(d.siret ?? company.siret ?? ""),
+        typeSociete: String(company.legalForm ?? ""),
+        representantNom: String(d.representantNom ?? company.leaderLastName ?? ""),
+        representantPrenom: String(d.representantPrenom ?? company.leaderFirstName ?? ""),
+        adresseNumero: "",
+        adresseVoie: String(ch.addressLine1 ?? ""),
+        adresseLocalite: String(ch.city ?? ""),
+        adresseCodePostal: String(ch.postalCode ?? ""),
+        email1: String(d.email ?? company.email ?? ""),
+        achievementDate: dateToCerfa(d.achievementDate as string),
+        destinationChangeDate: dateToCerfa(d.destinationChangeDate as string),
+        totalTravaux: !d.partialWorks,
+        trancheTravaux: !!d.partialWorks,
+        precisAchevement: String(d.partialWorksDescription ?? ""),
+        surfacePlancher: String(d.surfaceCreated ?? ""),
+        nbLogementsTotal: String(d.nbLogementsTotal ?? ""),
+        nbIndividuels: String(d.nbIndividuels ?? ""),
+        nbCollectifs: String(d.nbCollectifs ?? ""),
+        signatureLieu: String(d.signedLocation ?? ""),
+        signatureDate: dateToCerfa(d.signedDate as string),
+        signatureNom: String(d.representantNom ?? ""),
+      });
+      res
+        .type("application/pdf")
+        .setHeader(
+          "Content-Disposition",
+          `inline; filename="CERFA-13408-${String(d.reference ?? "daact")}.pdf"`
+        )
+        .send(Buffer.from(pdfBytes));
     })
   );
 

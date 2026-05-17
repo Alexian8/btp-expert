@@ -821,8 +821,14 @@ export function installBtpApiShim(): void {
       if (!res.ok) {
         return { success: false, error: `Erreur ${res.status} lors du chargement (${label})` };
       }
-      const html = await res.text();
-      const blob = new Blob([html], { type: "text/html" });
+      // Respecte le content-type : si le serveur renvoie application/pdf
+      // (cas des CERFA officiels remplis via pdf-lib), on conserve ce MIME
+      // pour que le navigateur affiche le PDF natif au lieu d'un HTML brut.
+      const contentType = res.headers.get("content-type") || "text/html";
+      const data = contentType.includes("pdf")
+        ? await res.arrayBuffer()
+        : await res.text();
+      const blob = new Blob([data], { type: contentType });
       const url = URL.createObjectURL(blob);
       const win = window.open(url, "_blank", "noopener,noreferrer");
       if (!win) {
@@ -979,12 +985,14 @@ export function installBtpApiShim(): void {
       wrapAction(http("PATCH", `${adminDaactPath}/${encodeURIComponent(id)}`, data)),
     adminDaactDelete: (id: string) =>
       wrapAction(http("DELETE", `${adminDaactPath}/${encodeURIComponent(id)}`)),
+    // DAACT : on sert directement le PDF officiel CERFA 13408*13 rempli.
+    // C'est le seul format pertinent (la mairie attend le formulaire officiel).
     adminDaactExportPdfPreview: async (id: string) => openHtmlForPrint(
-      `/api/admin-docs/daact/${encodeURIComponent(id)}/html?autoprint=1`,
+      `/api/admin-docs/daact/${encodeURIComponent(id)}/pdf`,
       "Aperçu DAACT"
     ),
     adminDaactExportPdfSaveAs: async (id: string) => openHtmlForPrint(
-      `/api/admin-docs/daact/${encodeURIComponent(id)}/html?autoprint=1`,
+      `/api/admin-docs/daact/${encodeURIComponent(id)}/pdf`,
       "Enregistrer DAACT"
     ),
 
@@ -1020,14 +1028,32 @@ export function installBtpApiShim(): void {
       `/api/admin-docs/receptions/${encodeURIComponent(id)}/html?autoprint=1`,
       "Enregistrer PV"
     ),
-    adminTvaExportPdfPreview: async (id: string) => openHtmlForPrint(
-      `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`,
-      "Aperçu attestation TVA"
-    ),
-    adminTvaExportPdfSaveAs: async (id: string) => openHtmlForPrint(
-      `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`,
-      "Enregistrer attestation TVA"
-    ),
+    // L'attestation TVA peut être au format HTML (modèle simplifié / CERFA
+    // visuel BatiDesk) OU directement le CERFA officiel 1301-SD pré-rempli
+    // (PDF AcroForm). On essaye d'abord le PDF officiel ; s'il échoue (l'attestation
+    // n'est pas en mode cerfa_officiel_1301sd, le serveur renvoie 200 quand
+    // même mais en HTML fallback), on bascule sur l'aperçu HTML.
+    // Stratégie simple : ouvrir directement le PDF — le serveur sait quoi servir
+    // selon attestationType (route /pdf = CERFA officiel ; /html = autres).
+    adminTvaExportPdfPreview: async (id: string) => {
+      // Récupère le type pour choisir la bonne route
+      const att = await httpGet<{ attestationType?: string } | null>(
+        `${adminTvaPath}/${encodeURIComponent(id)}`
+      ).catch(() => null);
+      const route = att?.attestationType === "cerfa_officiel_1301sd"
+        ? `/api/admin-docs/tva/${encodeURIComponent(id)}/pdf`
+        : `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`;
+      return openHtmlForPrint(route, "Aperçu attestation TVA");
+    },
+    adminTvaExportPdfSaveAs: async (id: string) => {
+      const att = await httpGet<{ attestationType?: string } | null>(
+        `${adminTvaPath}/${encodeURIComponent(id)}`
+      ).catch(() => null);
+      const route = att?.attestationType === "cerfa_officiel_1301sd"
+        ? `/api/admin-docs/tva/${encodeURIComponent(id)}/pdf`
+        : `/api/admin-docs/tva/${encodeURIComponent(id)}/html?autoprint=1`;
+      return openHtmlForPrint(route, "Enregistrer attestation TVA");
+    },
     adminDc4ExportPdfPreview: async (id: string) => openHtmlForPrint(
       `/api/admin-docs/dc4/${encodeURIComponent(id)}/html?autoprint=1`,
       "Aperçu DC4"
