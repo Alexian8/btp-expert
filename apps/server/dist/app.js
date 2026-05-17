@@ -24,6 +24,7 @@ const admin_users_1 = require("./routes/admin-users");
 const admin_logs_1 = require("./routes/admin-logs");
 const super_admin_1 = require("./routes/super-admin");
 const vault_1 = require("./routes/vault");
+const admin_docs_1 = require("./routes/admin-docs");
 const auth_2 = require("./auth");
 const rbac_1 = require("./rbac");
 const rate_limit_1 = require("./rate-limit");
@@ -560,6 +561,8 @@ async function createApp(cfg, db) {
     app.use("/api/backup", auth, (0, backup_1.buildBackupRouter)(pool, cfg));
     // ─── Vault (coffre-fort documents) ─────────────────────────────────────
     app.use("/api/vault", (0, vault_1.buildVaultRouter)(pool, cfg));
+    // ─── Documents administratifs (PV, TVA, DC4, RGE) ──────────────────────
+    app.use("/api/admin-docs", (0, admin_docs_1.buildAdminDocsRouter)(pool, cfg));
     // ─── Static SPA ────────────────────────────────────────────────────────
     const publicDir = node_path_1.default.resolve(process.cwd(), "public");
     if (node_fs_1.default.existsSync(publicDir)) {
