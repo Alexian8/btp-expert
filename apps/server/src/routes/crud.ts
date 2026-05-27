@@ -29,8 +29,10 @@ export interface CrudRouterOptions {
   db?: DB;
   /** Nom de la ressource pour les logs (ex: "quotes", "invoices"). */
   resourceName?: string;
-  /** Hooks optionnels appelés après chaque opération (best-effort, async). */
+  /** Hooks optionnels appelés autour de chaque opération. */
   hooks?: {
+    /** Appelé avant create — peut enrichir le body (ex: générer une référence). */
+    beforeCreate?: (body: Record<string, unknown>) => Promise<Record<string, unknown>> | Record<string, unknown>;
     afterCreate?: (id: string, body: unknown) => Promise<void> | void;
     afterUpdate?: (id: string, body: unknown) => Promise<void> | void;
     afterDelete?: (id: string) => Promise<void> | void;
@@ -84,7 +86,11 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
     "/",
     wrap(async (req, res) => {
       try {
-        const created = await repo.create(req.body ?? {}, ctxFromReq(req));
+        let body: Record<string, unknown> = (req.body as Record<string, unknown>) ?? {};
+        if (opts.hooks?.beforeCreate) {
+          body = await opts.hooks.beforeCreate(body);
+        }
+        const created = await repo.create(body, ctxFromReq(req));
         res.status(201).json(created);
 
         // Audit (best-effort, après réponse client pour ne pas la retarder)
@@ -95,16 +101,16 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
             action: "create",
             resource: opts.resourceName,
             resourceId: id != null ? String(id) : "",
-            meta: extractKeyFields(req.body, opts.resourceName),
+            meta: extractKeyFields(body, opts.resourceName),
           });
         }
 
-        // Hook after-create (best-effort)
+        // Hook after-create (best-effort) — reçoit le body enrichi par beforeCreate
         if (opts.hooks?.afterCreate) {
           const id = (created as { id?: unknown }).id;
           if (id != null) {
             try {
-              await opts.hooks.afterCreate(String(id), req.body);
+              await opts.hooks.afterCreate(String(id), body);
             } catch (err) {
               console.warn(`[${opts.resourceName} afterCreate hook]`, (err as Error).message);
             }

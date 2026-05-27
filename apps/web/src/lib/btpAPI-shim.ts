@@ -652,8 +652,7 @@ export function installBtpApiShim(): void {
       arg1: unknown,
       arg2?: unknown
     ): Promise<{ success: boolean; id?: string; invoice?: Record<string, unknown>; error?: string }> => {
-      // Le code desktop appelle soit invoicesConvertFromQuote(quoteId, options)
-      // soit invoicesConvertFromQuote({ quoteId, options }). On accepte les deux.
+      // Accepte (quoteId, options) ou ({ quoteId, options })
       let quoteId: string | number;
       let options: { type?: string; acomptePercent?: number; title?: string } = {};
       if (typeof arg1 === "object" && arg1 !== null && "quoteId" in arg1) {
@@ -664,88 +663,22 @@ export function installBtpApiShim(): void {
         quoteId = arg1 as string | number;
         options = (arg2 as typeof options) ?? {};
       }
-
       try {
-        const quote = (await httpGet<Record<string, unknown>>(
-          `/api/quotes/${encodeURIComponent(String(quoteId))}`
-        )) as Record<string, unknown> | null;
-        if (!quote) return { success: false, error: "Devis introuvable" };
-
-        const invoiceType = options.type ?? "standard";
-
-        // Normalise items pour qu'ils soient un tableau JSON valide
-        let items: unknown[] = [];
-        if (Array.isArray(quote.items)) items = quote.items;
-        else if (typeof quote.items === "string") {
-          try {
-            items = JSON.parse(quote.items);
-          } catch {
-            items = [];
-          }
+        // Délégué au serveur : référence + id + écriture comptable générés
+        // automatiquement. Logique métier centralisée (cf endpoint dédié).
+        const res = (await http<{ success: boolean; invoice?: Record<string, unknown>; error?: string }>(
+          "POST",
+          "/api/invoices/convert-from-quote",
+          { quoteId: String(quoteId), options }
+        )) as { success: boolean; invoice?: Record<string, unknown>; error?: string };
+        if (res?.success && res.invoice) {
+          return {
+            success: true,
+            invoice: res.invoice,
+            id: String((res.invoice as { id?: unknown }).id || ""),
+          };
         }
-
-        // Si type=acompte, on remplace les items par UNE seule ligne forfaitaire
-        const acomptePercent = Number(options.acomptePercent ?? 0);
-        if (invoiceType === "acompte" && acomptePercent > 0) {
-          const totalHT = Number(quote.totalHT ?? 0);
-          const acompteAmount = (totalHT * acomptePercent) / 100;
-          items = [
-            {
-              id: genId(),
-              kind: "single",
-              designation: `Acompte de ${acomptePercent}% sur devis ${quote.reference || ""}`,
-              unit: "forfait",
-              quantity: 1,
-              unitPriceHT: acompteAmount,
-              vatRate: 20,
-              discount: 0,
-            },
-          ];
-        }
-
-        const payload: Record<string, unknown> = {
-          id: genId(),
-          reference: "",
-          status: "brouillon",
-          type: invoiceType,
-          title: String(options.title || quote.title || ""),
-          clientId: String(quote.clientId ?? ""),
-          chantierId: String(quote.chantierId ?? ""),
-          fromQuoteId: String(quoteId),
-          issueDate: new Date().toISOString().slice(0, 10),
-          dueDate: "",
-          paymentTermsDays: 30,
-          sentAt: "",
-          paidAt: "",
-          items,
-          globalDiscountMode: quote.globalDiscountMode ?? "none",
-          globalDiscountPercent: Number(quote.globalDiscountPercent ?? 0),
-          globalDiscountAmount: Number(quote.globalDiscountAmount ?? 0),
-          acompteBasedOnQuoteId: invoiceType === "acompte" ? String(quoteId) : "",
-          acomptePercent,
-          avoirReferenceInvoiceId: "",
-          introText: quote.introText ?? "",
-          conditionsText: quote.conditionsText ?? "",
-          footerText: quote.footerText ?? "",
-          internalNotes: "",
-          companySnapshot: quote.companySnapshot ?? {},
-          totalHT: Number(quote.totalHT ?? 0),
-          totalTTC: Number(quote.totalTTC ?? 0),
-          totalPaid: 0,
-          lastReminderSentAt: "",
-          remindersCount: 0,
-        };
-
-        // Le code desktop attend `{success, invoice: {id, reference, ...}}`
-        try {
-          const created = (await http<Record<string, unknown>>("POST", "/api/invoices", payload)) as
-            | Record<string, unknown>
-            | null;
-          return { success: true, invoice: created ?? { id: payload.id }, id: payload.id as string };
-        } catch (e) {
-          console.error("[shim] invoicesConvertFromQuote POST failed:", e);
-          return { success: false, error: e instanceof Error ? e.message : "Erreur" };
-        }
+        return { success: false, error: res?.error || "Échec de la conversion" };
       } catch (e) {
         console.error("[shim] invoicesConvertFromQuote exception:", e);
         return { success: false, error: e instanceof Error ? e.message : "Erreur" };

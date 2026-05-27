@@ -22,6 +22,7 @@ import { buildSuperAdminRouter } from "./routes/super-admin";
 import { buildVaultRouter } from "./routes/vault";
 import { buildAdminDocsRouter } from "./routes/admin-docs";
 import { buildAccountingRouter, accountingHooks } from "./routes/accounting";
+import { makeReferenceHook } from "./accounting/references";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
@@ -309,7 +310,22 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasAuditColumns: true,
     tenantColumn: "companyId",
   });
-  app.use("/api/quotes", auth, buildCrudRouter(quotes, { db: pool, resourceName: "quotes" }));
+  app.use(
+    "/api/quotes",
+    auth,
+    buildCrudRouter(quotes, {
+      db: pool,
+      resourceName: "quotes",
+      hooks: {
+        beforeCreate: makeReferenceHook({
+          db: pool,
+          idPrefix: "quo",
+          table: "quotes",
+          referencePrefix: "DEVIS",
+        }),
+      },
+    })
+  );
 
   // ─── Invoices ──────────────────────────────────────────────────────────
   const invoices = new MysqlRepository(pool, "invoices", {
@@ -329,11 +345,212 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
       db: pool,
       resourceName: "invoices",
       hooks: {
+        beforeCreate: makeReferenceHook({
+          db: pool,
+          idPrefix: "inv",
+          table: "invoices",
+          referencePrefix: "FACT",
+        }),
         afterCreate: (id) => accountingHooks.generateInvoiceEntry(pool, id),
         afterUpdate: (id) => accountingHooks.generateInvoiceEntry(pool, id),
         afterDelete: (id) => accountingHooks.deleteEntriesForSource(pool, "invoice", id),
       },
     })
+  );
+
+  // ─── Conversion devis → facture ────────────────────────────────────────
+  // POST /api/invoices/convert-from-quote
+  // Body : { quoteId: string, options: { type?: "standard"|"acompte"|"avoir", acomptePercent?: number } }
+  app.post(
+    "/api/invoices/convert-from-quote",
+    auth,
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { quoteId, options = {} } = req.body || {};
+        if (!quoteId || typeof quoteId !== "string") {
+          res.status(400).json({ success: false, error: "quoteId requis" });
+          return;
+        }
+        const [qRows] = await pool.query<RowDataPacket[]>(
+          "SELECT * FROM quotes WHERE id = ?",
+          [quoteId]
+        );
+        const quote = qRows[0] as
+          | {
+              id: string;
+              reference: string;
+              title: string;
+              clientId: string;
+              chantierId: string;
+              items: unknown;
+              globalDiscountMode: string;
+              globalDiscountPercent: number;
+              globalDiscountAmount: number;
+              companySnapshot: unknown;
+              totalHT: number;
+              totalTTC: number;
+            }
+          | undefined;
+        if (!quote) {
+          res.status(404).json({ success: false, error: "Devis introuvable" });
+          return;
+        }
+
+        const type: "standard" | "acompte" | "avoir" = options.type || "standard";
+        const acomptePercent =
+          type === "acompte" ? Number(options.acomptePercent) || 30 : 0;
+
+        // Récupère paymentTermsDays depuis settings (singleton id=1, JSON data)
+        let paymentTermsDays = 30;
+        try {
+          const [sRows] = await pool.query<RowDataPacket[]>(
+            "SELECT data FROM settings WHERE id = 1"
+          );
+          const raw = (sRows[0] as { data?: string })?.data;
+          const parsed = raw
+            ? typeof raw === "string"
+              ? JSON.parse(raw)
+              : raw
+            : {};
+          if (parsed?.invoicePaymentTermsDays) {
+            paymentTermsDays = Number(parsed.invoicePaymentTermsDays);
+          }
+        } catch {}
+
+        const issueDate = new Date().toISOString().slice(0, 10);
+        const dueDate = (() => {
+          const d = new Date(issueDate);
+          d.setDate(d.getDate() + paymentTermsDays);
+          return d.toISOString().slice(0, 10);
+        })();
+
+        // Items / totaux selon le type
+        let items: unknown[] = (() => {
+          const raw = quote.items;
+          if (typeof raw === "string") {
+            try {
+              return JSON.parse(raw);
+            } catch {
+              return [];
+            }
+          }
+          return Array.isArray(raw) ? (raw as unknown[]) : [];
+        })();
+        let totalHT = Number(quote.totalHT);
+        let totalTTC = Number(quote.totalTTC);
+
+        if (type === "acompte") {
+          items = [
+            {
+              id: "item_" + Date.now(),
+              kind: "line",
+              title: `Acompte de ${acomptePercent} % sur devis ${quote.reference}`,
+              description: `Facture d'acompte correspondant à ${acomptePercent} % du montant total du devis ${quote.reference}`,
+              quantity: 1,
+              unit: "forfait",
+              unitPriceHT: Number(((totalHT * acomptePercent) / 100).toFixed(2)),
+              vatRate: 20,
+              discountPercent: 0,
+              discountAmount: 0,
+              discountMode: "none",
+            },
+          ];
+          totalHT = Number(((totalHT * acomptePercent) / 100).toFixed(2));
+          totalTTC = Number(((totalTTC * acomptePercent) / 100).toFixed(2));
+        } else if (type === "avoir") {
+          items = (items as Array<{ kind?: string; unitPriceHT?: number }>).map((it) => ({
+            ...it,
+            unitPriceHT:
+              it.kind === "line" ? -Math.abs(Number(it.unitPriceHT) || 0) : it.unitPriceHT,
+          }));
+          totalHT = -Math.abs(totalHT);
+          totalTTC = -Math.abs(totalTTC);
+        }
+
+        // Génère id + reference via le helper de références
+        const refHook = makeReferenceHook({
+          db: pool,
+          idPrefix: "inv",
+          table: "invoices",
+          referencePrefix: "FACT",
+        });
+        const baseBody = await refHook({});
+        const id = String(baseBody.id);
+        const reference = String(baseBody.reference);
+
+        const title =
+          type === "acompte"
+            ? `Acompte ${acomptePercent}% - ${quote.title}`
+            : type === "avoir"
+              ? `Avoir - ${quote.title}`
+              : quote.title;
+
+        const companySnapshotStr =
+          typeof quote.companySnapshot === "string"
+            ? quote.companySnapshot
+            : JSON.stringify(quote.companySnapshot ?? {});
+
+        await pool.query(
+          `INSERT INTO invoices (
+            id, reference, status, type, title, clientId, chantierId, fromQuoteId,
+            issueDate, dueDate, paymentTermsDays, sentAt, paidAt,
+            items, globalDiscountMode, globalDiscountPercent, globalDiscountAmount,
+            acompteBasedOnQuoteId, acomptePercent, avoirReferenceInvoiceId,
+            introText, conditionsText, footerText, internalNotes, companySnapshot,
+            totalHT, totalTTC, totalPaid,
+            lastReminderSentAt, remindersCount
+          ) VALUES (
+            ?, ?, 'brouillon', ?, ?, ?, ?, ?,
+            ?, ?, ?, '', '',
+            ?, ?, ?, ?,
+            ?, ?, '',
+            '', '', '', '', ?,
+            ?, ?, 0,
+            '', 0
+          )`,
+          [
+            id,
+            reference,
+            type,
+            title,
+            quote.clientId,
+            quote.chantierId,
+            type === "acompte" ? "" : quoteId,
+            issueDate,
+            dueDate,
+            paymentTermsDays,
+            JSON.stringify(items),
+            type === "acompte" ? "none" : quote.globalDiscountMode,
+            type === "acompte" ? 0 : Number(quote.globalDiscountPercent),
+            type === "acompte" ? 0 : Number(quote.globalDiscountAmount),
+            type === "acompte" ? quoteId : "",
+            acomptePercent,
+            companySnapshotStr,
+            totalHT,
+            totalTTC,
+          ]
+        );
+
+        // Génère l'écriture comptable
+        try {
+          await accountingHooks.generateInvoiceEntry(pool, id);
+        } catch (err) {
+          console.warn(
+            "[convert-from-quote accounting hook]",
+            (err as Error).message
+          );
+        }
+
+        const [createdRows] = await pool.query<RowDataPacket[]>(
+          "SELECT * FROM invoices WHERE id = ?",
+          [id]
+        );
+        res.json({ success: true, invoice: createdRows[0] });
+      } catch (e) {
+        console.error("[invoices:convertFromQuote]", e);
+        res.status(500).json({ success: false, error: (e as Error).message });
+      }
+    }
   );
 
   // ─── Invoice payments ──────────────────────────────────────────────────
@@ -405,6 +622,12 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
       db: pool,
       resourceName: "expenses",
       hooks: {
+        beforeCreate: makeReferenceHook({
+          db: pool,
+          idPrefix: "dep",
+          table: "expenses",
+          referencePrefix: "DEP",
+        }),
         afterCreate: async (id) => {
           await accountingHooks.generateExpenseEntry(pool, id);
           await accountingHooks.generateExpensePaymentEntry(pool, id);
@@ -447,7 +670,22 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasAuditColumns: true,
     tenantColumn: "companyId",
   });
-  app.use("/api/expense-notes", auth, buildCrudRouter(expenseNotes, { db: pool, resourceName: "expense_notes" }));
+  app.use(
+    "/api/expense-notes",
+    auth,
+    buildCrudRouter(expenseNotes, {
+      db: pool,
+      resourceName: "expense_notes",
+      hooks: {
+        beforeCreate: makeReferenceHook({
+          db: pool,
+          idPrefix: "ndf",
+          table: "expense_notes",
+          referencePrefix: "NDF",
+        }),
+      },
+    })
+  );
 
   // ─── Subcontractors ────────────────────────────────────────────────────
   const subcontractors = new MysqlRepository(pool, "subcontractors", {

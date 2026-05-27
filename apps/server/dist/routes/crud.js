@@ -46,7 +46,11 @@ function buildCrudRouter(repo, opts = {}) {
     }));
     router.post("/", wrap(async (req, res) => {
         try {
-            const created = await repo.create(req.body ?? {}, ctxFromReq(req));
+            let body = req.body ?? {};
+            if (opts.hooks?.beforeCreate) {
+                body = await opts.hooks.beforeCreate(body);
+            }
+            const created = await repo.create(body, ctxFromReq(req));
             res.status(201).json(created);
             // Audit (best-effort, après réponse client pour ne pas la retarder)
             if (opts.db && opts.resourceName) {
@@ -56,15 +60,15 @@ function buildCrudRouter(repo, opts = {}) {
                     action: "create",
                     resource: opts.resourceName,
                     resourceId: id != null ? String(id) : "",
-                    meta: extractKeyFields(req.body, opts.resourceName),
+                    meta: extractKeyFields(body, opts.resourceName),
                 });
             }
-            // Hook after-create (best-effort)
+            // Hook after-create (best-effort) — reçoit le body enrichi par beforeCreate
             if (opts.hooks?.afterCreate) {
                 const id = created.id;
                 if (id != null) {
                     try {
-                        await opts.hooks.afterCreate(String(id), req.body);
+                        await opts.hooks.afterCreate(String(id), body);
                     }
                     catch (err) {
                         console.warn(`[${opts.resourceName} afterCreate hook]`, err.message);
