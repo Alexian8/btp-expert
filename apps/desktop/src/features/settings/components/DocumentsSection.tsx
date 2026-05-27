@@ -14,6 +14,7 @@ import {
   Eye,
   Wrench,
   EyeOff,
+  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -336,6 +337,8 @@ export function DocumentsSection() {
   const [pdfLogoSizeMm, setPdfLogoSizeMm] = useState(35);
   const [pdfStampSizeMm, setPdfStampSizeMm] = useState(26);
   const [pdfSignatureSizeMm, setPdfSignatureSizeMm] = useState(22);
+  // Taille de police du nom de l'entreprise dans l'en-tête PDF
+  const [pdfCompanyNameSize, setPdfCompanyNameSize] = useState(18);
 
   // Email templates
   const [emailQuoteSubject, setEmailQuoteSubject] = useState("");
@@ -372,6 +375,7 @@ export function DocumentsSection() {
       setPdfLogoSizeMm(Number(sExt.pdfLogoSizeMm || 35));
       setPdfStampSizeMm(Number(sExt.pdfStampSizeMm || 26));
       setPdfSignatureSizeMm(Number(sExt.pdfSignatureSizeMm || 22));
+      setPdfCompanyNameSize(Number(sExt.pdfCompanyNameSize || 18));
       const pos = sExt.pdfStampPosition as string | undefined;
       setPdfStampPosition(pos === "left" || pos === "center" ? pos : "right");
       const den = sExt.pdfDensity as string | undefined;
@@ -408,6 +412,7 @@ export function DocumentsSection() {
       pdfLogoSizeMm,
       pdfStampSizeMm,
       pdfSignatureSizeMm,
+      pdfCompanyNameSize,
       pdfStampPosition,
       pdfDensity,
       pdfShowAccordBlock,
@@ -433,7 +438,7 @@ export function DocumentsSection() {
 
   // Preview PDF avec les paramètres en cours
   const previewDocument = useMemo(() => {
-    const co = { ...company, pdfAccentColor, pdfFooterText, pdfFont };
+    const co = { ...company, pdfAccentColor, pdfFooterText, pdfFont, pdfLogoSizeMm, pdfCompanyNameSize };
     if (pdfStyle === "sobre") {
       return <QuotePdfMinimal quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
     }
@@ -441,7 +446,7 @@ export function DocumentsSection() {
       return <QuotePdfClassique quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
     }
     return <QuotePdfDocument quote={SAMPLE_QUOTE} client={SAMPLE_CLIENT} company={co} />;
-  }, [pdfStyle, pdfAccentColor, pdfFooterText, pdfFont, company]);
+  }, [pdfStyle, pdfAccentColor, pdfFooterText, pdfFont, pdfLogoSizeMm, pdfCompanyNameSize, company]);
 
   if (loading) {
     return (
@@ -665,6 +670,70 @@ export function DocumentsSection() {
                 Helvetica est recommandé (intégré à @react-pdf, identique partout). Les
                 autres polices nécessitent qu'elles soient installées sur l'appareil
                 lecteur du PDF.
+              </p>
+            </Card>
+
+            {/* Card 2.5 — Identité visuelle (logo & nom) */}
+            <Card
+              icon={ImageIcon}
+              title="Identité visuelle"
+              description="Taille du logo et du nom de l'entreprise dans l'en-tête PDF"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Taille du logo
+                    </Label>
+                    <span className="text-xs font-mono tabular-nums text-muted-foreground">
+                      {pdfLogoSizeMm} mm
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={15}
+                    max={80}
+                    step={1}
+                    value={pdfLogoSizeMm}
+                    onChange={(e) => setPdfLogoSizeMm(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                    <span>15 mm</span>
+                    <span>50 mm (défaut)</span>
+                    <span>80 mm</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Taille du nom d'entreprise
+                    </Label>
+                    <span className="text-xs font-mono tabular-nums text-muted-foreground">
+                      {pdfCompanyNameSize} pt
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={32}
+                    step={1}
+                    value={pdfCompanyNameSize}
+                    onChange={(e) => setPdfCompanyNameSize(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                    <span>10 pt</span>
+                    <span>18 pt (défaut)</span>
+                    <span>32 pt</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground mt-3">
+                Augmentez la taille du logo et réduisez celle du nom pour mettre votre marque
+                en avant. Les changements sont visibles dans l'aperçu PDF.
               </p>
             </Card>
 

@@ -21,8 +21,35 @@ export const useCompanyStore = create<CompanyState>((set, get) => ({
     if (!window.btpAPI?.companyGet) return;
     set({ isLoading: true });
     try {
-      const data = await window.btpAPI.companyGet();
-      set({ company: data || {}, isLoading: false });
+      const [data, settings] = await Promise.all([
+        window.btpAPI.companyGet(),
+        window.btpAPI.getSettings?.() ?? Promise.resolve({}),
+      ]);
+      // Merge des paramètres PDF dans le profil entreprise : les composants
+      // PDF (@react-pdf/renderer) reçoivent désormais pdfLogoSizeMm,
+      // pdfCompanyNameSize, pdfAccentColor, pdfFont, etc. via la prop company.
+      const sExt = (settings || {}) as Record<string, unknown>;
+      const pdfFields: Record<string, unknown> = {};
+      for (const k of [
+        "pdfLogoSizeMm",
+        "pdfCompanyNameSize",
+        "pdfStampSizeMm",
+        "pdfSignatureSizeMm",
+        "pdfAccentColor",
+        "pdfFooterText",
+        "pdfFont",
+        "pdfStyle",
+        "pdfQuoteStyle",
+        "pdfShowLogoInHeader",
+        "pdfShowCompanyAddress",
+        "pdfIbanShown",
+      ]) {
+        if (sExt[k] !== undefined) pdfFields[k] = sExt[k];
+      }
+      set({
+        company: { ...(data || {}), ...pdfFields },
+        isLoading: false,
+      });
     } catch {
       set({ isLoading: false });
     }

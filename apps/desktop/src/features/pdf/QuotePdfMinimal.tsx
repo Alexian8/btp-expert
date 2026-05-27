@@ -17,6 +17,13 @@ import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
 const BLACK = "#000000";
 const GREY_LIGHT = "#f5f5f5";
 
+// Conversion mm → pt (1 mm ≈ 2.835 pt)
+const MM_TO_PT = 2.83465;
+
+// Valeurs par défaut SI rien n'est défini dans les paramètres PDF
+const DEFAULT_LOGO_SIZE_MM = 50;          // logo plus grand par défaut (avant 70pt ≈ 25mm)
+const DEFAULT_COMPANY_NAME_SIZE = 18;     // nom plus discret (avant 26)
+
 const styles = StyleSheet.create({
   page: {
     padding: 30,
@@ -27,13 +34,6 @@ const styles = StyleSheet.create({
 
   // ── Header ────────────────────────────────────────────────────────────
   headerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
-  companyLogo: { width: 70, height: 50, objectFit: "contain" },
-  companyName: {
-    fontSize: 26,
-    fontFamily: "Helvetica-Bold",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
   companyAddress: {
     fontSize: 9,
     marginBottom: 18,
@@ -317,6 +317,26 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
     .filter(Boolean)
     .join(" - ");
 
+  // Tailles configurables depuis Paramètres > Documents
+  const logoSizeMm = Number(company.pdfLogoSizeMm) || DEFAULT_LOGO_SIZE_MM;
+  const logoHeightPt = logoSizeMm * MM_TO_PT;
+  const logoWidthPt = logoHeightPt * 1.6;      // logo horizontal jusqu'à 1.6× large
+  const companyNameSize = Number(company.pdfCompanyNameSize) || DEFAULT_COMPANY_NAME_SIZE;
+
+  const dynStyles = {
+    companyLogo: {
+      height: logoHeightPt,
+      width: logoWidthPt,
+      objectFit: "contain" as const,
+    },
+    companyName: {
+      fontSize: companyNameSize,
+      fontFamily: "Helvetica-Bold",
+      letterSpacing: 0.5,
+      marginBottom: 4,
+    },
+  };
+
   const cName = clientName(client);
   const cLines = clientLines(client);
 
@@ -330,9 +350,9 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
         {/* Header company */}
         <View style={styles.headerRow}>
           {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
-            <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+            <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
           )}
-          <Text style={styles.companyName}>{companyName}</Text>
+          <Text style={dynStyles.companyName}>{companyName}</Text>
         </View>
         {companyAddress && <Text style={styles.companyAddress}>{companyAddress}</Text>}
         <Text style={styles.companyDot}>•</Text>

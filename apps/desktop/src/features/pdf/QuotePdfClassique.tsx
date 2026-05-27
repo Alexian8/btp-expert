@@ -40,13 +40,6 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headerLeft: { flex: 1 },
-  companyLogo: { width: 70, height: 50, objectFit: "contain", marginBottom: 6 },
-  companyName: {
-    fontSize: 22,
-    fontFamily: "Times-Bold",
-    color: ACCENT,
-    letterSpacing: 0.5,
-  },
   companyTagline: {
     fontSize: 9,
     fontStyle: "italic",
@@ -258,6 +251,27 @@ export function QuotePdfClassique({ quote, client, company = {} }: Props) {
   const cName = clientName(client);
   const cLines = clientLines(client);
 
+  // Tailles configurables (Paramètres > Documents)
+  const MM_TO_PT = 2.83465;
+  const logoSizeMm = Number(company.pdfLogoSizeMm) || 35;
+  const logoHeightPt = logoSizeMm * MM_TO_PT;
+  const logoWidthPt = logoHeightPt * 1.4;
+  const companyNameSize = Number(company.pdfCompanyNameSize) || 22;
+  const dynStyles = {
+    companyLogo: {
+      width: logoWidthPt,
+      height: logoHeightPt,
+      objectFit: "contain" as const,
+      marginBottom: 6,
+    },
+    companyName: {
+      fontSize: companyNameSize,
+      fontFamily: "Times-Bold",
+      color: ACCENT,
+      letterSpacing: 0.5,
+    },
+  };
+
   return (
     <Document title={quote.reference || "Devis"} author={companyName}>
       <Page size="A4" style={styles.page}>
@@ -267,9 +281,9 @@ export function QuotePdfClassique({ quote, client, company = {} }: Props) {
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
                 {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
-                  <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+                  <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
                 )}
-                <Text style={styles.companyName}>{companyName}</Text>
+                <Text style={dynStyles.companyName}>{companyName}</Text>
                 {get(company, "tagline") && (
                   <Text style={styles.companyTagline}>« {get(company, "tagline")} »</Text>
                 )}

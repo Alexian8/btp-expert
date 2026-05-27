@@ -38,9 +38,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.primary,
   },
   companyBlock: { flex: 1, flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  companyLogo: { width: 60, height: 60, objectFit: "contain" },
   companyText: { flex: 1 },
-  companyName: { fontSize: 18, fontFamily: "Helvetica-Bold", color: COLORS.primary, marginBottom: 4 },
   companyLine: { fontSize: 8, color: COLORS.muted, lineHeight: 1.4 },
   docTypeBlock: { alignItems: "flex-end", minWidth: 200 },
   docType: { fontSize: 22, fontFamily: "Helvetica-Bold", color: COLORS.text },
@@ -266,6 +264,21 @@ export function InvoicePdfDocument({ invoice, client, company = {} }: Props) {
   const status = STATUS_LABELS[invoice.status] ?? STATUS_LABELS.brouillon!;
   const typeLabel = TYPE_LABELS[invoice.type] ?? "FACTURE";
 
+  // Tailles configurables (Paramètres > Documents)
+  const MM_TO_PT = 2.83465;
+  const logoSizeMm = Number(company.pdfLogoSizeMm) || 30;
+  const logoSizePt = logoSizeMm * MM_TO_PT;
+  const companyNameSize = Number(company.pdfCompanyNameSize) || 18;
+  const dynStyles = {
+    companyLogo: { width: logoSizePt * 1.4, height: logoSizePt, objectFit: "contain" as const },
+    companyName: {
+      fontSize: companyNameSize,
+      fontFamily: "Helvetica-Bold",
+      color: COLORS.primary,
+      marginBottom: 4,
+    },
+  };
+
   return (
     <Document title={invoice.reference || "Facture"} author={companyName} subject={invoice.title}>
       <Page size="A4" style={styles.page}>
@@ -273,10 +286,10 @@ export function InvoicePdfDocument({ invoice, client, company = {} }: Props) {
         <View style={styles.header} fixed>
           <View style={styles.companyBlock}>
             {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
-              <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+              <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
             )}
             <View style={styles.companyText}>
-              <Text style={styles.companyName}>{companyName}</Text>
+              <Text style={dynStyles.companyName}>{companyName}</Text>
               {companyLines.map((l, i) => <Text key={i} style={styles.companyLine}>{l}</Text>)}
             </View>
           </View>

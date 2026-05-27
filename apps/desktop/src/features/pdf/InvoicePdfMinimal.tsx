@@ -21,8 +21,6 @@ const styles = StyleSheet.create({
   page: { padding: 30, fontSize: 9, color: BLACK, fontFamily: "Helvetica" },
 
   headerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
-  companyLogo: { width: 70, height: 50, objectFit: "contain" },
-  companyName: { fontSize: 26, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, marginBottom: 4 },
   companyAddress: { fontSize: 9, marginBottom: 18 },
   companyDot: { fontSize: 14, marginBottom: 12 },
 
@@ -203,6 +201,22 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
   const cLines = clientLines(client);
   const clientNum = (client?.id ?? "").slice(-6).toUpperCase() || "—";
 
+  // Tailles configurables (Paramètres > Documents)
+  const MM_TO_PT = 2.83465;
+  const logoSizeMm = Number(company.pdfLogoSizeMm) || 50;
+  const logoHeightPt = logoSizeMm * MM_TO_PT;
+  const logoWidthPt = logoHeightPt * 1.6;
+  const companyNameSize = Number(company.pdfCompanyNameSize) || 18;
+  const dynStyles = {
+    companyLogo: { width: logoWidthPt, height: logoHeightPt, objectFit: "contain" as const },
+    companyName: {
+      fontSize: companyNameSize,
+      fontFamily: "Helvetica-Bold",
+      letterSpacing: 0.5,
+      marginBottom: 4,
+    },
+  };
+
   return (
     <Document title={invoice.reference || "Facture"} author={companyName}>
       <Page size="A4" style={styles.page}>
@@ -211,9 +225,9 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
 
         <View style={styles.headerRow}>
           {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
-            <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+            <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
           )}
-          <Text style={styles.companyName}>{companyName}</Text>
+          <Text style={dynStyles.companyName}>{companyName}</Text>
         </View>
         {companyAddress && <Text style={styles.companyAddress}>{companyAddress}</Text>}
         <Text style={styles.companyDot}>•</Text>

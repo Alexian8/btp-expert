@@ -41,11 +41,6 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.primary,
   },
   companyBlock: { flex: 1, flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  companyLogo: {
-    width: 60,
-    height: 60,
-    objectFit: "contain",
-  },
   companyText: { flex: 1 },
   companyName: {
     fontSize: 18,
@@ -320,6 +315,25 @@ export function QuotePdfDocument({ quote, client, company = {} }: Props) {
   const companyLines = companyHeaderLines(company);
   const clientLines = clientFullAddress(client);
 
+  // Tailles configurables depuis Paramètres > Documents
+  const MM_TO_PT = 2.83465;
+  const logoSizeMm = Number(company.pdfLogoSizeMm) || 30;
+  const logoSizePt = logoSizeMm * MM_TO_PT;
+  const companyNameSize = Number(company.pdfCompanyNameSize) || 18;
+  const dynStyles = {
+    companyLogo: {
+      width: logoSizePt * 1.4,
+      height: logoSizePt,
+      objectFit: "contain" as const,
+    },
+    companyName: {
+      fontSize: companyNameSize,
+      fontWeight: 700 as const,
+      color: COLORS.primary,
+      marginBottom: 4,
+    },
+  };
+
   const docType =
     quote.status === "accepte"
       ? "DEVIS ACCEPTÉ"
@@ -338,10 +352,10 @@ export function QuotePdfDocument({ quote, client, company = {} }: Props) {
         <View style={styles.header} fixed>
           <View style={styles.companyBlock}>
             {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
-              <Image style={styles.companyLogo} src={company.logoDataUrl as string} />
+              <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
             )}
             <View style={styles.companyText}>
-              <Text style={styles.companyName}>{companyName}</Text>
+              <Text style={dynStyles.companyName}>{companyName}</Text>
               {companyLines.map((l, i) => (
                 <Text key={i} style={styles.companyLine}>
                   {l}
