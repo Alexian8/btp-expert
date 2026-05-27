@@ -25,6 +25,7 @@ const admin_logs_1 = require("./routes/admin-logs");
 const super_admin_1 = require("./routes/super-admin");
 const vault_1 = require("./routes/vault");
 const admin_docs_1 = require("./routes/admin-docs");
+const accounting_1 = require("./routes/accounting");
 const auth_2 = require("./auth");
 const rbac_1 = require("./rbac");
 const rate_limit_1 = require("./rate-limit");
@@ -285,7 +286,15 @@ async function createApp(cfg, db) {
         hasAuditColumns: true,
         tenantColumn: "companyId",
     });
-    app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices, { db: pool, resourceName: "invoices" }));
+    app.use("/api/invoices", auth, (0, crud_1.buildCrudRouter)(invoices, {
+        db: pool,
+        resourceName: "invoices",
+        hooks: {
+            afterCreate: (id) => accounting_1.accountingHooks.generateInvoiceEntry(pool, id),
+            afterUpdate: (id) => accounting_1.accountingHooks.generateInvoiceEntry(pool, id),
+            afterDelete: (id) => accounting_1.accountingHooks.deleteEntriesForSource(pool, "invoice", id),
+        },
+    }));
     // ─── Invoice payments ──────────────────────────────────────────────────
     const invoicePayments = new repository_1.MysqlRepository(pool, "invoice_payments", {
         primaryKey: "client",
@@ -295,7 +304,20 @@ async function createApp(cfg, db) {
         hasAuditColumns: true,
         tenantColumn: "companyId",
     });
-    app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments, { db: pool, resourceName: "invoice_payments" }));
+    app.use("/api/invoice-payments", auth, (0, crud_1.buildCrudRouter)(invoicePayments, {
+        db: pool,
+        resourceName: "invoice_payments",
+        hooks: {
+            afterCreate: async (id, body) => {
+                await accounting_1.accountingHooks.generateInvoicePaymentEntry(pool, id);
+                const invId = body?.invoiceId;
+                if (invId)
+                    await accounting_1.accountingHooks.generateInvoiceEntry(pool, invId);
+            },
+            afterUpdate: (id) => accounting_1.accountingHooks.generateInvoicePaymentEntry(pool, id),
+            afterDelete: (id) => accounting_1.accountingHooks.deleteEntriesForSource(pool, "invoice_payment", id),
+        },
+    }));
     // ─── Expenses ──────────────────────────────────────────────────────────
     const expenses = new repository_1.MysqlRepository(pool, "expenses", {
         primaryKey: "client",
@@ -313,12 +335,43 @@ async function createApp(cfg, db) {
             "isPaid",
             "notes",
             "attachmentPath",
+            // Session 30 — colonnes ajoutées pour la compta partie double
+            "reference",
+            "supplierName",
+            "amountHt",
+            "amountVat",
+            "amountTtc",
+            "vatRate",
+            "description",
+            "expenseDate",
+            "dueDate",
+            "status",
+            "receiptVaultDocumentId",
         ],
         hasUpdatedAt: true,
         hasAuditColumns: true,
         tenantColumn: "companyId",
     });
-    app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses, { db: pool, resourceName: "expenses" }));
+    app.use("/api/expenses", auth, (0, crud_1.buildCrudRouter)(expenses, {
+        db: pool,
+        resourceName: "expenses",
+        hooks: {
+            afterCreate: async (id) => {
+                await accounting_1.accountingHooks.generateExpenseEntry(pool, id);
+                await accounting_1.accountingHooks.generateExpensePaymentEntry(pool, id);
+            },
+            afterUpdate: async (id) => {
+                await accounting_1.accountingHooks.generateExpenseEntry(pool, id);
+                await accounting_1.accountingHooks.generateExpensePaymentEntry(pool, id);
+            },
+            afterDelete: async (id) => {
+                await accounting_1.accountingHooks.deleteEntriesForSource(pool, "expense", id);
+                await accounting_1.accountingHooks.deleteEntriesForSource(pool, "expense_payment", id);
+            },
+        },
+    }));
+    // ─── Accounting (compta partie double) ────────────────────────────────
+    app.use("/api/accounting", auth, (0, accounting_1.buildAccountingRouter)(pool));
     // ─── Expense notes ─────────────────────────────────────────────────────
     const expenseNotes = new repository_1.MysqlRepository(pool, "expense_notes", {
         primaryKey: "client",

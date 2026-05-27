@@ -29,6 +29,12 @@ export interface CrudRouterOptions {
   db?: DB;
   /** Nom de la ressource pour les logs (ex: "quotes", "invoices"). */
   resourceName?: string;
+  /** Hooks optionnels appelés après chaque opération (best-effort, async). */
+  hooks?: {
+    afterCreate?: (id: string, body: unknown) => Promise<void> | void;
+    afterUpdate?: (id: string, body: unknown) => Promise<void> | void;
+    afterDelete?: (id: string) => Promise<void> | void;
+  };
 }
 
 export function buildCrudRouter<T extends Record<string, unknown> & { id?: number }>(
@@ -92,6 +98,18 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
             meta: extractKeyFields(req.body, opts.resourceName),
           });
         }
+
+        // Hook after-create (best-effort)
+        if (opts.hooks?.afterCreate) {
+          const id = (created as { id?: unknown }).id;
+          if (id != null) {
+            try {
+              await opts.hooks.afterCreate(String(id), req.body);
+            } catch (err) {
+              console.warn(`[${opts.resourceName} afterCreate hook]`, (err as Error).message);
+            }
+          }
+        }
       } catch (e) {
         res.status(400).json({ message: e instanceof Error ? e.message : "Bad request" });
       }
@@ -119,6 +137,14 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
           resourceId: String(req.params.id),
           meta: { changedFields },
         });
+      }
+
+      if (opts.hooks?.afterUpdate) {
+        try {
+          await opts.hooks.afterUpdate(String(req.params.id), req.body);
+        } catch (err) {
+          console.warn(`[${opts.resourceName} afterUpdate hook]`, (err as Error).message);
+        }
       }
     })
   );
@@ -152,6 +178,14 @@ export function buildCrudRouter<T extends Record<string, unknown> & { id?: numbe
           resourceId: String(req.params.id),
           meta: snapshot ? { snapshot } : null,
         });
+      }
+
+      if (opts.hooks?.afterDelete) {
+        try {
+          await opts.hooks.afterDelete(String(req.params.id));
+        } catch (err) {
+          console.warn(`[${opts.resourceName} afterDelete hook]`, (err as Error).message);
+        }
       }
     })
   );

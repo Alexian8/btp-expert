@@ -1201,11 +1201,137 @@ export function installBtpApiShim(): void {
     }) =>
       wrapAction(
         http("PATCH", `/api/expenses/${encodeURIComponent(String(id))}`, {
+          status: "payee",
           isPaid: 1,
           paidDate,
           paymentMethod,
         })
       ),
+  };
+
+  // ─── Comptabilité partie double (Session 30) ─────────────────────────
+  const buildQueryString = (filters: Record<string, unknown> | undefined): string => {
+    if (!filters) return "";
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(filters)) {
+      if (v === undefined || v === null || v === "") continue;
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    }
+    return parts.length ? "?" + parts.join("&") : "";
+  };
+
+  const EMPTY_GRAND_LIVRE = {
+    compteNum: "",
+    lines: [],
+    totals: { debit: 0, credit: 0, solde: 0 },
+  };
+  const EMPTY_INCOME = {
+    charges: [],
+    produits: [],
+    totalCharges: 0,
+    totalProduits: 0,
+    resultat: 0,
+  };
+  const EMPTY_BALANCE_SHEET = {
+    actif: [],
+    passif: [],
+    totalActif: 0,
+    totalPassif: 0,
+    resultat: 0,
+  };
+  const EMPTY_REGEN = {
+    success: false,
+    invoices: 0,
+    expenses: 0,
+    invoicePayments: 0,
+    expensePayments: 0,
+    errors: [],
+  };
+
+  const accountingPartieDouble = {
+    accountingGetSettings: () =>
+      httpGet("/api/accounting/settings").catch(() => null),
+    accountingUpdateSettings: (patch: unknown) =>
+      wrapAction(http("PATCH", "/api/accounting/settings", patch)),
+
+    accountingListAccounts: (filters?: Record<string, unknown>) =>
+      httpGetList(`/api/accounting/accounts${buildQueryString(filters)}`).catch(
+        () => [] as unknown[]
+      ),
+    accountingGetAccount: (numero: string) =>
+      httpGet(`/api/accounting/accounts/${encodeURIComponent(numero)}`).catch(() => null),
+    accountingCreateAccount: (data: unknown) =>
+      wrapCreate(http("POST", "/api/accounting/accounts", data)),
+    accountingUpdateAccount: ({ numero, data }: { numero: string; data: unknown }) =>
+      wrapAction(http("PATCH", `/api/accounting/accounts/${encodeURIComponent(numero)}`, data)),
+    accountingDeleteAccount: (numero: string) =>
+      wrapAction(http("DELETE", `/api/accounting/accounts/${encodeURIComponent(numero)}`)),
+
+    accountingListJournals: () =>
+      httpGetList("/api/accounting/journals").catch(() => [] as unknown[]),
+
+    accountingListEntries: (filters?: Record<string, unknown>) =>
+      httpGetList(`/api/accounting/entries${buildQueryString(filters)}`).catch(
+        () => [] as unknown[]
+      ),
+    accountingGetEntry: (entryId: string) =>
+      httpGet(`/api/accounting/entries/${encodeURIComponent(entryId)}`).catch(() => null),
+    accountingCreateManualEntry: (data: unknown) =>
+      wrapCreate(http("POST", "/api/accounting/entries", data)).then(
+        (r) => r as { success: boolean; id?: string; numero?: number; error?: string }
+      ),
+    accountingDeleteEntry: (entryId: string) =>
+      wrapAction(http("DELETE", `/api/accounting/entries/${encodeURIComponent(entryId)}`)),
+
+    accountingRegenerateAllEntries: () =>
+      http("POST", "/api/accounting/regenerate")
+        .then((r) => r as typeof EMPTY_REGEN)
+        .catch(() => EMPTY_REGEN),
+
+    accountingAutoLettrer: (compteAuxNum?: string) =>
+      wrapAction(http("POST", "/api/accounting/lettrer", { compteAuxNum })),
+    accountingSetLettrage: ({ lineIds, code }: { lineIds: string[]; code: string }) =>
+      wrapAction(http("POST", "/api/accounting/set-lettrage", { lineIds, code })),
+
+    accountingGetGrandLivre: ({
+      compteNum,
+      year,
+      dateFrom,
+      dateTo,
+    }: {
+      compteNum: string;
+      year?: number;
+      dateFrom?: string;
+      dateTo?: string;
+    }) =>
+      httpGet(
+        `/api/accounting/grand-livre/${encodeURIComponent(compteNum)}${buildQueryString({ year, dateFrom, dateTo })}`
+      ).catch(() => ({ ...EMPTY_GRAND_LIVRE, compteNum })),
+
+    accountingGetBalance: (params?: Record<string, unknown>) =>
+      httpGetList(`/api/accounting/balance${buildQueryString(params)}`).catch(
+        () => [] as unknown[]
+      ),
+    accountingGetIncomeStatement: (params?: Record<string, unknown>) =>
+      httpGet(`/api/accounting/income-statement${buildQueryString(params)}`).catch(
+        () => EMPTY_INCOME
+      ),
+    accountingGetBalanceSheet: (params?: Record<string, unknown>) =>
+      httpGet(`/api/accounting/balance-sheet${buildQueryString(params)}`).catch(
+        () => EMPTY_BALANCE_SHEET
+      ),
+
+    accountingEnsureClientAccount: (clientId: string) =>
+      http("POST", `/api/accounting/ensure-client-account/${encodeURIComponent(clientId)}`)
+        .then((r) => r as { success: boolean; numero?: string; error?: string })
+        .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur" })),
+    accountingEnsureSupplierAccount: (supplierId: string) =>
+      http(
+        "POST",
+        `/api/accounting/ensure-supplier-account/${encodeURIComponent(supplierId)}`
+      )
+        .then((r) => r as { success: boolean; numero?: string; error?: string })
+        .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur" })),
   };
 
   // ─── Expense notes (notes de frais) ────────────────────────────────────
@@ -1558,6 +1684,7 @@ export function installBtpApiShim(): void {
     ...quotes,
     ...invoices,
     ...expensesAPI,
+    ...accountingPartieDouble,
     ...expenseNotesAPI,
     ...subcontractorsAPI,
     ...agendaAPI,

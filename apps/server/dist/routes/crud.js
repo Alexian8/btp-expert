@@ -59,6 +59,18 @@ function buildCrudRouter(repo, opts = {}) {
                     meta: extractKeyFields(req.body, opts.resourceName),
                 });
             }
+            // Hook after-create (best-effort)
+            if (opts.hooks?.afterCreate) {
+                const id = created.id;
+                if (id != null) {
+                    try {
+                        await opts.hooks.afterCreate(String(id), req.body);
+                    }
+                    catch (err) {
+                        console.warn(`[${opts.resourceName} afterCreate hook]`, err.message);
+                    }
+                }
+            }
         }
         catch (e) {
             res.status(400).json({ message: e instanceof Error ? e.message : "Bad request" });
@@ -80,6 +92,14 @@ function buildCrudRouter(repo, opts = {}) {
                 resourceId: String(req.params.id),
                 meta: { changedFields },
             });
+        }
+        if (opts.hooks?.afterUpdate) {
+            try {
+                await opts.hooks.afterUpdate(String(req.params.id), req.body);
+            }
+            catch (err) {
+                console.warn(`[${opts.resourceName} afterUpdate hook]`, err.message);
+            }
         }
     }));
     router.delete("/:id", wrap(async (req, res) => {
@@ -108,6 +128,14 @@ function buildCrudRouter(repo, opts = {}) {
                 resourceId: String(req.params.id),
                 meta: snapshot ? { snapshot } : null,
             });
+        }
+        if (opts.hooks?.afterDelete) {
+            try {
+                await opts.hooks.afterDelete(String(req.params.id));
+            }
+            catch (err) {
+                console.warn(`[${opts.resourceName} afterDelete hook]`, err.message);
+            }
         }
     }));
     return router;

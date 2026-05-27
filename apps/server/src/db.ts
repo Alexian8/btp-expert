@@ -694,6 +694,87 @@ export async function runMigrations(db: Pool): Promise<void> {
       INDEX idx_rge_chantier (chantierId),
       INDEX idx_rge_type (type)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    // ─── Session 30 : Comptabilité partie double ──────────────────────────
+    `CREATE TABLE IF NOT EXISTS chart_of_accounts (
+      numero VARCHAR(16) PRIMARY KEY,
+      libelle VARCHAR(255) NOT NULL DEFAULT '',
+      classe INT NOT NULL DEFAULT 0,
+      type VARCHAR(16) DEFAULT 'neutre',
+      nature VARCHAR(16) DEFAULT 'detail',
+      parentNumero VARCHAR(16) DEFAULT '',
+      isAuxiliary TINYINT(1) DEFAULT 0,
+      isLocked TINYINT(1) DEFAULT 0,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_coa_classe (classe),
+      INDEX idx_coa_parent (parentNumero)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    `CREATE TABLE IF NOT EXISTS journals (
+      code VARCHAR(8) PRIMARY KEY,
+      libelle VARCHAR(255) NOT NULL DEFAULT '',
+      type VARCHAR(16) DEFAULT 'od',
+      defaultCompte VARCHAR(16) DEFAULT '',
+      isLocked TINYINT(1) DEFAULT 0,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    `CREATE TABLE IF NOT EXISTS journal_entries (
+      id VARCHAR(64) PRIMARY KEY,
+      journalCode VARCHAR(8) NOT NULL,
+      numero INT NOT NULL DEFAULT 1,
+      \`date\` VARCHAR(32) NOT NULL,
+      dateValidation VARCHAR(32) DEFAULT '',
+      libelle VARCHAR(500) DEFAULT '',
+      pieceRef VARCHAR(64) DEFAULT '',
+      pieceDate VARCHAR(32) DEFAULT '',
+      sourceType VARCHAR(32) DEFAULT 'manual',
+      sourceId VARCHAR(64) DEFAULT '',
+      exerciceYear INT NOT NULL,
+      isLocked TINYINT(1) DEFAULT 0,
+      isReversed TINYINT(1) DEFAULT 0,
+      reversedById VARCHAR(64) DEFAULT '',
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_je_journal (journalCode),
+      INDEX idx_je_date (\`date\`),
+      INDEX idx_je_source (sourceType, sourceId),
+      INDEX idx_je_year (exerciceYear)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    `CREATE TABLE IF NOT EXISTS journal_lines (
+      id VARCHAR(64) PRIMARY KEY,
+      entryId VARCHAR(64) NOT NULL,
+      compteNum VARCHAR(16) NOT NULL,
+      compAuxNum VARCHAR(16) DEFAULT '',
+      compAuxLib VARCHAR(255) DEFAULT '',
+      libelle VARCHAR(500) DEFAULT '',
+      debit DECIMAL(15,2) DEFAULT 0,
+      credit DECIMAL(15,2) DEFAULT 0,
+      lettrage VARCHAR(8) DEFAULT '',
+      dateLettrage VARCHAR(32) DEFAULT '',
+      ordre INT DEFAULT 0,
+      INDEX idx_jl_entry (entryId),
+      INDEX idx_jl_compte (compteNum),
+      INDEX idx_jl_compaux (compAuxNum),
+      INDEX idx_jl_lettrage (lettrage),
+      CONSTRAINT fk_jl_entry FOREIGN KEY (entryId)
+        REFERENCES journal_entries(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+    `CREATE TABLE IF NOT EXISTS accounting_settings (
+      id INT PRIMARY KEY DEFAULT 1,
+      mode VARCHAR(16) DEFAULT '',
+      modeChosenAt VARCHAR(32) DEFAULT '',
+      exerciceStart VARCHAR(8) DEFAULT '01-01',
+      fiscalYear INT DEFAULT 0,
+      lastLockedDate VARCHAR(32) DEFAULT '',
+      defaultVatRegime VARCHAR(16) DEFAULT 'debits',
+      autoGenerateEntries TINYINT(1) DEFAULT 1,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   ];
 
   for (const sql of statements) {
@@ -894,6 +975,59 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
     `);
   } catch (e) {
     console.warn("[migrations] audit_logs companyId backfill failed:", e);
+  }
+
+  // ─── Comptabilité partie double (Session 30) ──────────────────────────
+  // Alignement schéma expenses sur le desktop (colonnes manquantes)
+  await addColumnIfNotExists(db, "expenses", "reference", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "expenses", "supplierName", "VARCHAR(255) DEFAULT ''");
+  await addColumnIfNotExists(db, "expenses", "amountHt", "DECIMAL(15,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expenses", "amountVat", "DECIMAL(15,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expenses", "amountTtc", "DECIMAL(15,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expenses", "vatRate", "DECIMAL(5,2) DEFAULT 20");
+  await addColumnIfNotExists(db, "expenses", "description", "VARCHAR(500) DEFAULT ''");
+  await addColumnIfNotExists(db, "expenses", "expenseDate", "VARCHAR(32) DEFAULT ''");
+  await addColumnIfNotExists(db, "expenses", "dueDate", "VARCHAR(32) DEFAULT ''");
+  await addColumnIfNotExists(db, "expenses", "status", "VARCHAR(16) DEFAULT 'a_payer'");
+  await addColumnIfNotExists(db, "expenses", "receiptVaultDocumentId", "VARCHAR(64) DEFAULT ''");
+
+  // Comptes auxiliaires sur clients & fournisseurs (411xxx / 401xxx)
+  await addColumnIfNotExists(db, "clients", "accountNumber", "VARCHAR(16) DEFAULT ''");
+  await addColumnIfNotExists(db, "suppliers", "accountNumber", "VARCHAR(16) DEFAULT ''");
+
+  // Initialiser la ligne unique de paramètres compta si absente
+  try {
+    const [rows] = await db.query<RowDataPacket[]>(
+      "SELECT id FROM accounting_settings WHERE id = 1"
+    );
+    if (rows.length === 0) {
+      await db.query(
+        `INSERT INTO accounting_settings (id, mode, exerciceStart, fiscalYear, autoGenerateEntries, defaultVatRegime)
+         VALUES (1, '', '01-01', ?, 1, 'debits')`,
+        [new Date().getFullYear()]
+      );
+    }
+  } catch (e) {
+    console.warn("[migrations] accounting_settings init failed:", e);
+  }
+
+  // Seed plan comptable + journaux si tables vides
+  try {
+    const { seedChartOfAccountsMysql, seedJournalsMysql } = await import("./accounting/seed");
+    const [accRows] = await db.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS n FROM chart_of_accounts"
+    );
+    if (Number((accRows[0] as { n: number }).n) === 0) {
+      await seedChartOfAccountsMysql(db);
+      console.log("[migrations] plan comptable inséré");
+    }
+    const [jRows] = await db.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM journals");
+    if (Number((jRows[0] as { n: number }).n) === 0) {
+      await seedJournalsMysql(db);
+      console.log("[migrations] journaux insérés");
+    }
+  } catch (e) {
+    console.warn("[migrations] accounting seed failed:", e);
   }
 }
 

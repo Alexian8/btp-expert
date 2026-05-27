@@ -21,6 +21,7 @@ import { buildAdminLogsRouter } from "./routes/admin-logs";
 import { buildSuperAdminRouter } from "./routes/super-admin";
 import { buildVaultRouter } from "./routes/vault";
 import { buildAdminDocsRouter } from "./routes/admin-docs";
+import { buildAccountingRouter, accountingHooks } from "./routes/accounting";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
@@ -321,7 +322,19 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasAuditColumns: true,
     tenantColumn: "companyId",
   });
-  app.use("/api/invoices", auth, buildCrudRouter(invoices, { db: pool, resourceName: "invoices" }));
+  app.use(
+    "/api/invoices",
+    auth,
+    buildCrudRouter(invoices, {
+      db: pool,
+      resourceName: "invoices",
+      hooks: {
+        afterCreate: (id) => accountingHooks.generateInvoiceEntry(pool, id),
+        afterUpdate: (id) => accountingHooks.generateInvoiceEntry(pool, id),
+        afterDelete: (id) => accountingHooks.deleteEntriesForSource(pool, "invoice", id),
+      },
+    })
+  );
 
   // ─── Invoice payments ──────────────────────────────────────────────────
   const invoicePayments = new MysqlRepository(pool, "invoice_payments", {
@@ -332,7 +345,24 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     hasAuditColumns: true,
     tenantColumn: "companyId",
   });
-  app.use("/api/invoice-payments", auth, buildCrudRouter(invoicePayments, { db: pool, resourceName: "invoice_payments" }));
+  app.use(
+    "/api/invoice-payments",
+    auth,
+    buildCrudRouter(invoicePayments, {
+      db: pool,
+      resourceName: "invoice_payments",
+      hooks: {
+        afterCreate: async (id, body) => {
+          await accountingHooks.generateInvoicePaymentEntry(pool, id);
+          const invId = (body as { invoiceId?: string } | null)?.invoiceId;
+          if (invId) await accountingHooks.generateInvoiceEntry(pool, invId);
+        },
+        afterUpdate: (id) => accountingHooks.generateInvoicePaymentEntry(pool, id),
+        afterDelete: (id) =>
+          accountingHooks.deleteEntriesForSource(pool, "invoice_payment", id),
+      },
+    })
+  );
 
   // ─── Expenses ──────────────────────────────────────────────────────────
   const expenses = new MysqlRepository(pool, "expenses", {
@@ -351,12 +381,48 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
       "isPaid",
       "notes",
       "attachmentPath",
+      // Session 30 — colonnes ajoutées pour la compta partie double
+      "reference",
+      "supplierName",
+      "amountHt",
+      "amountVat",
+      "amountTtc",
+      "vatRate",
+      "description",
+      "expenseDate",
+      "dueDate",
+      "status",
+      "receiptVaultDocumentId",
     ],
     hasUpdatedAt: true,
     hasAuditColumns: true,
     tenantColumn: "companyId",
   });
-  app.use("/api/expenses", auth, buildCrudRouter(expenses, { db: pool, resourceName: "expenses" }));
+  app.use(
+    "/api/expenses",
+    auth,
+    buildCrudRouter(expenses, {
+      db: pool,
+      resourceName: "expenses",
+      hooks: {
+        afterCreate: async (id) => {
+          await accountingHooks.generateExpenseEntry(pool, id);
+          await accountingHooks.generateExpensePaymentEntry(pool, id);
+        },
+        afterUpdate: async (id) => {
+          await accountingHooks.generateExpenseEntry(pool, id);
+          await accountingHooks.generateExpensePaymentEntry(pool, id);
+        },
+        afterDelete: async (id) => {
+          await accountingHooks.deleteEntriesForSource(pool, "expense", id);
+          await accountingHooks.deleteEntriesForSource(pool, "expense_payment", id);
+        },
+      },
+    })
+  );
+
+  // ─── Accounting (compta partie double) ────────────────────────────────
+  app.use("/api/accounting", auth, buildAccountingRouter(pool));
 
   // ─── Expense notes ─────────────────────────────────────────────────────
   const expenseNotes = new MysqlRepository(pool, "expense_notes", {
