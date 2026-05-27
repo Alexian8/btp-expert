@@ -118,14 +118,25 @@ function round2(n: number): number {
 }
 
 // ─── Format euros ────────────────────────────────────────────────────────
+// toLocaleString("fr-FR") produit un espace insécable étroite (U+202F NNBSP)
+// entre les milliers. Helvetica (la police par défaut de @react-pdf/renderer)
+// ne contient pas ce glyphe et affiche `/` ou un autre caractère de fallback
+// dans les PDF. On normalise donc toutes les variantes d'espaces insécables
+// (U+202F, U+00A0, U+2009) vers un espace ASCII compatible toutes polices.
+function normalizeSpaces(s: string): string {
+  return s.replace(/[   ]/g, " ");
+}
+
 export function formatEuros(v: number, decimals = 2): string {
-  return v.toLocaleString("fr-FR", {
+  const formatted = v.toLocaleString("fr-FR", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }) + " €";
+  });
+  return normalizeSpaces(formatted) + " €";
 }
 
 // ─── Format % ────────────────────────────────────────────────────────────
 export function formatPercent(v: number): string {
-  return v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " %";
+  const formatted = v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return normalizeSpaces(formatted) + " %";
 }

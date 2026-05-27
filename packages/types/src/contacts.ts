@@ -50,6 +50,9 @@ export interface Client {
   source: string;         // ex: "Bouche à oreille", "Google", "Référencement"
   notes: string;
   firstContactAt: string; // ISO date
+  // Compte auxiliaire client (Session 30 — compta partie double).
+  // Format 411xxx, auto-attribué à la 1ère écriture comptable du client.
+  accountNumber?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -94,6 +97,9 @@ export interface Supplier {
   // Metadata
   tags: string[];
   notes: string;
+  // Compte auxiliaire fournisseur (Session 30 — compta partie double).
+  // Format 401xxx, auto-attribué à la 1ère écriture comptable.
+  accountNumber?: string;
   createdAt: string;
   updatedAt: string;
 }

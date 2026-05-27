@@ -199,7 +199,11 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
 
   const cName = clientName(client);
   const cLines = clientLines(client);
-  const clientNum = (client?.id ?? "").slice(-6).toUpperCase() || "—";
+  // N° client : compte auxiliaire (411xxx) si présent, sinon fallback id
+  const clientNum =
+    client?.accountNumber ||
+    (client?.id ?? "").slice(-6).toUpperCase() ||
+    "—";
 
   // Tailles configurables (Paramètres > Documents)
   const MM_TO_PT = 2.83465;

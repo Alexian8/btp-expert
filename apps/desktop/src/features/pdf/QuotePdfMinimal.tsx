@@ -340,8 +340,12 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
   const cName = clientName(client);
   const cLines = clientLines(client);
 
-  // N° client : on prend les 6 derniers chars de l'id pour faire un faux N°
-  const clientNum = (client?.id ?? "").slice(-6).toUpperCase() || "—";
+  // N° client : compte auxiliaire (411xxx) attribué par la compta partie
+  // double si présent, sinon fallback sur les 6 derniers chars de l'id.
+  const clientNum =
+    client?.accountNumber ||
+    (client?.id ?? "").slice(-6).toUpperCase() ||
+    "—";
   const folio = "1 / 1";
 
   return (
