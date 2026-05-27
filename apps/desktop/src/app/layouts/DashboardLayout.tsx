@@ -31,6 +31,7 @@ import {
   FileSignature,
   Menu,
   RefreshCw,
+  BookOpen,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -77,6 +78,7 @@ const navigation = [
   { id: "expense-notes",  to: "/expense-notes",     label: "Notes de frais", icon: Wallet, badgeKey: null },
   { id: "subcontractors", to: "/subcontractors",    label: "Sous-traitants", icon: HardHat, badgeKey: null },
   { id: "finances",       to: "/finances",          label: "Finances", icon: BarChart3, badgeKey: null },
+  { id: "accounting",     to: "/accounting",        label: "Comptabilité", icon: BookOpen, badgeKey: null },
   { id: "statistics",     to: "/statistics",        label: "Statistiques", icon: Activity, badgeKey: null },
   { id: "admin-docs",     to: "/admin-docs",        label: "Documents admin", icon: FileSignature, badgeKey: null },
   { id: "vault",          to: "/vault",             label: "Coffre-fort", icon: Archive, badgeKey: null },

@@ -26,6 +26,7 @@ import { PurchaseOrderEditorPage } from "@/features/purchase-orders/components/P
 import { PurchaseOrderDetailPage } from "@/features/purchase-orders/components/PurchaseOrderDetailPage";
 import { StatisticsPage } from "@/features/stats/components/StatisticsPage";
 import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
+import { AccountingHubPage } from "@/features/accounting/components/AccountingHubPage";
 import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
 import { LogsPage } from "@/features/admin-logs/components/LogsPage";
 import { CompaniesAdminPage } from "@/features/super-admin/components/CompaniesAdminPage";
@@ -194,6 +195,10 @@ const router = createBrowserRouter(
         {
           path: "finances",
           element: <FinancesPage />,
+        },
+        {
+          path: "accounting",
+          element: <AccountingHubPage />,
         },
         {
           path: "subcontractors",
