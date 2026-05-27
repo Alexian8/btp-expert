@@ -3771,24 +3771,25 @@ ipcMain.handle("invoices:convertFromQuote", (_e, { quoteId, options }) => {
     let totalTTC = Number(quoteRow.totalTTC);
 
     if (type === "acompte") {
-      // Pour une facture d'acompte, on crée UNE SEULE ligne qui représente le %
-      items = [
-        {
-          id: "item_" + Date.now(),
-          kind: "line",
-          title: `Acompte de ${acomptePercent} % sur devis ${quoteRow.reference}`,
-          description: `Facture d'acompte correspondant à ${acomptePercent} % du montant total du devis ${quoteRow.reference}`,
-          quantity: 1,
-          unit: "forfait",
-          unitPriceHT: Number((totalHT * acomptePercent / 100).toFixed(2)),
-          vatRate: 20,
-          discountPercent: 0,
-          discountAmount: 0,
-          discountMode: "none",
-        },
-      ];
-      totalHT = Number((totalHT * acomptePercent / 100).toFixed(2));
-      totalTTC = Number((totalTTC * acomptePercent / 100).toFixed(2));
+      // Facture d'acompte : on REPREND toutes les lignes du devis et on
+      // applique le % d'acompte sur chaque prix unitaire (et remise montant).
+      // Ainsi le client voit exactement le détail du devis avec les bons
+      // proportions, et le total est cohérent.
+      const ratio = acomptePercent / 100;
+      items = items.map((it) => {
+        if (it.kind !== "line") return it; // sections inchangées
+        const newUnitPriceHT = Number((Number(it.unitPriceHT || 0) * ratio).toFixed(2));
+        const newDiscountAmount = it.discountMode === "amount"
+          ? Number((Number(it.discountAmount || 0) * ratio).toFixed(2))
+          : Number(it.discountAmount || 0);
+        return {
+          ...it,
+          unitPriceHT: newUnitPriceHT,
+          discountAmount: newDiscountAmount,
+        };
+      });
+      totalHT = Number((totalHT * ratio).toFixed(2));
+      totalTTC = Number((totalTTC * ratio).toFixed(2));
     } else if (type === "avoir") {
       // Pour un avoir, on inverse les signes (montants négatifs)
       items = items.map((it) => ({
@@ -3845,11 +3846,17 @@ ipcMain.handle("invoices:convertFromQuote", (_e, { quoteId, options }) => {
       paymentTermsDays,
       items: JSON.stringify(items),
       globalDiscountMode: type === "acompte" ? "none" : quoteRow.globalDiscountMode,
-      globalDiscountPercent: type === "acompte" ? 0 : Number(quoteRow.globalDiscountPercent),
-      globalDiscountAmount: type === "acompte" ? 0 : Number(quoteRow.globalDiscountAmount),
+      globalDiscountPercent: type === "acompte"
+        ? Number(quoteRow.globalDiscountPercent)
+        : Number(quoteRow.globalDiscountPercent),
+      globalDiscountAmount: type === "acompte"
+        ? Number((Number(quoteRow.globalDiscountAmount || 0) * acomptePercent / 100).toFixed(2))
+        : Number(quoteRow.globalDiscountAmount),
       acompteBasedOnQuoteId: type === "acompte" ? quoteId : "",
       acomptePercent,
-      introText: "",
+      introText: type === "acompte"
+        ? `Facture d'acompte de ${acomptePercent} % sur le devis ${quoteRow.reference || ""}. Le solde sera facturé en fin de travaux.`
+        : "",
       conditionsText: defaultConditions,
       companySnapshot: quoteRow.companySnapshot || "{}",
       totalHT,

@@ -368,23 +368,25 @@ async function createApp(cfg, db) {
             let totalHT = Number(quote.totalHT);
             let totalTTC = Number(quote.totalTTC);
             if (type === "acompte") {
-                items = [
-                    {
-                        id: "item_" + Date.now(),
-                        kind: "line",
-                        title: `Acompte de ${acomptePercent} % sur devis ${quote.reference}`,
-                        description: `Facture d'acompte correspondant à ${acomptePercent} % du montant total du devis ${quote.reference}`,
-                        quantity: 1,
-                        unit: "forfait",
-                        unitPriceHT: Number(((totalHT * acomptePercent) / 100).toFixed(2)),
-                        vatRate: 20,
-                        discountPercent: 0,
-                        discountAmount: 0,
-                        discountMode: "none",
-                    },
-                ];
-                totalHT = Number(((totalHT * acomptePercent) / 100).toFixed(2));
-                totalTTC = Number(((totalTTC * acomptePercent) / 100).toFixed(2));
+                // Facture d'acompte : on REPREND toutes les lignes du devis et on
+                // applique le % d'acompte sur chaque PU + sur les remises montant.
+                // Le total final est cohérent avec totalHT * acomptePercent / 100.
+                const ratio = acomptePercent / 100;
+                items = items.map((it) => {
+                    if (it.kind !== "line")
+                        return it;
+                    const newUnitPriceHT = Number(((Number(it.unitPriceHT) || 0) * ratio).toFixed(2));
+                    const newDiscountAmount = it.discountMode === "amount"
+                        ? Number(((Number(it.discountAmount) || 0) * ratio).toFixed(2))
+                        : Number(it.discountAmount) || 0;
+                    return {
+                        ...it,
+                        unitPriceHT: newUnitPriceHT,
+                        discountAmount: newDiscountAmount,
+                    };
+                });
+                totalHT = Number((totalHT * ratio).toFixed(2));
+                totalTTC = Number((totalTTC * ratio).toFixed(2));
             }
             else if (type === "avoir") {
                 items = items.map((it) => ({
@@ -412,6 +414,15 @@ async function createApp(cfg, db) {
             const companySnapshotStr = typeof quote.companySnapshot === "string"
                 ? quote.companySnapshot
                 : JSON.stringify(quote.companySnapshot ?? {});
+            const introText = type === "acompte"
+                ? `Facture d'acompte de ${acomptePercent} % sur le devis ${quote.reference || ""}. Le solde sera facturé en fin de travaux.`
+                : "";
+            // Pour l'acompte on garde la même remise globale en % mais on
+            // applique le ratio sur la remise globale en montant fixe.
+            const ratio = acomptePercent / 100;
+            const newGlobalDiscountAmount = type === "acompte"
+                ? Number((Number(quote.globalDiscountAmount || 0) * ratio).toFixed(2))
+                : Number(quote.globalDiscountAmount || 0);
             await pool.query(`INSERT INTO invoices (
             id, reference, status, type, title, clientId, chantierId, fromQuoteId,
             issueDate, dueDate, paymentTermsDays, sentAt, paidAt,
@@ -425,7 +436,7 @@ async function createApp(cfg, db) {
             ?, ?, ?, '', '',
             ?, ?, ?, ?,
             ?, ?, '',
-            '', '', '', '', ?,
+            ?, '', '', '', ?,
             ?, ?, 0,
             '', 0
           )`, [
@@ -440,11 +451,12 @@ async function createApp(cfg, db) {
                 dueDate,
                 paymentTermsDays,
                 JSON.stringify(items),
-                type === "acompte" ? "none" : quote.globalDiscountMode,
-                type === "acompte" ? 0 : Number(quote.globalDiscountPercent),
-                type === "acompte" ? 0 : Number(quote.globalDiscountAmount),
+                quote.globalDiscountMode || "none",
+                Number(quote.globalDiscountPercent),
+                newGlobalDiscountAmount,
                 type === "acompte" ? quoteId : "",
                 acomptePercent,
+                introText,
                 companySnapshotStr,
                 totalHT,
                 totalTTC,
