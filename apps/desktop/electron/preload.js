@@ -250,6 +250,29 @@ contextBridge.exposeInMainWorld("btpAPI", {
   accountingGetChantierMargins: () => ipcRenderer.invoke("accounting:getChantierMargins"),
   accountingExportFEC: (year) => ipcRenderer.invoke("accounting:exportFEC", { year }),
 
+  // Session 30 — Comptabilité partie double
+  accountingGetSettings: () => ipcRenderer.invoke("accounting:getSettings"),
+  accountingUpdateSettings: (patch) => ipcRenderer.invoke("accounting:updateSettings", patch),
+  accountingListAccounts: (filters) => ipcRenderer.invoke("accounting:listAccounts", filters || {}),
+  accountingGetAccount: (numero) => ipcRenderer.invoke("accounting:getAccount", numero),
+  accountingCreateAccount: (data) => ipcRenderer.invoke("accounting:createAccount", data),
+  accountingUpdateAccount: (numero, data) => ipcRenderer.invoke("accounting:updateAccount", { numero, data }),
+  accountingDeleteAccount: (numero) => ipcRenderer.invoke("accounting:deleteAccount", numero),
+  accountingListJournals: () => ipcRenderer.invoke("accounting:listJournals"),
+  accountingListEntries: (filters) => ipcRenderer.invoke("accounting:listEntries", filters || {}),
+  accountingGetEntry: (entryId) => ipcRenderer.invoke("accounting:getEntry", entryId),
+  accountingCreateManualEntry: (data) => ipcRenderer.invoke("accounting:createManualEntry", data),
+  accountingDeleteEntry: (entryId) => ipcRenderer.invoke("accounting:deleteEntry", entryId),
+  accountingRegenerateAllEntries: () => ipcRenderer.invoke("accounting:regenerateAllEntries"),
+  accountingAutoLettrer: (compteAuxNum) => ipcRenderer.invoke("accounting:autoLettrer", compteAuxNum),
+  accountingSetLettrage: (lineIds, code) => ipcRenderer.invoke("accounting:setLettrage", { lineIds, code }),
+  accountingGetGrandLivre: (params) => ipcRenderer.invoke("accounting:getGrandLivre", params),
+  accountingGetBalance: (params) => ipcRenderer.invoke("accounting:getBalance", params || {}),
+  accountingGetIncomeStatement: (params) => ipcRenderer.invoke("accounting:getIncomeStatement", params || {}),
+  accountingGetBalanceSheet: (params) => ipcRenderer.invoke("accounting:getBalanceSheet", params || {}),
+  accountingEnsureClientAccount: (clientId) => ipcRenderer.invoke("accounting:ensureClientAccount", clientId),
+  accountingEnsureSupplierAccount: (supplierId) => ipcRenderer.invoke("accounting:ensureSupplierAccount", supplierId),
+
   // ═════════════════════════════════════════════════════════════════════════
   // Notes de frais (Session 14)
   // ═════════════════════════════════════════════════════════════════════════

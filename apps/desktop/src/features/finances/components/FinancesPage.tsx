@@ -13,6 +13,7 @@ import { useFinanceStore } from "@/stores/financeStore";
 import { formatEuro } from "@btp/types";
 import { MonthlyBarsChart } from "./MonthlyBarsChart";
 import { TopClientsList, TopSuppliersList, ChantierMarginsList } from "./TopLists";
+import { AccountingModeGate } from "./AccountingModeGate";
 import { PaymentDelaysWidget } from "@/features/stats/components/PaymentDelaysWidget";
 import { QuotePipelineWidget } from "@/features/stats/components/QuotePipelineWidget";
 
@@ -51,6 +52,7 @@ export function FinancesPage() {
 
   return (
     <div className="h-full flex flex-col">
+      <AccountingModeGate />
       {/* Header */}
       <div className="border-b border-border bg-background/80 backdrop-blur-sm p-4 shrink-0">
         <div className="flex items-center justify-between gap-3 flex-wrap">
