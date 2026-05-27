@@ -654,17 +654,37 @@ function init({ db, mainWindow }) {
 
   ipcMain.handle("accounting:createAccount", (_e, data) => {
     try {
+      const numero = String(data.numero || "").trim();
+      if (!numero) return { success: false, error: "Numéro requis" };
+      // Plages réservées à la génération automatique des auxiliaires
+      // 411001-411998 : clients, 401001-401998 : fournisseurs
+      // On autorise toujours les comptes parents (411000, 401000) ainsi que
+      // toute valeur en dehors de ces plages (412xxx, 413xxx, etc.).
+      if (numero.length === 6) {
+        const isClientAux = numero.startsWith("411") && numero !== "411000" && numero !== "411999";
+        const isSupplierAux = numero.startsWith("401") && numero !== "401000" && numero !== "401999";
+        if (isClientAux || isSupplierAux) {
+          const tier = isClientAux ? "clients" : "suppliers";
+          return {
+            success: false,
+            error: `La plage ${numero.slice(0, 3)}001-${numero.slice(0, 3)}998 est réservée aux comptes auxiliaires ${tier === "clients" ? "clients" : "fournisseurs"} (générés automatiquement). Utilisez ${numero.slice(0, 3)}999 pour un compte divers.`,
+          };
+        }
+      }
+      const exists = db.prepare("SELECT numero FROM chart_of_accounts WHERE numero = ?").get(numero);
+      if (exists) return { success: false, error: "Ce numéro de compte existe déjà" };
+
       const now = nowIso();
       db.prepare(`
         INSERT INTO chart_of_accounts (numero, libelle, classe, type, nature, parentNumero, isAuxiliary, isLocked, createdAt, updatedAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `).run(
-        data.numero, data.libelle || "", Number(data.classe) || 0,
+        numero, data.libelle || "", Number(data.classe) || 0,
         data.type || "neutre", data.nature || "detail",
         data.parentNumero || "", Number(data.isAuxiliary) || 0,
         now, now,
       );
-      return { success: true, numero: data.numero };
+      return { success: true, numero };
     } catch (e) {
       return { success: false, error: e.message };
     }

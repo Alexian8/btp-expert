@@ -54,27 +54,50 @@ function isAutoEnabled(db) {
 }
 
 // ─── Comptes auxiliaires ───────────────────────────────────────────────────
+//
+// Convention : les comptes auxiliaires occupent la plage 411001-411998 (clients)
+// et 401001-401998 (fournisseurs). 411000 et 401000 sont les comptes collectifs
+// système (parents). 411999 et 401999 sont réservés "divers".
+//
+// Le numéro suivant est calculé en prenant le MAX dans DEUX sources :
+//   1. tiers déjà numérotés (clients.accountNumber / suppliers.accountNumber)
+//   2. plan comptable (chart_of_accounts.numero) — pour les saisies manuelles
+// On ne réutilise jamais un numéro déjà connu, même si le tiers/compte a été
+// supprimé entre temps. Cela garantit l'absence de collision silencieuse.
+
+function nextAuxNumber(db, prefix /* "411" | "401" */) {
+  const tiersTable = prefix === "411" ? "clients" : "suppliers";
+  const fromTiers = db.prepare(`
+    SELECT COALESCE(MAX(CAST(SUBSTR(accountNumber, 4) AS INTEGER)), 0) AS n
+    FROM ${tiersTable}
+    WHERE accountNumber LIKE ? AND LENGTH(accountNumber) = 6
+  `).get(`${prefix}%`).n;
+  // On exclut le compte collectif (411000 / 401000) et la plage "divers" (xx999)
+  const fromPlan = db.prepare(`
+    SELECT COALESCE(MAX(CAST(SUBSTR(numero, 4) AS INTEGER)), 0) AS n
+    FROM chart_of_accounts
+    WHERE numero LIKE ? AND LENGTH(numero) = 6 AND numero NOT IN (?, ?)
+  `).get(`${prefix}%`, `${prefix}000`, `${prefix}999`).n;
+  const next = Math.max(fromTiers, fromPlan) + 1;
+  if (next > 998) throw new Error(`Plage ${prefix}xxx épuisée (>998 auxiliaires)`);
+  return prefix + String(next).padStart(3, "0");
+}
 
 // Attribue un numéro auxiliaire séquentiel (411001, 411002...) à un tiers
-// s'il n'en a pas déjà un. Retourne le numéro (string sans zéro initial).
+// s'il n'en a pas déjà un. Retourne le numéro.
 function ensureClientAccountNumber(db, clientId) {
   if (!clientId) return null;
   const row = db.prepare("SELECT id, accountNumber, lastName, firstName, companyName, type FROM clients WHERE id = ?").get(clientId);
   if (!row) return null;
   if (row.accountNumber && row.accountNumber.length >= 6) return row.accountNumber;
-  // Trouver le prochain numéro : on cherche le max parmi les 411xxx déjà attribués
-  const next = db.prepare(`
-    SELECT COALESCE(MAX(CAST(SUBSTR(accountNumber, 4) AS INTEGER)), 0) + 1 AS n
-    FROM clients
-    WHERE accountNumber LIKE '411%' AND LENGTH(accountNumber) = 6
-  `).get().n;
-  const numero = "411" + String(next).padStart(3, "0");
-  db.prepare("UPDATE clients SET accountNumber = ? WHERE id = ?").run(numero, clientId);
-  // Créer le compte auxiliaire dans le plan comptable
+  const numero = nextAuxNumber(db, "411");
   const libelle = row.type === "pro" && row.companyName
     ? row.companyName
     : `${row.lastName || ""} ${row.firstName || ""}`.trim() || "Client";
+  // Création du compte AVANT mise à jour du tiers : si le compte existe déjà
+  // (cas anormal — collision), on lève une erreur plutôt qu'écraser.
   upsertAuxiliaryAccount(db, numero, "411000", libelle);
+  db.prepare("UPDATE clients SET accountNumber = ? WHERE id = ?").run(numero, clientId);
   return numero;
 }
 
@@ -83,27 +106,31 @@ function ensureSupplierAccountNumber(db, supplierId, fallbackName) {
   const row = db.prepare("SELECT id, accountNumber, companyName FROM suppliers WHERE id = ?").get(supplierId);
   if (!row) return null;
   if (row.accountNumber && row.accountNumber.length >= 6) return row.accountNumber;
-  const next = db.prepare(`
-    SELECT COALESCE(MAX(CAST(SUBSTR(accountNumber, 4) AS INTEGER)), 0) + 1 AS n
-    FROM suppliers
-    WHERE accountNumber LIKE '401%' AND LENGTH(accountNumber) = 6
-  `).get().n;
-  const numero = "401" + String(next).padStart(3, "0");
-  db.prepare("UPDATE suppliers SET accountNumber = ? WHERE id = ?").run(numero, supplierId);
+  const numero = nextAuxNumber(db, "401");
   upsertAuxiliaryAccount(db, numero, "401000", row.companyName || fallbackName || "Fournisseur");
+  db.prepare("UPDATE suppliers SET accountNumber = ? WHERE id = ?").run(numero, supplierId);
   return numero;
 }
 
+// Insère un compte auxiliaire. Si un compte avec ce numéro existe déjà :
+//   - et qu'il n'est PAS un compte auxiliaire (isAuxiliary=0) → ERREUR
+//     (refus d'écraser un compte du plan comptable manuel ou système)
+//   - et qu'il est auxiliaire avec un libellé différent → mise à jour libellé
 function upsertAuxiliaryAccount(db, numero, parentNumero, libelle) {
-  const classe = parentNumero.startsWith("411") ? 4 : 4;
-  const type = parentNumero.startsWith("411") ? "actif" : "passif";
+  const existing = db.prepare("SELECT numero, isAuxiliary, isLocked FROM chart_of_accounts WHERE numero = ?").get(numero);
+  if (existing && (!existing.isAuxiliary || existing.isLocked)) {
+    throw new Error(`Conflit : le compte ${numero} existe déjà comme compte non-auxiliaire`);
+  }
   const now = nowIso();
-  db.prepare(`
-    INSERT INTO chart_of_accounts
-      (numero, libelle, classe, type, nature, parentNumero, isAuxiliary, isLocked, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, 'detail', ?, 1, 0, ?, ?)
-    ON CONFLICT(numero) DO UPDATE SET libelle = excluded.libelle, updatedAt = excluded.updatedAt
-  `).run(numero, libelle, classe, type, parentNumero, now, now);
+  if (existing) {
+    db.prepare("UPDATE chart_of_accounts SET libelle = ?, updatedAt = ? WHERE numero = ?").run(libelle, now, numero);
+  } else {
+    db.prepare(`
+      INSERT INTO chart_of_accounts
+        (numero, libelle, classe, type, nature, parentNumero, isAuxiliary, isLocked, createdAt, updatedAt)
+      VALUES (?, ?, 4, ?, 'detail', ?, 1, 0, ?, ?)
+    `).run(numero, libelle, parentNumero.startsWith("411") ? "actif" : "passif", parentNumero, now, now);
+  }
 }
 
 // ─── Numérotation d'écritures ──────────────────────────────────────────────
