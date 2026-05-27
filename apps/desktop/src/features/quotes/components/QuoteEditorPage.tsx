@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, Save, Trash2, Send, Check, X as XIcon, Info, FileText, Receipt, Mail,
-  MoreVertical,
+  MoreHorizontal, Download, Eye, Archive, Palette, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,10 +31,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PdfActions } from "@/features/pdf/PdfActions";
 import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
 import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
 import { QuotePdfClassique } from "@/features/pdf/QuotePdfClassique";
+import { usePdfActions, PDF_TEMPLATE_LABELS } from "@/features/pdf/usePdfActions";
+import { PdfPreviewPortal } from "@/features/pdf/PdfPreviewPortal";
 import {
   EMPTY_QUOTE, QUOTE_STATUS_META,
   type Quote, type QuoteStatus, type LineWorkType,
@@ -281,145 +282,24 @@ ${company?.companyName || ""}`;
                 </div>
               )}
             </div>
-            <div className="flex gap-2 shrink-0 flex-wrap items-center">
-              {existing && (
-                <>
-                  {/* PDF — visible partout (PdfActions est compact) */}
-                  {(() => {
-                    const c = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
-                    const co = company as Record<string, unknown>;
-                    return (
-                      <PdfActions
-                        templates={{
-                          modern: <QuotePdfDocument quote={existing} client={c} company={co} />,
-                          sobre: <QuotePdfMinimal quote={existing} client={c} company={co} />,
-                          classique: <QuotePdfClassique quote={existing} client={c} company={co} />,
-                        }}
-                        persistKey="quote-template"
-                        defaultTemplate="modern"
-                        fileName={`${existing.reference || "Devis"}.pdf`}
-                        vaultContext={{
-                          quoteId: existing.id,
-                          clientId: existing.clientId || undefined,
-                          chantierId: existing.chantierId || undefined,
-                          category: "generated_quote",
-                        }}
-                      />
-                    );
-                  })()}
-
-                  {/* Actions secondaires : visibles en md+, cachées sur mobile */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleOpenEmailModal}
-                    className="hidden md:inline-flex"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    Envoyer par email
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setConvertModalOpen(true)}
-                    className="hidden md:inline-flex"
-                  >
-                    <Receipt className="w-3.5 h-3.5" />
-                    Convertir en facture
-                  </Button>
-                  {existing.status === "brouillon" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleStatusChange("envoye")}
-                      className="hidden md:inline-flex"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      Marquer envoyé
-                    </Button>
-                  )}
-                  {existing.status === "envoye" && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleStatusChange("accepte")}
-                        className="hidden md:inline-flex"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        Accepté
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleStatusChange("refuse")}
-                        className="hidden md:inline-flex"
-                      >
-                        <XIcon className="w-3.5 h-3.5" />
-                        Refusé
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setConfirmDelete(true)}
-                    className="hidden md:inline-flex"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
-
-                  {/* Mobile : dropdown "..." regroupe toutes les actions secondaires */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="md:hidden h-9 w-9">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-56">
-                      <DropdownMenuItem onClick={handleOpenEmailModal}>
-                        <Mail className="w-4 h-4" />
-                        <span>Envoyer par email</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setConvertModalOpen(true)}>
-                        <Receipt className="w-4 h-4" />
-                        <span>Convertir en facture</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {existing.status === "brouillon" && (
-                        <DropdownMenuItem onClick={() => handleStatusChange("envoye")}>
-                          <Send className="w-4 h-4" />
-                          <span>Marquer envoyé</span>
-                        </DropdownMenuItem>
-                      )}
-                      {existing.status === "envoye" && (
-                        <>
-                          <DropdownMenuItem onClick={() => handleStatusChange("accepte")}>
-                            <Check className="w-4 h-4" />
-                            <span>Marquer accepté</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange("refuse")}>
-                            <XIcon className="w-4 h-4" />
-                            <span>Marquer refusé</span>
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => setConfirmDelete(true)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Supprimer</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
+            <div className="flex gap-2 shrink-0 items-center">
+              {existing ? (
+                <QuoteActionsToolbar
+                  quote={existing}
+                  company={company}
+                  onEmail={handleOpenEmailModal}
+                  onConvert={() => setConvertModalOpen(true)}
+                  onStatusChange={handleStatusChange}
+                  onDelete={() => setConfirmDelete(true)}
+                  onSave={handleSave}
+                  saving={saving}
+                />
+              ) : (
+                <Button onClick={handleSave} loading={saving} size="default" className="h-10">
+                  <Save className="w-4 h-4" />
+                  <span>Enregistrer</span>
+                </Button>
               )}
-              <Button onClick={handleSave} loading={saving} size="sm">
-                <Save className="w-4 h-4" />
-                <span className="hidden sm:inline">Enregistrer</span>
-              </Button>
             </div>
           </div>
         </div>
@@ -677,5 +557,182 @@ ${company?.companyName || ""}`;
         onDownload={handleDownloadPdf}
       />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QuoteActionsToolbar — barre d'actions unifiée du devis.
+//
+// Design : 2 actions principales visibles + 1 menu "..." qui regroupe tout
+// le reste. Compatible desktop + tablette + iPhone (touch targets ≥ 40px).
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface QuoteActionsToolbarProps {
+  quote: Quote;
+  company: Record<string, unknown>;
+  onEmail: () => void;
+  onConvert: () => void;
+  onStatusChange: (status: QuoteStatus) => void;
+  onDelete: () => void;
+  onSave: () => void;
+  saving: boolean;
+}
+
+function QuoteActionsToolbar({
+  quote, company, onEmail, onConvert, onStatusChange, onDelete, onSave, saving,
+}: QuoteActionsToolbarProps) {
+  const client = useClientsStore.getState().clients.find((c) => c.id === quote.clientId);
+  const fileName = `${quote.reference || "Devis"}.pdf`;
+
+  const pdf = usePdfActions({
+    templates: {
+      modern: <QuotePdfDocument quote={quote} client={client} company={company} />,
+      sobre: <QuotePdfMinimal quote={quote} client={client} company={company} />,
+      classique: <QuotePdfClassique quote={quote} client={client} company={company} />,
+    },
+    persistKey: "quote-template",
+    defaultTemplate: "modern",
+    fileName,
+    vaultContext: {
+      quoteId: quote.id,
+      clientId: quote.clientId || undefined,
+      chantierId: quote.chantierId || undefined,
+      category: "generated_quote",
+    },
+  });
+
+  return (
+    <>
+      {/* Bouton principal : Télécharger PDF (toujours visible) */}
+      <Button
+        onClick={pdf.handleDownload}
+        disabled={pdf.loading !== null || !pdf.activeDoc}
+        size="default"
+        className="h-10"
+      >
+        {pdf.loading === "download" ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Download className="w-4 h-4" />
+        )}
+        <span className="hidden sm:inline">Télécharger PDF</span>
+      </Button>
+
+      {/* Bouton Enregistrer */}
+      <Button
+        onClick={onSave}
+        loading={saving}
+        variant="outline"
+        size="default"
+        className="h-10"
+      >
+        <Save className="w-4 h-4" />
+        <span className="hidden sm:inline">Enregistrer</span>
+      </Button>
+
+      {/* Menu unifié pour tout le reste */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" className="h-10 w-10" title="Plus d'actions">
+            <MoreHorizontal className="w-4 h-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-64">
+          {/* Style PDF */}
+          {pdf.templateKeys.length > 1 && (
+            <>
+              <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                Style du PDF
+              </div>
+              {pdf.templateKeys.map((k) => (
+                <DropdownMenuItem
+                  key={k}
+                  onClick={() => pdf.setSelectedTemplate(k)}
+                  className={cn("pl-8", pdf.selectedTemplate === k && "font-medium")}
+                >
+                  {pdf.selectedTemplate === k && (
+                    <Check className="w-3.5 h-3.5 absolute left-2.5" />
+                  )}
+                  <Palette className={cn("w-4 h-4", pdf.selectedTemplate === k ? "text-primary" : "text-muted-foreground")} />
+                  <span>{PDF_TEMPLATE_LABELS[k] ?? k}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+            </>
+          )}
+
+          {/* Actions PDF */}
+          <DropdownMenuItem onClick={pdf.handlePreview} disabled={pdf.loading !== null}>
+            <Eye className="w-4 h-4" />
+            <span>Aperçu PDF</span>
+          </DropdownMenuItem>
+          {pdf.hasVault && (
+            <DropdownMenuItem
+              onClick={pdf.handleSaveToVault}
+              disabled={pdf.loading !== null || pdf.savedToVault}
+            >
+              {pdf.savedToVault ? (
+                <Check className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <Archive className="w-4 h-4" />
+              )}
+              <span>{pdf.savedToVault ? "Rangé au coffre" : "Ranger au coffre-fort"}</span>
+            </DropdownMenuItem>
+          )}
+
+          <DropdownMenuSeparator />
+
+          {/* Envoi / conversion */}
+          <DropdownMenuItem onClick={onEmail}>
+            <Mail className="w-4 h-4" />
+            <span>Envoyer par email</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onConvert}>
+            <Receipt className="w-4 h-4" />
+            <span>Convertir en facture</span>
+          </DropdownMenuItem>
+
+          {/* Changements de statut (conditionnels) */}
+          {(quote.status === "brouillon" || quote.status === "envoye") && (
+            <DropdownMenuSeparator />
+          )}
+          {quote.status === "brouillon" && (
+            <DropdownMenuItem onClick={() => onStatusChange("envoye")}>
+              <Send className="w-4 h-4" />
+              <span>Marquer envoyé</span>
+            </DropdownMenuItem>
+          )}
+          {quote.status === "envoye" && (
+            <>
+              <DropdownMenuItem onClick={() => onStatusChange("accepte")}>
+                <Check className="w-4 h-4 text-emerald-500" />
+                <span>Marquer accepté</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onStatusChange("refuse")}>
+                <XIcon className="w-4 h-4 text-rose-500" />
+                <span>Marquer refusé</span>
+              </DropdownMenuItem>
+            </>
+          )}
+
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Supprimer le devis</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Modal d'aperçu PDF (Portal) */}
+      <PdfPreviewPortal
+        previewUrl={pdf.previewUrl}
+        fileName={fileName}
+        onClose={pdf.closePreview}
+        onDownload={pdf.handleDownload}
+      />
+    </>
   );
 }

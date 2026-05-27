@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, Save, Trash2, Send, Mail, Bell,
-  CreditCard, FileText, AlertCircle, MoreVertical,
+  CreditCard, FileText, AlertCircle,
+  MoreHorizontal, Download, Eye, Archive, Palette, Loader2, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,7 +25,8 @@ import { QuoteTotalsPanel } from "@/features/quotes/components/QuoteTotalsPanel"
 import { PaymentModal } from "./PaymentModal";
 import { PaymentsHistory } from "./PaymentsHistory";
 import { SendInvoiceByEmailModal } from "./SendInvoiceByEmailModal";
-import { PdfActions } from "@/features/pdf/PdfActions";
+import { usePdfActions, PDF_TEMPLATE_LABELS } from "@/features/pdf/usePdfActions";
+import { PdfPreviewPortal } from "@/features/pdf/PdfPreviewPortal";
 import { InvoicePdfDocument } from "@/features/pdf/InvoicePdfDocument";
 import { InvoicePdfMinimal } from "@/features/pdf/InvoicePdfMinimal";
 import { InvoicePdfClassique } from "@/features/pdf/InvoicePdfClassique";
@@ -329,131 +331,26 @@ ${companyName}`,
               </p>
             </div>
           </div>
-          <div className="flex gap-2 shrink-0 flex-wrap items-center">
-            {existing && (
-              <>
-                {(() => {
-                  const c = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
-                  const co = company as Record<string, unknown>;
-                  return (
-                    <PdfActions
-                      templates={{
-                        modern: <InvoicePdfDocument invoice={existing} client={c} company={co} />,
-                        sobre: <InvoicePdfMinimal invoice={existing} client={c} company={co} />,
-                        classique: <InvoicePdfClassique invoice={existing} client={c} company={co} />,
-                      }}
-                      persistKey="invoice-template"
-                      defaultTemplate="modern"
-                      fileName={`${existing.reference || "Facture"}.pdf`}
-                      vaultContext={{
-                        invoiceId: existing.id,
-                        clientId: existing.clientId || undefined,
-                        chantierId: existing.chantierId || undefined,
-                        category: "generated_invoice",
-                      }}
-                    />
-                  );
-                })()}
-
-                {/* Actions desktop visibles, cachées sur mobile */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenEmailModal}
-                  className="hidden md:inline-flex"
-                >
-                  <Mail className="w-3.5 h-3.5" />
-                  Envoyer par email
-                </Button>
-                {(existing.status === "envoyee" || existing.status === "partiellement-payee") && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPaymentModalOpen(true)}
-                    className="hidden md:inline-flex"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    Enregistrer un paiement
-                  </Button>
-                )}
-                {overdue && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleOpenReminderModal}
-                    className="hidden md:inline-flex"
-                  >
-                    <Bell className="w-3.5 h-3.5 text-amber-500" />
-                    Envoyer une relance
-                  </Button>
-                )}
-                {existing.status === "brouillon" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleStatusChange("envoyee")}
-                    className="hidden md:inline-flex"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Marquer envoyée
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConfirmDelete(true)}
-                  className="hidden md:inline-flex"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                </Button>
-
-                {/* Mobile : dropdown "..." */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="md:hidden h-9 w-9">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-56">
-                    <DropdownMenuItem onClick={handleOpenEmailModal}>
-                      <Mail className="w-4 h-4" />
-                      <span>Envoyer par email</span>
-                    </DropdownMenuItem>
-                    {(existing.status === "envoyee" ||
-                      existing.status === "partiellement-payee") && (
-                      <DropdownMenuItem onClick={() => setPaymentModalOpen(true)}>
-                        <CreditCard className="w-4 h-4" />
-                        <span>Enregistrer un paiement</span>
-                      </DropdownMenuItem>
-                    )}
-                    {overdue && (
-                      <DropdownMenuItem onClick={handleOpenReminderModal}>
-                        <Bell className="w-4 h-4 text-amber-500" />
-                        <span>Envoyer une relance</span>
-                      </DropdownMenuItem>
-                    )}
-                    {existing.status === "brouillon" && (
-                      <DropdownMenuItem onClick={() => handleStatusChange("envoyee")}>
-                        <Send className="w-4 h-4" />
-                        <span>Marquer envoyée</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setConfirmDelete(true)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Supprimer</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+          <div className="flex gap-2 shrink-0 items-center">
+            {existing ? (
+              <InvoiceActionsToolbar
+                invoice={existing}
+                company={company}
+                overdue={overdue}
+                onEmail={handleOpenEmailModal}
+                onRecordPayment={() => setPaymentModalOpen(true)}
+                onSendReminder={handleOpenReminderModal}
+                onStatusChange={handleStatusChange}
+                onDelete={() => setConfirmDelete(true)}
+                onSave={handleSave}
+                saving={saving}
+              />
+            ) : (
+              <Button onClick={handleSave} loading={saving} size="default" className="h-10">
+                <Save className="w-4 h-4" />
+                <span>Enregistrer</span>
+              </Button>
             )}
-            <Button onClick={handleSave} loading={saving} size="sm">
-              <Save className="w-4 h-4" />
-              <span className="hidden sm:inline">Enregistrer</span>
-            </Button>
           </div>
         </div>
       </div>
@@ -706,5 +603,172 @@ ${companyName}`,
         onDownload={handleDownloadPdf}
       />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// InvoiceActionsToolbar — barre d'actions unifiée de la facture.
+// Design : 2 actions visibles + menu kebab pour tout le reste.
+// Mobile-friendly (touch ≥ 40px).
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface InvoiceActionsToolbarProps {
+  invoice: Invoice;
+  company: Record<string, unknown>;
+  overdue: boolean;
+  onEmail: () => void;
+  onRecordPayment: () => void;
+  onSendReminder: () => void;
+  onStatusChange: (status: InvoiceStatus) => void;
+  onDelete: () => void;
+  onSave: () => void;
+  saving: boolean;
+}
+
+function InvoiceActionsToolbar({
+  invoice, company, overdue,
+  onEmail, onRecordPayment, onSendReminder, onStatusChange, onDelete, onSave, saving,
+}: InvoiceActionsToolbarProps) {
+  const client = useClientsStore.getState().clients.find((c) => c.id === invoice.clientId);
+  const fileName = `${invoice.reference || "Facture"}.pdf`;
+
+  const pdf = usePdfActions({
+    templates: {
+      modern: <InvoicePdfDocument invoice={invoice} client={client} company={company} />,
+      sobre: <InvoicePdfMinimal invoice={invoice} client={client} company={company} />,
+      classique: <InvoicePdfClassique invoice={invoice} client={client} company={company} />,
+    },
+    persistKey: "invoice-template",
+    defaultTemplate: "modern",
+    fileName,
+    vaultContext: {
+      invoiceId: invoice.id,
+      clientId: invoice.clientId || undefined,
+      chantierId: invoice.chantierId || undefined,
+      category: "generated_invoice",
+    },
+  });
+
+  return (
+    <>
+      <Button
+        onClick={pdf.handleDownload}
+        disabled={pdf.loading !== null || !pdf.activeDoc}
+        size="default"
+        className="h-10"
+      >
+        {pdf.loading === "download" ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Download className="w-4 h-4" />
+        )}
+        <span className="hidden sm:inline">Télécharger PDF</span>
+      </Button>
+
+      <Button
+        onClick={onSave}
+        loading={saving}
+        variant="outline"
+        size="default"
+        className="h-10"
+      >
+        <Save className="w-4 h-4" />
+        <span className="hidden sm:inline">Enregistrer</span>
+      </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" className="h-10 w-10" title="Plus d'actions">
+            <MoreHorizontal className="w-4 h-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-64">
+          {pdf.templateKeys.length > 1 && (
+            <>
+              <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                Style du PDF
+              </div>
+              {pdf.templateKeys.map((k) => (
+                <DropdownMenuItem
+                  key={k}
+                  onClick={() => pdf.setSelectedTemplate(k)}
+                  className={cn(pdf.selectedTemplate === k && "font-medium")}
+                >
+                  <Palette className={cn("w-4 h-4", pdf.selectedTemplate === k ? "text-primary" : "text-muted-foreground")} />
+                  <span>{PDF_TEMPLATE_LABELS[k] ?? k}</span>
+                  {pdf.selectedTemplate === k && <Check className="w-3.5 h-3.5 ml-auto" />}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+            </>
+          )}
+
+          <DropdownMenuItem onClick={pdf.handlePreview} disabled={pdf.loading !== null}>
+            <Eye className="w-4 h-4" />
+            <span>Aperçu PDF</span>
+          </DropdownMenuItem>
+          {pdf.hasVault && (
+            <DropdownMenuItem
+              onClick={pdf.handleSaveToVault}
+              disabled={pdf.loading !== null || pdf.savedToVault}
+            >
+              {pdf.savedToVault ? (
+                <Check className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <Archive className="w-4 h-4" />
+              )}
+              <span>{pdf.savedToVault ? "Rangée au coffre" : "Ranger au coffre-fort"}</span>
+            </DropdownMenuItem>
+          )}
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem onClick={onEmail}>
+            <Mail className="w-4 h-4" />
+            <span>Envoyer par email</span>
+          </DropdownMenuItem>
+
+          {(invoice.status === "envoyee" || invoice.status === "partiellement-payee") && (
+            <DropdownMenuItem onClick={onRecordPayment}>
+              <CreditCard className="w-4 h-4" />
+              <span>Enregistrer un paiement</span>
+            </DropdownMenuItem>
+          )}
+
+          {overdue && (
+            <DropdownMenuItem onClick={onSendReminder}>
+              <Bell className="w-4 h-4 text-amber-500" />
+              <span>Envoyer une relance</span>
+            </DropdownMenuItem>
+          )}
+
+          {invoice.status === "brouillon" && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onStatusChange("envoyee")}>
+                <Send className="w-4 h-4" />
+                <span>Marquer envoyée</span>
+              </DropdownMenuItem>
+            </>
+          )}
+
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Supprimer la facture</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <PdfPreviewPortal
+        previewUrl={pdf.previewUrl}
+        fileName={fileName}
+        onClose={pdf.closePreview}
+        onDownload={pdf.handleDownload}
+      />
+    </>
   );
 }
