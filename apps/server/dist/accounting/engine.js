@@ -12,6 +12,8 @@ exports.generateInvoiceEntry = generateInvoiceEntry;
 exports.generateExpenseEntry = generateExpenseEntry;
 exports.generateInvoicePaymentEntry = generateInvoicePaymentEntry;
 exports.generateExpensePaymentEntry = generateExpensePaymentEntry;
+exports.generateExpenseNoteEntry = generateExpenseNoteEntry;
+exports.generateExpenseNoteRefundEntry = generateExpenseNoteRefundEntry;
 exports.regenerateAll = regenerateAll;
 exports.autoLettrerAccount = autoLettrerAccount;
 exports.autoLettrerAll = autoLettrerAll;
@@ -427,6 +429,85 @@ async function generateExpensePaymentEntry(db, expenseId) {
         }, lines);
     }
 }
+// ─── Notes de frais ──────────────────────────────────────────────────────
+//   - status 'validee'/'remboursee'/'refacturee' → écriture AC :
+//       6xx + 4456 D | 108 (dirigeant) ou 421 (employé) C
+//   - status 'remboursee' + reimbursedDate → écriture BQ :
+//       108/421 D | 512 C
+function payerCompte(payerType) {
+    return payerType === "employe" ? "421000" : "108000";
+}
+async function generateExpenseNoteEntry(db, noteId) {
+    if (!(await isAutoEnabled(db)))
+        return;
+    const [rows] = await db.query("SELECT * FROM expense_notes WHERE id = ?", [noteId]);
+    const note = rows[0];
+    if (!note)
+        return;
+    await deleteEntriesForSource(db, "expense_note", noteId);
+    if (note.status === "brouillon")
+        return;
+    const totalHt = round2(Number(note.amountHt));
+    const totalVat = round2(Number(note.amountVat));
+    const totalTtc = round2(Number(note.amountTtc));
+    if (totalTtc === 0)
+        return;
+    const date = ymd(note.expenseDate) || ymd(note.createdAt);
+    const pcgAccount = seed_1.CATEGORY_PCG[note.category] || "658000";
+    const payerAccount = payerCompte(note.payerType);
+    const payerLabel = note.payerName || (note.payerType === "employe" ? "Employé" : "Dirigeant");
+    const lines = [
+        { compteNum: pcgAccount, libelle: note.description || `Note de frais ${note.reference}`, debit: totalHt, credit: 0 },
+    ];
+    if (totalVat > 0) {
+        lines.push({ compteNum: "445660", libelle: `TVA déductible - ${note.reference}`, debit: totalVat, credit: 0 });
+    }
+    lines.push({
+        compteNum: payerAccount,
+        compAuxLib: payerLabel,
+        libelle: `Note de frais ${note.reference} - ${payerLabel}`,
+        debit: 0,
+        credit: totalTtc,
+    });
+    await insertEntry(db, {
+        journalCode: "AC",
+        date,
+        libelle: `Note de frais ${note.reference} - ${payerLabel}`,
+        pieceRef: note.reference,
+        pieceDate: date,
+        sourceType: "expense_note",
+        sourceId: noteId,
+    }, lines);
+}
+async function generateExpenseNoteRefundEntry(db, noteId) {
+    if (!(await isAutoEnabled(db)))
+        return;
+    const [rows] = await db.query("SELECT * FROM expense_notes WHERE id = ?", [noteId]);
+    const note = rows[0];
+    if (!note)
+        return;
+    await deleteEntriesForSource(db, "expense_note_refund", noteId);
+    if (note.status !== "remboursee" || !note.reimbursedDate)
+        return;
+    const amount = round2(Number(note.amountTtc));
+    if (amount === 0)
+        return;
+    const date = ymd(note.reimbursedDate);
+    const payerAccount = payerCompte(note.payerType);
+    const payerLabel = note.payerName || (note.payerType === "employe" ? "Employé" : "Dirigeant");
+    await insertEntry(db, {
+        journalCode: "BQ",
+        date,
+        libelle: `Remboursement note de frais ${note.reference} - ${payerLabel}`,
+        pieceRef: note.reference,
+        pieceDate: date,
+        sourceType: "expense_note_refund",
+        sourceId: noteId,
+    }, [
+        { compteNum: payerAccount, compAuxLib: payerLabel, libelle: `Remboursement ${note.reference}`, debit: amount, credit: 0 },
+        { compteNum: "512000", libelle: `Remboursement ${note.reference}`, debit: 0, credit: amount },
+    ]);
+}
 async function regenerateAll(db) {
     const result = {
         success: true,
@@ -434,11 +515,13 @@ async function regenerateAll(db) {
         expenses: 0,
         invoicePayments: 0,
         expensePayments: 0,
+        expenseNotes: 0,
+        expenseNoteRefunds: 0,
         errors: [],
     };
     // Purge écritures auto
     await db.query(`DELETE FROM journal_entries
-     WHERE sourceType IN ('invoice', 'expense', 'invoice_payment', 'expense_payment')
+     WHERE sourceType IN ('invoice', 'expense', 'invoice_payment', 'expense_payment', 'expense_note', 'expense_note_refund')
        AND isLocked = 0`);
     // Factures
     const [invRows] = await db.query("SELECT id FROM invoices WHERE status != 'brouillon' AND status != 'annulee' ORDER BY issueDate");
@@ -482,6 +565,28 @@ async function regenerateAll(db) {
         }
         catch (e) {
             result.errors.push(`Règlement dépense ${r.id}: ${e.message}`);
+        }
+    }
+    // Notes de frais
+    const [noteRows] = await db.query("SELECT id FROM expense_notes WHERE status IN ('validee', 'remboursee', 'refacturee') ORDER BY expenseDate");
+    for (const r of noteRows) {
+        try {
+            await generateExpenseNoteEntry(db, r.id);
+            result.expenseNotes++;
+        }
+        catch (e) {
+            result.errors.push(`Note de frais ${r.id}: ${e.message}`);
+        }
+    }
+    // Remboursements notes de frais
+    const [refRows] = await db.query("SELECT id FROM expense_notes WHERE status = 'remboursee' AND reimbursedDate != '' ORDER BY reimbursedDate");
+    for (const r of refRows) {
+        try {
+            await generateExpenseNoteRefundEntry(db, r.id);
+            result.expenseNoteRefunds++;
+        }
+        catch (e) {
+            result.errors.push(`Remboursement note ${r.id}: ${e.message}`);
         }
     }
     return result;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, FileText, ListChecks, TrendingUp, Scale, Calculator, Settings as SettingsIcon } from "lucide-react";
+import { BookOpen, FileText, ListChecks, TrendingUp, Scale, Calculator, Settings as SettingsIcon, Receipt } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@btp/ui";
 import { useAccountingStore } from "@/stores/accountingStore";
@@ -11,14 +11,15 @@ import { IncomeStatementView } from "./IncomeStatementView";
 import { BalanceSheetView } from "./BalanceSheetView";
 import { ChartOfAccountsView } from "./ChartOfAccountsView";
 import { AccountingSettingsView } from "./AccountingSettingsView";
+import { VatReportView } from "./VatReportView";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AccountingHubPage — Hub central de la comptabilité partie double
 //   Onglets : Livre Journal · Grand Livre · Balance · Compte Résultat · Bilan
-//           · Plan Comptable · Paramètres
+//           · TVA · Plan Comptable · Paramètres
 // ═══════════════════════════════════════════════════════════════════════════
 
-type TabId = "journal" | "grandLivre" | "balance" | "incomeStatement" | "balanceSheet" | "plan" | "settings";
+type TabId = "journal" | "grandLivre" | "balance" | "incomeStatement" | "balanceSheet" | "vat" | "plan" | "settings";
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "journal",         label: "Livre Journal",   icon: BookOpen },
@@ -26,6 +27,7 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: "balance",         label: "Balance",         icon: ListChecks },
   { id: "incomeStatement", label: "Compte de Résultat", icon: TrendingUp },
   { id: "balanceSheet",    label: "Bilan",           icon: Scale },
+  { id: "vat",             label: "TVA",             icon: Receipt },
   { id: "plan",            label: "Plan Comptable",  icon: Calculator },
   { id: "settings",        label: "Paramètres",      icon: SettingsIcon },
 ];
@@ -116,6 +118,7 @@ export function AccountingHubPage() {
             {activeTab === "balance" && <BalanceView />}
             {activeTab === "incomeStatement" && <IncomeStatementView />}
             {activeTab === "balanceSheet" && <BalanceSheetView />}
+            {activeTab === "vat" && <VatReportView />}
             {activeTab === "plan" && <ChartOfAccountsView />}
             {activeTab === "settings" && <AccountingSettingsView />}
           </>

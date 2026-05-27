@@ -270,6 +270,7 @@ contextBridge.exposeInMainWorld("btpAPI", {
   accountingGetBalance: (params) => ipcRenderer.invoke("accounting:getBalance", params || {}),
   accountingGetIncomeStatement: (params) => ipcRenderer.invoke("accounting:getIncomeStatement", params || {}),
   accountingGetBalanceSheet: (params) => ipcRenderer.invoke("accounting:getBalanceSheet", params || {}),
+  accountingGetVatReport: (period) => ipcRenderer.invoke("accounting:getVatReport", { period }),
   accountingEnsureClientAccount: (clientId) => ipcRenderer.invoke("accounting:ensureClientAccount", clientId),
   accountingEnsureSupplierAccount: (supplierId) => ipcRenderer.invoke("accounting:ensureSupplierAccount", supplierId),
 

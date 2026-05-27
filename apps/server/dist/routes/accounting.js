@@ -608,6 +608,110 @@ function buildAccountingRouter(db) {
             res.status(500).json({ error: e.message });
         }
     });
+    // ─── Rapport TVA ───────────────────────────────────────────────────────
+    // GET /api/accounting/vat-report?period=YYYY-MM | YYYY-Qn | YYYY
+    // Calcule TVA collectée (445710), TVA déductible (445660 + 445620) sur
+    // la période, et la TVA à décaisser (différence). Inclut détail par
+    // taux (heuristique : ratio TVA/base sur les écritures de classe 7).
+    router.get("/vat-report", async (req, res) => {
+        try {
+            const period = String(req.query.period || "");
+            let dateFrom = "";
+            let dateTo = "";
+            const year = parseInt(period.slice(0, 4), 10) || new Date().getFullYear();
+            if (/^\d{4}$/.test(period)) {
+                // Année entière
+                dateFrom = `${year}-01-01`;
+                dateTo = `${year}-12-31`;
+            }
+            else if (/^\d{4}-\d{2}$/.test(period)) {
+                // Mois
+                const mm = period.slice(5, 7);
+                const lastDay = new Date(year, parseInt(mm, 10), 0).getDate();
+                dateFrom = `${year}-${mm}-01`;
+                dateTo = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+            }
+            else if (/^\d{4}-Q[1-4]$/.test(period)) {
+                // Trimestre
+                const q = parseInt(period.slice(6), 10);
+                const fromMonth = (q - 1) * 3 + 1;
+                const toMonth = fromMonth + 2;
+                const lastDay = new Date(year, toMonth, 0).getDate();
+                dateFrom = `${year}-${String(fromMonth).padStart(2, "0")}-01`;
+                dateTo = `${year}-${String(toMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+            }
+            else {
+                return res.status(400).json({ error: "Format période invalide (YYYY, YYYY-MM ou YYYY-Qn)" });
+            }
+            // Somme des comptes TVA sur la période
+            const sumCompte = async (compte) => {
+                const [rows] = await db.query(`SELECT COALESCE(SUM(jl.debit), 0) AS d, COALESCE(SUM(jl.credit), 0) AS c
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl.entryId
+           WHERE jl.compteNum = ? AND je.\`date\` >= ? AND je.\`date\` <= ?`, [compte, dateFrom, dateTo]);
+                const r = rows[0];
+                return { debit: Number(r.d) || 0, credit: Number(r.c) || 0 };
+            };
+            const collectee = await sumCompte("445710"); // crédit = TVA due
+            const deductibleBiens = await sumCompte("445660"); // débit = TVA récupérable
+            const deductibleImmo = await sumCompte("445620");
+            const tvaCollectee = Math.max(0, collectee.credit - collectee.debit);
+            const tvaDeductibleBiens = Math.max(0, deductibleBiens.debit - deductibleBiens.credit);
+            const tvaDeductibleImmo = Math.max(0, deductibleImmo.debit - deductibleImmo.credit);
+            const tvaDeductible = tvaDeductibleBiens + tvaDeductibleImmo;
+            const tvaADecaisser = tvaCollectee - tvaDeductible;
+            // Détail par taux (heuristique : pour chaque écriture VE, on regarde
+            // la ligne 445710 et la ligne 706xxx pour calculer le taux)
+            const [byRateRows] = await db.query(`SELECT je.id AS entryId, je.date,
+                MAX(CASE WHEN jl.compteNum = '445710' THEN jl.credit - jl.debit END) AS tva,
+                MAX(CASE WHEN jl.compteNum LIKE '70%' THEN jl.credit - jl.debit END) AS base
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl.entryId = je.id
+         WHERE je.journalCode IN ('VE', 'BQ') AND je.\`date\` >= ? AND je.\`date\` <= ?
+         GROUP BY je.id, je.date
+         HAVING tva IS NOT NULL AND base IS NOT NULL AND base > 0`, [dateFrom, dateTo]);
+            const byRate = {};
+            for (const r of byRateRows) {
+                const rr = r;
+                const tva = Number(rr.tva) || 0;
+                const base = Number(rr.base) || 0;
+                if (base <= 0)
+                    continue;
+                const rateRaw = Math.round((tva / base) * 100 * 10) / 10;
+                const rateKey = Math.abs(rateRaw - 20) < 0.5 ? "20" :
+                    Math.abs(rateRaw - 10) < 0.5 ? "10" :
+                        Math.abs(rateRaw - 5.5) < 0.5 ? "5.5" :
+                            Math.abs(rateRaw - 2.1) < 0.5 ? "2.1" :
+                                String(rateRaw);
+                if (!byRate[rateKey])
+                    byRate[rateKey] = { base: 0, tva: 0 };
+                byRate[rateKey].base += base;
+                byRate[rateKey].tva += tva;
+            }
+            const byRateArr = Object.keys(byRate)
+                .sort((a, b) => Number(b) - Number(a))
+                .map((rate) => ({
+                rate,
+                base: Math.round(byRate[rate].base * 100) / 100,
+                tva: Math.round(byRate[rate].tva * 100) / 100,
+            }));
+            res.json({
+                period,
+                dateFrom,
+                dateTo,
+                tvaCollectee: Math.round(tvaCollectee * 100) / 100,
+                tvaDeductibleBiens: Math.round(tvaDeductibleBiens * 100) / 100,
+                tvaDeductibleImmo: Math.round(tvaDeductibleImmo * 100) / 100,
+                tvaDeductible: Math.round(tvaDeductible * 100) / 100,
+                tvaADecaisser: Math.round(tvaADecaisser * 100) / 100,
+                creditTvaAReporter: tvaADecaisser < 0 ? Math.abs(Math.round(tvaADecaisser * 100) / 100) : 0,
+                byRate: byRateArr,
+            });
+        }
+        catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
     // ─── Comptes auxiliaires (création à la volée) ─────────────────────────
     router.post("/ensure-client-account/:clientId", async (req, res) => {
         try {
@@ -844,5 +948,7 @@ exports.accountingHooks = {
     generateExpenseEntry: engine_1.generateExpenseEntry,
     generateInvoicePaymentEntry: engine_1.generateInvoicePaymentEntry,
     generateExpensePaymentEntry: engine_1.generateExpensePaymentEntry,
+    generateExpenseNoteEntry: engine_1.generateExpenseNoteEntry,
+    generateExpenseNoteRefundEntry: engine_1.generateExpenseNoteRefundEntry,
     deleteEntriesForSource: engine_1.deleteEntriesForSource,
 };

@@ -1254,6 +1254,19 @@ export function installBtpApiShim(): void {
         () => EMPTY_BALANCE_SHEET
       ),
 
+    accountingGetVatReport: (period: string) =>
+      httpGet(`/api/accounting/vat-report${buildQueryString({ period })}`).catch((e) => ({
+        error: e instanceof Error ? e.message : "Erreur",
+        period,
+        tvaCollectee: 0,
+        tvaDeductibleBiens: 0,
+        tvaDeductibleImmo: 0,
+        tvaDeductible: 0,
+        tvaADecaisser: 0,
+        creditTvaAReporter: 0,
+        byRate: [],
+      })),
+
     accountingEnsureClientAccount: (clientId: string) =>
       http("POST", `/api/accounting/ensure-client-account/${encodeURIComponent(clientId)}`)
         .then((r) => r as { success: boolean; numero?: string; error?: string })

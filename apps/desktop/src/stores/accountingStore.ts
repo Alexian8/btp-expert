@@ -11,6 +11,7 @@ import type {
   BalanceSheet,
   RegenerateResult,
   AccountingMode,
+  VatReport,
 } from "@btp/types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -52,12 +53,25 @@ interface AccountingState {
   getBalance: (params?: { year?: number; dateFrom?: string; dateTo?: string }) => Promise<BalanceRow[]>;
   getIncomeStatement: (params?: { year?: number; dateFrom?: string; dateTo?: string }) => Promise<IncomeStatement>;
   getBalanceSheet: (params?: { year?: number; asOfDate?: string }) => Promise<BalanceSheet>;
+  getVatReport: (period: string) => Promise<VatReport>;
 }
 
 const EMPTY_GRAND_LIVRE: GrandLivre = { compteNum: "", lines: [], totals: { debit: 0, credit: 0, solde: 0 } };
 const EMPTY_INCOME: IncomeStatement = { charges: [], produits: [], totalCharges: 0, totalProduits: 0, resultat: 0 };
 const EMPTY_BALANCE_SHEET: BalanceSheet = { actif: [], passif: [], totalActif: 0, totalPassif: 0, resultat: 0 };
 const EMPTY_REGEN: RegenerateResult = { success: false, invoices: 0, expenses: 0, invoicePayments: 0, expensePayments: 0, errors: [] };
+const EMPTY_VAT_REPORT: VatReport = {
+  period: "",
+  dateFrom: "",
+  dateTo: "",
+  tvaCollectee: 0,
+  tvaDeductibleBiens: 0,
+  tvaDeductibleImmo: 0,
+  tvaDeductible: 0,
+  tvaADecaisser: 0,
+  creditTvaAReporter: 0,
+  byRate: [],
+};
 
 export const useAccountingStore = create<AccountingState>((set, get) => ({
   settings: null,
@@ -228,5 +242,11 @@ export const useAccountingStore = create<AccountingState>((set, get) => ({
     if (!window.btpAPI?.accountingGetBalanceSheet) return EMPTY_BALANCE_SHEET;
     try { return await window.btpAPI.accountingGetBalanceSheet(params); }
     catch { return EMPTY_BALANCE_SHEET; }
+  },
+
+  getVatReport: async (period) => {
+    if (!window.btpAPI?.accountingGetVatReport) return { ...EMPTY_VAT_REPORT, period };
+    try { return await window.btpAPI.accountingGetVatReport(period); }
+    catch { return { ...EMPTY_VAT_REPORT, period }; }
   },
 }));

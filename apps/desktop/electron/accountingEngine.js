@@ -515,10 +515,19 @@ function getClientName(db, clientId) {
 // ─── Régénération massive (migration historique) ──────────────────────────
 
 function regenerateAll(db) {
-  const results = { invoices: 0, expenses: 0, invoicePayments: 0, expensePayments: 0, errors: [] };
+  const results = {
+    invoices: 0, expenses: 0,
+    invoicePayments: 0, expensePayments: 0,
+    expenseNotes: 0, expenseNoteRefunds: 0,
+    errors: [],
+  };
 
   // 1) Purge complète des écritures auto (on garde les manuelles)
-  const autoSources = ["invoice", "expense", "invoice_payment", "expense_payment"];
+  const autoSources = [
+    "invoice", "expense",
+    "invoice_payment", "expense_payment",
+    "expense_note", "expense_note_refund",
+  ];
   const placeholders = autoSources.map(() => "?").join(",");
   const oldIds = db.prepare(`SELECT id FROM journal_entries WHERE sourceType IN (${placeholders}) AND isLocked = 0`).all(...autoSources).map(r => r.id);
   if (oldIds.length) {
@@ -553,6 +562,20 @@ function regenerateAll(db) {
   for (const e of paidExpenses) {
     try { if (generateExpensePaymentEntry(db, e.id)) results.expensePayments++; }
     catch (err) { results.errors.push(`Règlement dépense ${e.id}: ${err.message}`); }
+  }
+
+  // 6) Notes de frais (validées ou remboursées)
+  const notes = db.prepare("SELECT id FROM expense_notes WHERE status IN ('validee', 'remboursee', 'refacturee') ORDER BY expenseDate").all();
+  for (const n of notes) {
+    try { if (generateExpenseNoteEntry(db, n.id)) results.expenseNotes++; }
+    catch (err) { results.errors.push(`Note de frais ${n.id}: ${err.message}`); }
+  }
+
+  // 7) Remboursements notes de frais
+  const refundedNotes = db.prepare("SELECT id FROM expense_notes WHERE status = 'remboursee' AND reimbursedDate != '' ORDER BY reimbursedDate").all();
+  for (const n of refundedNotes) {
+    try { if (generateExpenseNoteRefundEntry(db, n.id)) results.expenseNoteRefunds++; }
+    catch (err) { results.errors.push(`Remboursement note ${n.id}: ${err.message}`); }
   }
 
   return results;
@@ -633,12 +656,146 @@ function autoLettrerAll(db) {
   for (const a of accounts) autoLettrer(db, a.compAuxNum);
 }
 
+// ─── Notes de frais ────────────────────────────────────────────────────────
+//
+// Workflow comptable :
+//   - status 'validee' : la dépense devient effective. On enregistre la
+//     charge + TVA déductible côté débit, et la dette de l'entreprise vers
+//     le payeur côté crédit.
+//       Dirigeant   → 108 (Compte de l'exploitant)
+//       Employé     → 421 (Personnel - rémunérations dues)
+//   - status 'remboursee' : on solde la dette via la banque.
+//   - status 'refacturee' : pas d'écriture spécifique ici (la facture
+//     client générée portera ses propres écritures via generateInvoiceEntry).
+
+const CATEGORY_PCG_NOTE = {
+  materiaux: "601000",
+  outillage: "606300",
+  carburant: "606100",
+  vehicule: "615500",
+  sous_traitance: "611000",
+  loyer: "613200",
+  energie: "606100",
+  telecom: "626000",
+  assurance: "616000",
+  frais_bancaires: "627000",
+  honoraires: "622600",
+  fourniture: "606400",
+  repas: "625600",
+  deplacement: "625100",
+  formation: "628100",
+  logiciel: "651600",
+  publicite: "623000",
+  autre: "658000",
+};
+
+function payerCompte(payerType) {
+  // dirigeant → 108 (Compte de l'exploitant)
+  // employe   → 421 (Personnel - rémunérations dues)
+  if (payerType === "employe") return "421000";
+  return "108000";
+}
+
+function generateExpenseNoteEntry(db, noteId) {
+  if (!isAutoEnabled(db)) return null;
+  const note = db.prepare("SELECT * FROM expense_notes WHERE id = ?").get(noteId);
+  if (!note) return null;
+  deleteEntriesForSource(db, "expense_note", noteId);
+  // Brouillon ou refusée → pas d'écriture
+  if (note.status === "brouillon") return null;
+
+  const totalHt = round2(note.amountHt);
+  const totalVat = round2(note.amountVat);
+  const totalTtc = round2(note.amountTtc);
+  if (totalTtc === 0) return null;
+
+  const date = ymd(note.expenseDate) || ymd(note.createdAt);
+  const pcgAccount = CATEGORY_PCG_NOTE[note.category] || "658000";
+  const payerAccount = payerCompte(note.payerType);
+  const payerLabel = note.payerName || (note.payerType === "employe" ? "Employé" : "Dirigeant");
+
+  const lines = [
+    {
+      compteNum: pcgAccount,
+      libelle: note.description || `Note de frais ${note.reference}`,
+      debit: totalHt,
+      credit: 0,
+    },
+  ];
+  if (totalVat > 0) {
+    lines.push({
+      compteNum: "445660",
+      libelle: `TVA déductible - ${note.reference}`,
+      debit: totalVat,
+      credit: 0,
+    });
+  }
+  lines.push({
+    compteNum: payerAccount,
+    compAuxLib: payerLabel,
+    libelle: `Note de frais ${note.reference} - ${payerLabel}`,
+    debit: 0,
+    credit: totalTtc,
+  });
+
+  return insertEntry(db, {
+    journalCode: "AC",
+    date,
+    libelle: `Note de frais ${note.reference} - ${payerLabel}`,
+    pieceRef: note.reference,
+    pieceDate: date,
+    sourceType: "expense_note",
+    sourceId: noteId,
+  }, lines);
+}
+
+function generateExpenseNoteRefundEntry(db, noteId) {
+  if (!isAutoEnabled(db)) return null;
+  const note = db.prepare("SELECT * FROM expense_notes WHERE id = ?").get(noteId);
+  if (!note) return null;
+  deleteEntriesForSource(db, "expense_note_refund", noteId);
+  if (note.status !== "remboursee" || !note.reimbursedDate) return null;
+
+  const amount = round2(note.amountTtc);
+  if (amount === 0) return null;
+
+  const date = ymd(note.reimbursedDate);
+  const payerAccount = payerCompte(note.payerType);
+  const payerLabel = note.payerName || (note.payerType === "employe" ? "Employé" : "Dirigeant");
+
+  return insertEntry(db, {
+    journalCode: "BQ",
+    date,
+    libelle: `Remboursement note de frais ${note.reference} - ${payerLabel}`,
+    pieceRef: note.reference,
+    pieceDate: date,
+    sourceType: "expense_note_refund",
+    sourceId: noteId,
+  }, [
+    {
+      compteNum: payerAccount,
+      compAuxLib: payerLabel,
+      libelle: `Remboursement ${note.reference}`,
+      debit: amount,
+      credit: 0,
+    },
+    {
+      compteNum: "512000",
+      libelle: `Remboursement ${note.reference}`,
+      debit: 0,
+      credit: amount,
+    },
+  ]);
+}
+
 module.exports = {
   // génération
   generateInvoiceEntry,
   generateExpenseEntry,
   generateInvoicePaymentEntry,
   generateExpensePaymentEntry,
+  generateExpenseNoteEntry,
+  generateExpenseNoteRefundEntry,
   deleteEntriesForSource,
   regenerateAll,
   // lettrage

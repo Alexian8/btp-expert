@@ -8,6 +8,7 @@
 const { ipcMain, dialog } = require("electron");
 const fs = require("fs");
 const path = require("path");
+const engine = require("./accountingEngine");
 
 function generateId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -115,6 +116,12 @@ function init({ db, mainWindow }) {
         data.receiptVaultDocumentId || "",
         now, now
       );
+      try {
+        engine.generateExpenseNoteEntry(db, id);
+        if ((data.status || "brouillon") === "remboursee") {
+          engine.generateExpenseNoteRefundEntry(db, id);
+        }
+      } catch (err) { console.warn("[accounting hook expenseNotes:create]", err.message); }
       return { success: true, id, reference };
     } catch (e) {
       console.error("[expenseNotes:create]", e);
@@ -144,6 +151,10 @@ function init({ db, mainWindow }) {
         } else payload[k] = data[k] !== undefined ? data[k] : "";
       }
       db.prepare(`UPDATE expense_notes SET ${sets}, updatedAt = @updatedAt WHERE id = @id`).run(payload);
+      try {
+        engine.generateExpenseNoteEntry(db, id);
+        engine.generateExpenseNoteRefundEntry(db, id);
+      } catch (err) { console.warn("[accounting hook expenseNotes:update]", err.message); }
       return { success: true };
     } catch (e) {
       console.error("[expenseNotes:update]", e);
@@ -153,6 +164,10 @@ function init({ db, mainWindow }) {
 
   ipcMain.handle("expenseNotes:delete", (_e, id) => {
     try {
+      try {
+        engine.deleteEntriesForSource(db, "expense_note", id);
+        engine.deleteEntriesForSource(db, "expense_note_refund", id);
+      } catch (err) { console.warn("[accounting hook expenseNotes:delete]", err.message); }
       db.prepare("DELETE FROM expense_notes WHERE id = ?").run(id);
       return { success: true };
     } catch (e) {
@@ -166,6 +181,8 @@ function init({ db, mainWindow }) {
     try {
       db.prepare("UPDATE expense_notes SET status = 'validee', updatedAt = ? WHERE id = ?")
         .run(nowIso(), id);
+      try { engine.generateExpenseNoteEntry(db, id); }
+      catch (err) { console.warn("[accounting hook expenseNotes:validate]", err.message); }
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
@@ -180,6 +197,10 @@ function init({ db, mainWindow }) {
         SET status = 'remboursee', reimbursedDate = ?, updatedAt = ?
         WHERE id = ?
       `).run(today, nowIso(), id);
+      try {
+        engine.generateExpenseNoteEntry(db, id);
+        engine.generateExpenseNoteRefundEntry(db, id);
+      } catch (err) { console.warn("[accounting hook expenseNotes:markReimbursed]", err.message); }
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

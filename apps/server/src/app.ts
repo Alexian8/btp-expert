@@ -703,6 +703,18 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
           table: "expense_notes",
           referencePrefix: "NDF",
         }),
+        afterCreate: async (id) => {
+          await accountingHooks.generateExpenseNoteEntry(pool, id);
+          await accountingHooks.generateExpenseNoteRefundEntry(pool, id);
+        },
+        afterUpdate: async (id) => {
+          await accountingHooks.generateExpenseNoteEntry(pool, id);
+          await accountingHooks.generateExpenseNoteRefundEntry(pool, id);
+        },
+        afterDelete: async (id) => {
+          await accountingHooks.deleteEntriesForSource(pool, "expense_note", id);
+          await accountingHooks.deleteEntriesForSource(pool, "expense_note_refund", id);
+        },
       },
     })
   );

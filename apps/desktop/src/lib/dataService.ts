@@ -52,6 +52,7 @@ import type {
   IncomeStatement,
   BalanceSheet,
   RegenerateResult,
+  VatReport,
 } from "@btp/types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -331,6 +332,7 @@ declare global {
       accountingGetBalance: (params?: { year?: number; dateFrom?: string; dateTo?: string }) => Promise<BalanceRow[]>;
       accountingGetIncomeStatement: (params?: { year?: number; dateFrom?: string; dateTo?: string }) => Promise<IncomeStatement>;
       accountingGetBalanceSheet: (params?: { year?: number; asOfDate?: string }) => Promise<BalanceSheet>;
+      accountingGetVatReport: (period: string) => Promise<VatReport>;
       accountingEnsureClientAccount: (clientId: string) => Promise<{ success: boolean; numero?: string; error?: string }>;
       accountingEnsureSupplierAccount: (supplierId: string) => Promise<{ success: boolean; numero?: string; error?: string }>;
 

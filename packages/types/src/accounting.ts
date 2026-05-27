@@ -347,7 +347,29 @@ export interface RegenerateResult {
   expenses: number;
   invoicePayments: number;
   expensePayments: number;
+  expenseNotes?: number;
+  expenseNoteRefunds?: number;
   errors: string[];
+}
+
+export interface VatRateBreakdown {
+  rate: string;        // "20", "10", "5.5", "2.1", etc.
+  base: number;        // base HT taxée à ce taux
+  tva: number;         // TVA correspondante
+}
+
+export interface VatReport {
+  period: string;            // "2026" | "2026-04" | "2026-Q2"
+  dateFrom: string;          // YYYY-MM-DD
+  dateTo: string;            // YYYY-MM-DD
+  tvaCollectee: number;
+  tvaDeductibleBiens: number;
+  tvaDeductibleImmo: number;
+  tvaDeductible: number;     // somme des deux
+  tvaADecaisser: number;     // positif = à payer, 0 = neutre
+  creditTvaAReporter: number; // positif = crédit en faveur de l'entreprise
+  byRate: VatRateBreakdown[];
+  error?: string;
 }
 
 // ─── Libellés UI ──────────────────────────────────────────────────────────

@@ -592,6 +592,18 @@ async function createApp(cfg, db) {
                 table: "expense_notes",
                 referencePrefix: "NDF",
             }),
+            afterCreate: async (id) => {
+                await accounting_1.accountingHooks.generateExpenseNoteEntry(pool, id);
+                await accounting_1.accountingHooks.generateExpenseNoteRefundEntry(pool, id);
+            },
+            afterUpdate: async (id) => {
+                await accounting_1.accountingHooks.generateExpenseNoteEntry(pool, id);
+                await accounting_1.accountingHooks.generateExpenseNoteRefundEntry(pool, id);
+            },
+            afterDelete: async (id) => {
+                await accounting_1.accountingHooks.deleteEntriesForSource(pool, "expense_note", id);
+                await accounting_1.accountingHooks.deleteEntriesForSource(pool, "expense_note_refund", id);
+            },
         },
     }));
     // ─── Subcontractors ────────────────────────────────────────────────────
