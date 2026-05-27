@@ -683,6 +683,243 @@ export function buildAccountingRouter(db: Pool): Router {
     }
   });
 
+  // ─── Export FEC (Fichier des Écritures Comptables) ────────────────────
+  // Format normalisé DGFIP : 18 colonnes tab-séparées, UTF-8 BOM, CRLF.
+  // Réf : article A47 A-1 du LPF.
+  router.get("/export-fec", async (req, res) => {
+    try {
+      const year = Number(req.query.year) || new Date().getFullYear();
+      const yearStr = String(year);
+
+      // Récupère SIREN de la company
+      const [companyRows] = await db.query<RowDataPacket[]>(
+        "SELECT data FROM company WHERE id = 1"
+      );
+      let companyData: { siret?: string } = {};
+      try {
+        const raw = (companyRows[0] as { data?: string })?.data;
+        companyData = raw ? (typeof raw === "string" ? JSON.parse(raw) : raw) : {};
+      } catch {}
+      const siren = (companyData.siret || "").replace(/\s/g, "").slice(0, 9) || "999999999";
+
+      const headers = [
+        "JournalCode", "JournalLib", "EcritureNum", "EcritureDate",
+        "CompteNum", "CompteLib", "CompAuxNum", "CompAuxLib",
+        "PieceRef", "PieceDate", "EcritureLib",
+        "Debit", "Credit", "EcritureLet", "DateLet",
+        "ValidDate", "Montantdevise", "Idevise",
+      ];
+      const lines: string[] = [headers.join("\t")];
+
+      const fecDate = (iso: string): string => {
+        if (!iso) return "";
+        try {
+          const d = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return `${d.getFullYear()}${m}${day}`;
+        } catch { return ""; }
+      };
+      const fecAmount = (n: number): string =>
+        (Number(n) || 0).toFixed(2).replace(".", ",");
+      const fecEsc = (s: string | null | undefined): string =>
+        String(s || "").replace(/[\t\r\n|]/g, " ").trim();
+
+      // Stratégie : on utilise PRIORITAIREMENT les écritures persistées
+      // (journal_entries). Si la table est vide pour cette année, on retombe
+      // sur la génération à la volée (compatibilité avec les bases anciennes).
+      const [entryRows] = await db.query<RowDataPacket[]>(
+        `SELECT je.*, j.libelle AS journalLibelle
+         FROM journal_entries je
+         LEFT JOIN journals j ON j.code = je.journalCode
+         WHERE je.exerciceYear = ?
+         ORDER BY je.\`date\` ASC, je.journalCode ASC, je.numero ASC`,
+        [year]
+      );
+
+      if (entryRows.length > 0) {
+        const entries = entryRows as Array<{
+          id: string; journalCode: string; journalLibelle: string;
+          numero: number; date: string; dateValidation: string;
+          libelle: string; pieceRef: string; pieceDate: string;
+        }>;
+        const ids = entries.map((e) => e.id);
+        const placeholders = ids.map(() => "?").join(",");
+        const [lineRows] = await db.query<RowDataPacket[]>(
+          `SELECT * FROM journal_lines WHERE entryId IN (${placeholders}) ORDER BY entryId, ordre`,
+          ids
+        );
+        const linesByEntry: Record<string, Array<{
+          compteNum: string; compAuxNum: string; compAuxLib: string;
+          libelle: string; debit: number; credit: number;
+          lettrage: string; dateLettrage: string;
+        }>> = {};
+        for (const l of lineRows) {
+          const ll = l as { entryId: string } & Record<string, unknown>;
+          if (!linesByEntry[ll.entryId]) linesByEntry[ll.entryId] = [];
+          linesByEntry[ll.entryId].push(ll as never);
+        }
+
+        const compteLibCache: Record<string, string> = {};
+        const [accRows] = await db.query<RowDataPacket[]>(
+          "SELECT numero, libelle FROM chart_of_accounts"
+        );
+        for (const a of accRows) {
+          const aa = a as { numero: string; libelle: string };
+          compteLibCache[aa.numero] = aa.libelle;
+        }
+
+        for (const e of entries) {
+          const date = fecDate(e.date);
+          const validDate = fecDate(e.dateValidation || e.date);
+          const pieceDate = fecDate(e.pieceDate || e.date);
+          const journalLib = e.journalLibelle || e.journalCode;
+          const eLines = linesByEntry[e.id] || [];
+          for (const l of eLines) {
+            lines.push([
+              fecEsc(e.journalCode),
+              fecEsc(journalLib),
+              String(e.numero),
+              date,
+              fecEsc(l.compteNum),
+              fecEsc(compteLibCache[l.compteNum] || ""),
+              fecEsc(l.compAuxNum),
+              fecEsc(l.compAuxLib),
+              fecEsc(e.pieceRef),
+              pieceDate,
+              fecEsc(l.libelle || e.libelle),
+              fecAmount(Number(l.debit)),
+              fecAmount(Number(l.credit)),
+              fecEsc(l.lettrage),
+              fecDate(l.dateLettrage),
+              validDate,
+              "",
+              "",
+            ].join("\t"));
+          }
+        }
+      } else {
+        // Fallback : génération à la volée depuis invoices + expenses
+        // (pour les bases sans écritures persistées encore)
+        const CATEGORY_PCG_LOCAL: Record<string, string> = {
+          materiaux: "601000", outillage: "606300", carburant: "606100",
+          vehicule: "615500", sous_traitance: "611000", loyer: "613200",
+          energie: "606100", telecom: "626000", assurance: "616000",
+          frais_bancaires: "627000", honoraires: "622600", fourniture: "606400",
+          repas: "625600", deplacement: "625100", formation: "628100",
+          logiciel: "651600", publicite: "623000", autre: "658000",
+        };
+        const PCG_LABEL: Record<string, string> = {
+          materiaux: "Achats matériaux", outillage: "Petit outillage",
+          carburant: "Carburant", vehicule: "Entretien véhicules",
+          sous_traitance: "Sous-traitance", loyer: "Locations immobilières",
+          energie: "Eau-Gaz-Électricité", telecom: "Frais postaux et télécom",
+          assurance: "Primes d'assurance", frais_bancaires: "Services bancaires",
+          honoraires: "Honoraires", fourniture: "Fournitures",
+          repas: "Repas", deplacement: "Déplacements",
+          formation: "Formation", logiciel: "Cotisations logiciels",
+          publicite: "Publicité", autre: "Charges diverses",
+        };
+
+        const [invRows] = await db.query<RowDataPacket[]>(
+          `SELECT i.*, c.companyName, c.firstName, c.lastName, c.type AS clientType
+           FROM invoices i LEFT JOIN clients c ON c.id = i.clientId
+           WHERE SUBSTR(i.issueDate, 1, 4) = ? AND i.status != 'annulee'
+           ORDER BY i.issueDate, i.reference`,
+          [yearStr]
+        );
+        let num = 1;
+        for (const r of invRows) {
+          const inv = r as { reference: string; clientId: string; companyName?: string; firstName?: string; lastName?: string; clientType?: string; issueDate: string; totalTTC: number; totalHT: number; type?: string };
+          const date = fecDate(inv.issueDate);
+          const clientName =
+            inv.clientType === "pro" && inv.companyName
+              ? inv.companyName
+              : `${inv.firstName || ""} ${inv.lastName || ""}`.trim() || "Client";
+          const compAuxNum = "411" + (inv.clientId || "").slice(-4).padStart(4, "0");
+          const lib = `Facture ${inv.reference}`;
+          const totalTtc = Number(inv.totalTTC) || 0;
+          const totalHt = Number(inv.totalHT) || 0;
+          const totalVat = totalTtc - totalHt;
+          lines.push([
+            "VE", "Ventes", String(num), date,
+            compAuxNum, fecEsc(clientName), compAuxNum, fecEsc(clientName),
+            fecEsc(inv.reference), date, fecEsc(lib),
+            fecAmount(totalTtc), "0,00", "", "",
+            date, "", "",
+          ].join("\t"));
+          lines.push([
+            "VE", "Ventes", String(num), date,
+            "706000", "Prestations de services", "", "",
+            fecEsc(inv.reference), date, fecEsc(lib),
+            "0,00", fecAmount(totalHt), "", "",
+            date, "", "",
+          ].join("\t"));
+          if (totalVat > 0) {
+            lines.push([
+              "VE", "Ventes", String(num), date,
+              "445710", "TVA collectée", "", "",
+              fecEsc(inv.reference), date, fecEsc(lib),
+              "0,00", fecAmount(totalVat), "", "",
+              date, "", "",
+            ].join("\t"));
+          }
+          num++;
+        }
+
+        const [expRows] = await db.query<RowDataPacket[]>(
+          `SELECT * FROM expenses
+           WHERE SUBSTR(COALESCE(expenseDate, \`date\`, ''), 1, 4) = ? AND status != 'annulee'
+           ORDER BY expenseDate, reference`,
+          [yearStr]
+        );
+        for (const r of expRows) {
+          const exp = r as { reference: string; supplierId: string; supplierName: string; category: string; description: string; amountHt: number; amountVat: number; amountTtc: number; expenseDate: string; date?: string };
+          const date = fecDate(exp.expenseDate || exp.date || "");
+          const compAuxNum = "401" + (exp.supplierId || "").slice(-4).padStart(4, "0");
+          const supplier = exp.supplierName || "Fournisseur";
+          const lib = `Achat ${exp.reference}`;
+          const pcg = CATEGORY_PCG_LOCAL[exp.category] || "658000";
+          const totalHt = Number(exp.amountHt) || 0;
+          const totalVat = Number(exp.amountVat) || 0;
+          const totalTtc = Number(exp.amountTtc) || 0;
+          lines.push([
+            "AC", "Achats", String(num), date,
+            pcg, fecEsc(PCG_LABEL[exp.category] || "Charges diverses"), "", "",
+            fecEsc(exp.reference), date, fecEsc(lib),
+            fecAmount(totalHt), "0,00", "", "",
+            date, "", "",
+          ].join("\t"));
+          if (totalVat > 0) {
+            lines.push([
+              "AC", "Achats", String(num), date,
+              "445660", "TVA déductible", "", "",
+              fecEsc(exp.reference), date, fecEsc(lib),
+              fecAmount(totalVat), "0,00", "", "",
+              date, "", "",
+            ].join("\t"));
+          }
+          lines.push([
+            "AC", "Achats", String(num), date,
+            compAuxNum, fecEsc(supplier), compAuxNum, fecEsc(supplier),
+            fecEsc(exp.reference), date, fecEsc(lib),
+            "0,00", fecAmount(totalTtc), "", "",
+            date, "", "",
+          ].join("\t"));
+          num++;
+        }
+      }
+
+      const content = "﻿" + lines.join("\r\n") + "\r\n";
+      const filename = `${siren}FEC${year}1231.txt`;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(content);
+    } catch (e) {
+      res.status(500).json({ success: false, error: (e as Error).message });
+    }
+  });
+
   return router;
 }
 

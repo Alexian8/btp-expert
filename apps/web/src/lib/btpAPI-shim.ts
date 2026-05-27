@@ -1332,6 +1332,41 @@ export function installBtpApiShim(): void {
       )
         .then((r) => r as { success: boolean; numero?: string; error?: string })
         .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur" })),
+
+    // Export FEC : déclenche un téléchargement de fichier dans le navigateur
+    accountingExportFEC: async (year: number) => {
+      try {
+        const token = getToken();
+        const url = `/api/accounting/export-fec?year=${encodeURIComponent(String(year))}`;
+        const resp = await fetch(url, {
+          method: "GET",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) {
+          const msg = await resp.text().catch(() => "");
+          return { success: false, error: msg || `HTTP ${resp.status}` };
+        }
+        const blob = await resp.blob();
+        const text = await blob.text();
+        const lineCount = Math.max(0, text.split("\n").filter((l) => l.trim()).length - 1);
+        // Récupère le nom de fichier proposé
+        const cd = resp.headers.get("Content-Disposition") || "";
+        const m = cd.match(/filename="?([^"]+)"?/);
+        const filename = m ? m[1] : `FEC-${year}.txt`;
+        // Force le download via un lien temporaire
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        return { success: true, path: filename, lineCount };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
   };
 
   // ─── Expense notes (notes de frais) ────────────────────────────────────
@@ -1632,7 +1667,6 @@ export function installBtpApiShim(): void {
     "accountingGetTopClients",
     "accountingGetTopSuppliers",
     "accountingGetChantierMargins",
-    "accountingExportFEC",
     // Expense notes : stats & export uniquement (CRUD câblé au-dessus)
     "expenseNotesGetStats",
     "expenseNotesExportMonth",
