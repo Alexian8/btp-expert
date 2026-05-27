@@ -42,6 +42,16 @@ import type {
   DaactDeclaration,
   RgeDocument,
   AdministrativeDocsStats,
+  AccountingSettings,
+  Account,
+  Journal,
+  JournalEntry,
+  JournalLine,
+  GrandLivre,
+  BalanceRow,
+  IncomeStatement,
+  BalanceSheet,
+  RegenerateResult,
 } from "@btp/types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -300,6 +310,29 @@ declare global {
       accountingGetTopSuppliers: (limit?: number) => Promise<TopSupplier[]>;
       accountingGetChantierMargins: () => Promise<ChantierMargin[]>;
       accountingExportFEC: (year: number) => Promise<{ success: boolean; path?: string; cancelled?: boolean; invoicesCount?: number; expensesCount?: number; lineCount?: number; error?: string }>;
+
+      // Session 30 — Comptabilité partie double (plan comptable, écritures, livre journal)
+      accountingGetSettings: () => Promise<AccountingSettings | null>;
+      accountingUpdateSettings: (patch: Partial<AccountingSettings>) => Promise<{ success: boolean; error?: string }>;
+      accountingListAccounts: (filters?: { classe?: number; search?: string; parentNumero?: string }) => Promise<Account[]>;
+      accountingGetAccount: (numero: string) => Promise<Account | null>;
+      accountingCreateAccount: (data: Partial<Account>) => Promise<{ success: boolean; numero?: string; error?: string }>;
+      accountingUpdateAccount: (numero: string, data: Partial<Account>) => Promise<{ success: boolean; error?: string }>;
+      accountingDeleteAccount: (numero: string) => Promise<{ success: boolean; error?: string }>;
+      accountingListJournals: () => Promise<Journal[]>;
+      accountingListEntries: (filters?: { journalCode?: string; year?: number; dateFrom?: string; dateTo?: string; search?: string; limit?: number }) => Promise<JournalEntry[]>;
+      accountingGetEntry: (entryId: string) => Promise<JournalEntry | null>;
+      accountingCreateManualEntry: (data: { journalCode: string; date: string; libelle: string; pieceRef?: string; pieceDate?: string; lines: Partial<JournalLine>[] }) => Promise<{ success: boolean; id?: string; numero?: number; error?: string }>;
+      accountingDeleteEntry: (entryId: string) => Promise<{ success: boolean; error?: string }>;
+      accountingRegenerateAllEntries: () => Promise<RegenerateResult>;
+      accountingAutoLettrer: (compteAuxNum?: string) => Promise<{ success: boolean; error?: string }>;
+      accountingSetLettrage: (lineIds: string[], code: string) => Promise<{ success: boolean; error?: string }>;
+      accountingGetGrandLivre: (params: { compteNum: string; year?: number; dateFrom?: string; dateTo?: string }) => Promise<GrandLivre>;
+      accountingGetBalance: (params?: { year?: number; dateFrom?: string; dateTo?: string }) => Promise<BalanceRow[]>;
+      accountingGetIncomeStatement: (params?: { year?: number; dateFrom?: string; dateTo?: string }) => Promise<IncomeStatement>;
+      accountingGetBalanceSheet: (params?: { year?: number; asOfDate?: string }) => Promise<BalanceSheet>;
+      accountingEnsureClientAccount: (clientId: string) => Promise<{ success: boolean; numero?: string; error?: string }>;
+      accountingEnsureSupplierAccount: (supplierId: string) => Promise<{ success: boolean; numero?: string; error?: string }>;
 
       // Session 14 — Notes de frais
       expenseNotesList: (filters?: { status?: string; category?: string; payerType?: string; chantierId?: string; refacturable?: boolean; yearMonth?: string; year?: number }) => Promise<ExpenseNote[]>;

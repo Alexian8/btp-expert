@@ -186,3 +186,182 @@ export function getMonthLabel(yearMonth: string): string {
   const yy = (y || "").slice(2);
   return `${months[monthIdx] || "?"} ${yy}`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Session 30 — Comptabilité partie double : plan comptable, journaux, écritures
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type AccountingMode = "" | "engagement" | "tresorerie";
+export type VatRegime = "debits" | "encaissements";
+
+export interface AccountingSettings {
+  id: 1;
+  mode: AccountingMode;                  // "" = pas encore choisi (onboarding)
+  modeChosenAt: string;                  // ISO date du premier choix
+  exerciceStart: string;                 // "MM-DD" (ex "01-01")
+  fiscalYear: number;                    // année courante
+  lastLockedDate: string;                // date de dernière clôture (vide si jamais)
+  defaultVatRegime: VatRegime;
+  autoGenerateEntries: 0 | 1;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AccountType = "actif" | "passif" | "charge" | "produit" | "neutre";
+export type AccountNature = "centralisateur" | "detail" | "collectif";
+
+export interface Account {
+  numero: string;            // "411000", "401001"...
+  libelle: string;
+  classe: number;            // 1..7
+  type: AccountType;
+  nature: AccountNature;
+  parentNumero: string;
+  isAuxiliary: 0 | 1;
+  isLocked: 0 | 1;           // 1 = compte système non supprimable
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type JournalCode = "VE" | "AC" | "BQ" | "CA" | "OD" | "AN" | string;
+export type JournalType = "ventes" | "achats" | "banque" | "caisse" | "od" | "anouveaux";
+
+export interface Journal {
+  code: JournalCode;
+  libelle: string;
+  type: JournalType;
+  defaultCompte: string;
+  isLocked: 0 | 1;
+  createdAt: string;
+}
+
+export type EntrySourceType =
+  | "manual"
+  | "invoice"
+  | "expense"
+  | "invoice_payment"
+  | "expense_payment"
+  | "opening";          // à-nouveaux
+
+export interface JournalEntry {
+  id: string;
+  journalCode: JournalCode;
+  journalLibelle?: string;     // joint depuis journals
+  numero: number;               // numéro chronologique par journal+exercice
+  date: string;                 // YYYY-MM-DD
+  dateValidation: string;
+  libelle: string;
+  pieceRef: string;
+  pieceDate: string;
+  sourceType: EntrySourceType;
+  sourceId: string;
+  exerciceYear: number;
+  isLocked: 0 | 1;
+  isReversed: 0 | 1;
+  reversedById: string;
+  createdAt: string;
+  updatedAt: string;
+  lines?: JournalLine[];
+}
+
+export interface JournalLine {
+  id: string;
+  entryId: string;
+  compteNum: string;
+  compAuxNum: string;
+  compAuxLib: string;
+  libelle: string;
+  debit: number;
+  credit: number;
+  lettrage: string;             // "A", "B"... "" si non lettré
+  dateLettrage: string;
+  ordre: number;
+}
+
+// ─── Vues agrégées ────────────────────────────────────────────────────────
+
+export interface GrandLivreLine extends JournalLine {
+  journalCode: JournalCode;
+  entryNumero: number;
+  date: string;
+  pieceRef: string;
+  entryLibelle: string;
+  soldeProgressif: number;
+}
+
+export interface GrandLivre {
+  compteNum: string;
+  lines: GrandLivreLine[];
+  totals: {
+    debit: number;
+    credit: number;
+    solde: number;
+  };
+}
+
+export interface BalanceRow {
+  compteNum: string;
+  compAuxNum: string;
+  compAuxLib: string;
+  compteLibelle: string;
+  classe: number;
+  type: AccountType;
+  nature: AccountNature;
+  totalDebit: number;
+  totalCredit: number;
+  solde: number;
+}
+
+export interface IncomeStatementItem {
+  compteNum: string;
+  libelle: string;
+  montant: number;
+}
+
+export interface IncomeStatement {
+  charges: IncomeStatementItem[];
+  produits: IncomeStatementItem[];
+  totalCharges: number;
+  totalProduits: number;
+  resultat: number;        // produits - charges
+}
+
+export interface BalanceSheetItem {
+  compteNum: string;
+  libelle: string;
+  classe: number;
+  montant: number;
+}
+
+export interface BalanceSheet {
+  actif: BalanceSheetItem[];
+  passif: BalanceSheetItem[];
+  totalActif: number;
+  totalPassif: number;
+  resultat: number;
+}
+
+export interface RegenerateResult {
+  success: boolean;
+  invoices: number;
+  expenses: number;
+  invoicePayments: number;
+  expensePayments: number;
+  errors: string[];
+}
+
+// ─── Libellés UI ──────────────────────────────────────────────────────────
+
+export const JOURNAL_LABEL: Record<string, string> = {
+  VE: "Ventes",
+  AC: "Achats",
+  BQ: "Banque",
+  CA: "Caisse",
+  OD: "Opérations diverses",
+  AN: "À-nouveaux",
+};
+
+export const ACCOUNTING_MODE_LABEL: Record<Exclude<AccountingMode, "">, string> = {
+  engagement: "Comptabilité d'engagement",
+  tresorerie: "Comptabilité de trésorerie",
+};

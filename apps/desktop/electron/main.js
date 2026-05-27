@@ -747,6 +747,124 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_expenses_reference ON expenses(reference);
     `);
 
+    // ─── Session 30 : Comptabilité partie double ──────────────────────────
+    // Plan comptable + journaux + écritures débit/crédit
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chart_of_accounts (
+        numero TEXT PRIMARY KEY,
+        libelle TEXT NOT NULL DEFAULT '',
+        classe INTEGER NOT NULL DEFAULT 0,
+        type TEXT DEFAULT 'neutre',
+        nature TEXT DEFAULT 'detail',
+        parentNumero TEXT DEFAULT '',
+        isAuxiliary INTEGER DEFAULT 0,
+        isLocked INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_coa_classe ON chart_of_accounts(classe);
+      CREATE INDEX IF NOT EXISTS idx_coa_parent ON chart_of_accounts(parentNumero);
+
+      CREATE TABLE IF NOT EXISTS journals (
+        code TEXT PRIMARY KEY,
+        libelle TEXT NOT NULL DEFAULT '',
+        type TEXT DEFAULT 'od',
+        defaultCompte TEXT DEFAULT '',
+        isLocked INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS journal_entries (
+        id TEXT PRIMARY KEY,
+        journalCode TEXT NOT NULL,
+        numero INTEGER NOT NULL DEFAULT 1,
+        date TEXT NOT NULL,
+        dateValidation TEXT DEFAULT '',
+        libelle TEXT DEFAULT '',
+        pieceRef TEXT DEFAULT '',
+        pieceDate TEXT DEFAULT '',
+        sourceType TEXT DEFAULT 'manual',
+        sourceId TEXT DEFAULT '',
+        exerciceYear INTEGER NOT NULL,
+        isLocked INTEGER DEFAULT 0,
+        isReversed INTEGER DEFAULT 0,
+        reversedById TEXT DEFAULT '',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_je_journal ON journal_entries(journalCode);
+      CREATE INDEX IF NOT EXISTS idx_je_date ON journal_entries(date);
+      CREATE INDEX IF NOT EXISTS idx_je_source ON journal_entries(sourceType, sourceId);
+      CREATE INDEX IF NOT EXISTS idx_je_year ON journal_entries(exerciceYear);
+
+      CREATE TABLE IF NOT EXISTS journal_lines (
+        id TEXT PRIMARY KEY,
+        entryId TEXT NOT NULL,
+        compteNum TEXT NOT NULL,
+        compAuxNum TEXT DEFAULT '',
+        compAuxLib TEXT DEFAULT '',
+        libelle TEXT DEFAULT '',
+        debit REAL DEFAULT 0,
+        credit REAL DEFAULT 0,
+        lettrage TEXT DEFAULT '',
+        dateLettrage TEXT DEFAULT '',
+        ordre INTEGER DEFAULT 0,
+        FOREIGN KEY (entryId) REFERENCES journal_entries(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_jl_entry ON journal_lines(entryId);
+      CREATE INDEX IF NOT EXISTS idx_jl_compte ON journal_lines(compteNum);
+      CREATE INDEX IF NOT EXISTS idx_jl_compaux ON journal_lines(compAuxNum);
+      CREATE INDEX IF NOT EXISTS idx_jl_lettrage ON journal_lines(lettrage);
+
+      CREATE TABLE IF NOT EXISTS accounting_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        mode TEXT DEFAULT '',
+        modeChosenAt TEXT DEFAULT '',
+        exerciceStart TEXT DEFAULT '01-01',
+        fiscalYear INTEGER DEFAULT 0,
+        lastLockedDate TEXT DEFAULT '',
+        defaultVatRegime TEXT DEFAULT 'debits',
+        autoGenerateEntries INTEGER DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+
+    // Initialiser la ligne unique de paramètres si absente
+    try {
+      const exists = db.prepare("SELECT id FROM accounting_settings WHERE id = 1").get();
+      if (!exists) {
+        const now = new Date().toISOString();
+        db.prepare(`
+          INSERT INTO accounting_settings (id, mode, exerciceStart, fiscalYear, autoGenerateEntries, defaultVatRegime, createdAt, updatedAt)
+          VALUES (1, '', '01-01', ?, 1, 'debits', ?, ?)
+        `).run(new Date().getFullYear(), now, now);
+      }
+    } catch (e) {
+      console.warn("[accounting_settings init]", e.message);
+    }
+
+    // Migration : numéros de comptes auxiliaires sur clients & fournisseurs
+    addColIfMissing("clients", "accountNumber", "TEXT DEFAULT ''");
+    addColIfMissing("suppliers", "accountNumber", "TEXT DEFAULT ''");
+
+    // Seed du plan comptable + journaux si tables vides
+    try {
+      const { seedChartOfAccounts, seedJournals } = require("./chartOfAccountsSeed");
+      const accountsCount = db.prepare("SELECT COUNT(*) as n FROM chart_of_accounts").get().n;
+      if (accountsCount === 0) {
+        seedChartOfAccounts(db);
+        console.log("[seed] plan comptable inséré");
+      }
+      const journalsCount = db.prepare("SELECT COUNT(*) as n FROM journals").get().n;
+      if (journalsCount === 0) {
+        seedJournals(db);
+        console.log("[seed] journaux insérés");
+      }
+    } catch (e) {
+      console.warn("[seed accounting]", e.message);
+    }
+
     // ─── Session 14 : Notes de frais ──────────────────────────────────────
     db.exec(`
       CREATE TABLE IF NOT EXISTS expense_notes (
@@ -3540,6 +3658,8 @@ ipcMain.handle("invoices:create", (_e, data) => {
       createdAt: now,
       updatedAt: now,
     });
+    try { accountingEngine.generateInvoiceEntry(db, id); }
+    catch (err) { console.warn("[accounting hook invoices:create]", err.message); }
     return { success: true, id, reference };
   } catch (e) {
     console.error("[invoices:create]", e);
@@ -3563,6 +3683,8 @@ ipcMain.handle("invoices:update", (_e, { id, data }) => {
       }
     }
     db.prepare(`UPDATE invoices SET ${sets}, updatedAt = @updatedAt WHERE id = @id`).run(payload);
+    try { accountingEngine.generateInvoiceEntry(db, id); }
+    catch (err) { console.warn("[accounting hook invoices:update]", err.message); }
     return { success: true };
   } catch (e) {
     console.error("[invoices:update]", e);
@@ -3579,6 +3701,8 @@ ipcMain.handle("invoices:updateStatus", (_e, { id, status }) => {
 
     const sets = Object.keys(updates).map((k) => `${k} = @${k}`).join(", ");
     db.prepare(`UPDATE invoices SET ${sets} WHERE id = @id`).run({ ...updates, id });
+    try { accountingEngine.generateInvoiceEntry(db, id); }
+    catch (err) { console.warn("[accounting hook invoices:updateStatus]", err.message); }
     return { success: true };
   } catch (e) {
     console.error("[invoices:updateStatus]", e);
@@ -3588,6 +3712,11 @@ ipcMain.handle("invoices:updateStatus", (_e, { id, status }) => {
 
 ipcMain.handle("invoices:delete", (_e, id) => {
   try {
+    const pays = db.prepare("SELECT id FROM invoice_payments WHERE invoiceId = ?").all(id);
+    try {
+      accountingEngine.deleteEntriesForSource(db, "invoice", id);
+      for (const p of pays) accountingEngine.deleteEntriesForSource(db, "invoice_payment", p.id);
+    } catch (err) { console.warn("[accounting hook invoices:delete]", err.message); }
     db.prepare("DELETE FROM invoice_payments WHERE invoiceId = ?").run(id);
     db.prepare("DELETE FROM invoices WHERE id = ?").run(id);
     return { success: true };
@@ -3765,6 +3894,13 @@ ipcMain.handle("invoices:addPayment", (_e, payment) => {
       createdAt: now,
     });
     recomputeInvoiceTotalPaid(payment.invoiceId);
+    try {
+      accountingEngine.generateInvoicePaymentEntry(db, id);
+      // En mode trésorerie, l'écriture VE+BQ remplace toute écriture VE de la facture
+      // (qui n'existe de toute façon pas car non générée à l'émission).
+      // En mode engagement, on doit régénérer la VE pour s'assurer qu'elle existe.
+      accountingEngine.generateInvoiceEntry(db, payment.invoiceId);
+    } catch (err) { console.warn("[accounting hook invoices:addPayment]", err.message); }
     return { success: true, id };
   } catch (e) {
     console.error("[invoices:addPayment]", e);
@@ -3776,6 +3912,8 @@ ipcMain.handle("invoices:deletePayment", (_e, paymentId) => {
   try {
     const row = db.prepare("SELECT invoiceId FROM invoice_payments WHERE id = ?").get(paymentId);
     if (!row) return { success: false, error: "Paiement introuvable" };
+    try { accountingEngine.deleteEntriesForSource(db, "invoice_payment", paymentId); }
+    catch (err) { console.warn("[accounting hook invoices:deletePayment]", err.message); }
     db.prepare("DELETE FROM invoice_payments WHERE id = ?").run(paymentId);
     recomputeInvoiceTotalPaid(row.invoiceId);
     return { success: true };
@@ -5759,6 +5897,8 @@ const vaultModule = require("./vault");
 const agendaModule = require("./agenda");
 // Initialisation du module Comptabilité (Session 13)
 const accountingModule = require("./accounting");
+// Moteur compta partie double (Session 30) — utilisé pour hooks auto sur factures/paiements
+const accountingEngine = require("./accountingEngine");
 // Initialisation du module Notes de frais (Session 14)
 const expenseNotesModule = require("./expenseNotes");
 // Initialisation du module Sous-traitants (Session 15)
