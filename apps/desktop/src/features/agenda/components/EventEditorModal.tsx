@@ -356,7 +356,7 @@ export function EventEditorModal({ open, event, defaultDate, onClose, onSaved }:
                   id="chantier"
                   value={chantierId}
                   onChange={(e) => setChantierId(e.target.value)}
-                  className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                  className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                 >
                   <option value="">Aucun chantier</option>
                   {filteredChantiers.map((ch) => (

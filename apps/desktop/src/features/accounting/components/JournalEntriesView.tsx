@@ -84,7 +84,7 @@ export function JournalEntriesView() {
         <select
           value={filterJournal}
           onChange={(e) => setFilterJournal(e.target.value)}
-          className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          className="h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
         >
           <option value="">Tous les journaux</option>
           {journals.map((j: Journal) => (
@@ -95,7 +95,7 @@ export function JournalEntriesView() {
         <select
           value={filterYear}
           onChange={(e) => setFilterYear(Number(e.target.value))}
-          className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          className="h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
         >
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>

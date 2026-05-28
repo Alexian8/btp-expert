@@ -245,7 +245,7 @@ function AccountEditorModal({ open, editing, onClose, onSubmit }: AccountEditorM
                   <select
                     value={classe}
                     onChange={(e) => setClasse(Number(e.target.value))}
-                    className="mt-1 w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
+                    className="mt-1 w-full h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
                   >
                     {[1, 2, 3, 4, 5, 6, 7].map((c) => (
                       <option key={c} value={c}>{c} — {CLASS_LABEL[c]}</option>
@@ -257,7 +257,7 @@ function AccountEditorModal({ open, editing, onClose, onSubmit }: AccountEditorM
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value as Account["type"])}
-                    className="mt-1 w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
+                    className="mt-1 w-full h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
                   >
                     <option value="actif">Actif</option>
                     <option value="passif">Passif</option>
@@ -271,7 +271,7 @@ function AccountEditorModal({ open, editing, onClose, onSubmit }: AccountEditorM
                   <select
                     value={nature}
                     onChange={(e) => setNature(e.target.value as Account["nature"])}
-                    className="mt-1 w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
+                    className="mt-1 w-full h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
                   >
                     <option value="detail">Détail</option>
                     <option value="centralisateur">Centralisateur</option>

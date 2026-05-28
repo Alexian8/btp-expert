@@ -368,7 +368,7 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
                   <select
                     value={String(vatRate)}
                     onChange={(e) => setVatRate(parseFloat(e.target.value))}
-                    className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                    className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                   >
                     {VAT_RATES.map((rate) => (
                       <option key={rate} value={rate}>{rate}%</option>
@@ -462,7 +462,7 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                     >
                       {Object.entries(PAYMENT_METHOD_LABEL).map(([k, label]) => (
                         <option key={k} value={k}>{label}</option>
@@ -482,7 +482,7 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
                   id="chantier"
                   value={chantierId}
                   onChange={(e) => setChantierId(e.target.value)}
-                  className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                  className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                 >
                   <option value="">Aucun chantier</option>
                   {filteredChantiers.map((ch) => (

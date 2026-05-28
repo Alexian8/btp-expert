@@ -70,7 +70,7 @@ export function BalanceView() {
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          className="h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
         >
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>

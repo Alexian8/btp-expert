@@ -145,7 +145,7 @@ export function ManualEntryModal({ open, onClose, onCreated }: ManualEntryModalP
                   <select
                     value={journalCode}
                     onChange={(e) => setJournalCode(e.target.value)}
-                    className="mt-1 w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
+                    className="mt-1 w-full h-10 rounded-md border border-border bg-muted/50 px-3 text-sm"
                   >
                     {journals.map((j: Journal) => (
                       <option key={j.code} value={j.code}>{j.code} — {j.libelle}</option>

@@ -377,7 +377,7 @@ export function PurchaseOrderEditorPage() {
               <select
                 value={subcontractorId}
                 onChange={(e) => setSubcontractorId(e.target.value)}
-                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
               >
                 <option value="">Sélectionnez un sous-traitant</option>
                 {subcontractors.filter((s) => s.isActive).map((s) => (
@@ -390,7 +390,7 @@ export function PurchaseOrderEditorPage() {
               <select
                 value={chantierId}
                 onChange={(e) => setChantierId(e.target.value)}
-                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
               >
                 <option value="">Sélectionnez un chantier</option>
                 {chantiers.map((c) => (
@@ -444,7 +444,7 @@ export function PurchaseOrderEditorPage() {
               <select
                 value={paymentDelay}
                 onChange={(e) => setPaymentDelay(parseInt(e.target.value, 10))}
-                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
               >
                 <option value={30}>30 jours</option>
                 <option value={45}>45 jours</option>
@@ -456,7 +456,7 @@ export function PurchaseOrderEditorPage() {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as PurchaseOrderStatus)}
-                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
               >
                 {Object.entries(PO_STATUS_META).map(([k, m]) => (
                   <option key={k} value={k}>{m.label}</option>
@@ -505,7 +505,7 @@ export function PurchaseOrderEditorPage() {
                         <select
                           value={l.unit}
                           onChange={(e) => updateLine(idx, "unit", e.target.value)}
-                          className="h-9 w-full px-2 rounded-md border border-input bg-background text-sm"
+                          className="h-9 w-full px-2 rounded-md border border-input bg-muted/50 text-sm"
                         >
                           {COMMON_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
                         </select>
@@ -522,7 +522,7 @@ export function PurchaseOrderEditorPage() {
                         <select
                           value={String(l.vatRate)}
                           onChange={(e) => updateLine(idx, "vatRate", parseFloat(e.target.value))}
-                          className="h-9 w-full px-2 rounded-md border border-input bg-background text-sm"
+                          className="h-9 w-full px-2 rounded-md border border-input bg-muted/50 text-sm"
                         >
                           {VAT_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                         </select>

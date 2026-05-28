@@ -459,7 +459,7 @@ export function SubcontractorFormModal({ open, subcontractor, onClose, onSaved }
                     <select
                       value={String(defaultVatRate)}
                       onChange={(e) => setDefaultVatRate(parseFloat(e.target.value))}
-                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                     >
                       {[20, 10, 5.5, 2.1, 0].map((r) => (
                         <option key={r} value={r}>{r}%</option>

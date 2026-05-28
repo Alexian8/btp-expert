@@ -402,7 +402,7 @@ ${companyName}`,
                       update_("paymentTermsDays", preset.days);
                     }
                   }}
-                  className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                  className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                 >
                   {PAYMENT_TERM_PRESETS.map((p) => (
                     <option key={p.id} value={p.id}>{p.label}</option>

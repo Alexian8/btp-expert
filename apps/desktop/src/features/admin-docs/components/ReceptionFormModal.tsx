@@ -383,7 +383,7 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
                     <select
                       value={chantierId}
                       onChange={(e) => setChantierId(e.target.value)}
-                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                     >
                       <option value="">Sélectionnez un chantier</option>
                       {chantiers.map((c) => (
@@ -396,7 +396,7 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
                     <select
                       value={clientId}
                       onChange={(e) => setClientId(e.target.value)}
-                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      className="mt-1.5 w-full px-3 py-2 rounded-md border border-input bg-muted/50 text-sm"
                     >
                       <option value="">—</option>
                       {clients.map((c) => {
@@ -502,7 +502,7 @@ export function ReceptionFormModal({ open, reportId, onClose }: Props) {
                                 <select
                                   value={res.category}
                                   onChange={(e) => updateReserve(idx, "category", e.target.value)}
-                                  className="h-9 w-full px-2 rounded-md border border-input bg-background text-xs"
+                                  className="h-9 w-full px-2 rounded-md border border-input bg-muted/50 text-xs"
                                 >
                                   {RESERVE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                                 </select>

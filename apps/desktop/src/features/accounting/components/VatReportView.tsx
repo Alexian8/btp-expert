@@ -76,7 +76,7 @@ export function VatReportView() {
             <select
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+              className="h-9 rounded-md border border-border bg-muted/50 px-3 text-sm"
             >
               {monthLabels.map((label, i) => (
                 <option key={i} value={i + 1}>{label}</option>
@@ -87,7 +87,7 @@ export function VatReportView() {
             <select
               value={quarter}
               onChange={(e) => setQuarter(Number(e.target.value))}
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+              className="h-9 rounded-md border border-border bg-muted/50 px-3 text-sm"
             >
               <option value={1}>T1 (jan–mar)</option>
               <option value={2}>T2 (avr–juin)</option>
@@ -99,7 +99,7 @@ export function VatReportView() {
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+            className="h-9 rounded-md border border-border bg-muted/50 px-3 text-sm"
           >
             {years.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
