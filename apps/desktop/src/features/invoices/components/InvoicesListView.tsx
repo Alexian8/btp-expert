@@ -9,6 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { UserBadge } from "@/components/UserBadge";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useInvoicesStore } from "@/stores/invoicesStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import {
@@ -407,18 +415,11 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 // ─── InvoiceRowMenu : menu d'actions ⋯ pour chaque ligne (Session 20) ──────
 function InvoiceRowMenu({ invoiceId, reference }: { invoiceId: string; reference: string }) {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const removeInvoice = useInvoicesStore((s) => s.delete);
   const fetchInvoices = useInvoicesStore((s) => s.fetch);
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirming) {
-      setConfirming(true);
-      setTimeout(() => setConfirming(false), 4000);
-      return;
-    }
+  const handleDelete = async () => {
     const r = await removeInvoice(invoiceId);
     if (r.success) {
       toast.success(`Facture ${reference} supprimée`);
@@ -426,18 +427,15 @@ function InvoiceRowMenu({ invoiceId, reference }: { invoiceId: string; reference
     } else {
       toast.error(r.error || "Erreur lors de la suppression");
     }
-    setOpen(false);
-    setConfirming(false);
+    setConfirmDelete(false);
   };
 
-  const handleDuplicate = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDuplicate = async () => {
     if (!window.btpAPI) { toast.error("API non disponible"); return; }
     const r = await window.btpAPI.invoicesDuplicate(invoiceId);
     if (r.success && r.id) {
       toast.success(`Facture dupliquée (${r.reference})`);
       await fetchInvoices();
-      setOpen(false);
       navigate(`/invoices/${r.id}`);
     } else {
       toast.error(r.error || "Erreur lors de la duplication");
@@ -445,45 +443,41 @@ function InvoiceRowMenu({ invoiceId, reference }: { invoiceId: string; reference
   };
 
   return (
-    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="p-2 rounded-md border border-border bg-background hover:bg-accent text-foreground transition-colors"
-        title="Actions"
-      >
-        <MoreHorizontal className="w-4 h-4" strokeWidth={2.5} />
-      </button>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="p-2 rounded-md border border-border bg-background hover:bg-accent text-foreground transition-colors"
+            title="Actions"
+          >
+            <MoreHorizontal className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          <DropdownMenuItem onClick={handleDuplicate}>
+            <Copy className="w-4 h-4" />
+            <span>Dupliquer</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setConfirmDelete(true)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Supprimer</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => { setOpen(false); setConfirming(false); }}
-          />
-          <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-md shadow-soft-lg py-1 min-w-[180px]">
-            <button
-              onClick={handleDuplicate}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors hover:bg-accent"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Dupliquer
-            </button>
-            <div className="my-1 border-t border-border" />
-            <button
-              onClick={handleDelete}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors",
-                confirming
-                  ? "bg-red-500/10 text-red-600 hover:bg-red-500/15"
-                  : "hover:bg-accent text-destructive"
-              )}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              {confirming ? "Confirmer la suppression ?" : "Supprimer"}
-            </button>
-          </div>
-        </>
-      )}
+      <ConfirmDialog
+        open={confirmDelete}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        title="Supprimer cette facture ?"
+        description={<span>La facture <strong>{reference}</strong> sera définitivement supprimée. Cette action est irréversible.</span>}
+        destructive
+        confirmLabel="Supprimer"
+      />
     </div>
   );
 }

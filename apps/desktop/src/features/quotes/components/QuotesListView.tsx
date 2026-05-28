@@ -12,6 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { UserBadge } from "@/components/UserBadge";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useQuotesStore } from "@/stores/quotesStore";
 import { useClientsStore } from "@/stores/clientsStore";
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, type QuoteStatus } from "@btp/types";
@@ -299,20 +307,13 @@ function formatDate(iso: string): string {
 // ─── RowMenu : menu d'actions ⋯ pour chaque ligne (Session 20) ─────────────
 function RowMenu({ quoteId, reference }: { quoteId: string; reference: string }) {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
   const [convertInvoiceOpen, setConvertInvoiceOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const removeQuote = useQuotesStore((s) => s.delete);
   const fetchQuotes = useQuotesStore((s) => s.fetch);
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirming) {
-      setConfirming(true);
-      setTimeout(() => setConfirming(false), 4000);
-      return;
-    }
+  const handleDelete = async () => {
     const r = await removeQuote(quoteId);
     if (r.success) {
       toast.success(`Devis ${reference} supprimé`);
@@ -320,18 +321,15 @@ function RowMenu({ quoteId, reference }: { quoteId: string; reference: string })
     } else {
       toast.error(r.error || "Erreur lors de la suppression");
     }
-    setOpen(false);
-    setConfirming(false);
+    setConfirmDelete(false);
   };
 
-  const handleDuplicate = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDuplicate = async () => {
     if (!window.btpAPI) { toast.error("API non disponible"); return; }
     const r = await window.btpAPI.quotesDuplicate(quoteId);
     if (r.success && r.id) {
       toast.success(`Devis dupliqué (${r.reference})`);
       await fetchQuotes();
-      setOpen(false);
       navigate(`/quotes/${r.id}`);
     } else {
       toast.error(r.error || "Erreur lors de la duplication");
@@ -339,60 +337,39 @@ function RowMenu({ quoteId, reference }: { quoteId: string; reference: string })
   };
 
   return (
-    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="p-2 rounded-md border border-border bg-background hover:bg-accent text-foreground transition-colors"
-        title="Actions"
-      >
-        <MoreHorizontal className="w-4 h-4" strokeWidth={2.5} />
-      </button>
-
-      {open && (
-        <>
-          {/* Click-outside */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => { setOpen(false); setConfirming(false); }}
-          />
-          <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-md shadow-soft-lg py-1 min-w-[200px]">
-            <button
-              onClick={handleDuplicate}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors hover:bg-accent"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Dupliquer
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setOpen(false); setConvertInvoiceOpen(true); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors hover:bg-accent"
-            >
-              <Receipt className="w-3.5 h-3.5" />
-              Convertir en facture
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setOpen(false); setConvertOpen(true); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors hover:bg-accent"
-            >
-              <Hammer className="w-3.5 h-3.5" />
-              Convertir en BdC sous-traitant
-            </button>
-            <div className="my-1 border-t border-border" />
-            <button
-              onClick={handleDelete}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors",
-                confirming
-                  ? "bg-red-500/10 text-red-600 hover:bg-red-500/15"
-                  : "hover:bg-accent text-destructive"
-              )}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              {confirming ? "Confirmer la suppression ?" : "Supprimer"}
-            </button>
-          </div>
-        </>
-      )}
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="p-2 rounded-md border border-border bg-background hover:bg-accent text-foreground transition-colors"
+            title="Actions"
+          >
+            <MoreHorizontal className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          <DropdownMenuItem onClick={handleDuplicate}>
+            <Copy className="w-4 h-4" />
+            <span>Dupliquer</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setConvertInvoiceOpen(true)}>
+            <Receipt className="w-4 h-4" />
+            <span>Convertir en facture</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setConvertOpen(true)}>
+            <Hammer className="w-4 h-4" />
+            <span>Convertir en BdC sous-traitant</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setConfirmDelete(true)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Supprimer</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <ConvertQuoteToPoModal
         open={convertOpen}
@@ -404,6 +381,15 @@ function RowMenu({ quoteId, reference }: { quoteId: string; reference: string })
         open={convertInvoiceOpen}
         quoteId={quoteId}
         onClose={() => setConvertInvoiceOpen(false)}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        title="Supprimer ce devis ?"
+        description={<span>Le devis <strong>{reference}</strong> sera définitivement supprimé. Cette action est irréversible.</span>}
+        destructive
+        confirmLabel="Supprimer"
       />
     </div>
   );
