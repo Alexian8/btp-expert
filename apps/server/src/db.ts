@@ -991,6 +991,29 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
   await addColumnIfNotExists(db, "expenses", "status", "VARCHAR(16) DEFAULT 'a_payer'");
   await addColumnIfNotExists(db, "expenses", "receiptVaultDocumentId", "VARCHAR(64) DEFAULT ''");
 
+  // Session 31 : dépenses & notes de frais enrichies (justificatif, n° facture
+  // fournisseur, n° transaction Qonto, mode de paiement détaillé)
+  await addColumnIfNotExists(db, "expenses", "supplierInvoiceNumber", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "expenses", "bankTransactionId", "VARCHAR(64) DEFAULT ''");
+  // Alignement schéma expense_notes serveur sur le desktop (legacy = label/amount)
+  await addColumnIfNotExists(db, "expense_notes", "reference", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "payerType", "VARCHAR(32) DEFAULT 'dirigeant'");
+  await addColumnIfNotExists(db, "expense_notes", "payerName", "VARCHAR(255) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "amountTtc", "DECIMAL(15,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expense_notes", "amountHt", "DECIMAL(15,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expense_notes", "amountVat", "DECIMAL(15,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expense_notes", "vatRate", "DECIMAL(5,2) DEFAULT 20");
+  await addColumnIfNotExists(db, "expense_notes", "description", "VARCHAR(500) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "expenseDate", "VARCHAR(32) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "refacturable", "TINYINT(1) DEFAULT 0");
+  await addColumnIfNotExists(db, "expense_notes", "refacturationMargePct", "DECIMAL(5,2) DEFAULT 0");
+  await addColumnIfNotExists(db, "expense_notes", "status", "VARCHAR(16) DEFAULT 'brouillon'");
+  await addColumnIfNotExists(db, "expense_notes", "refacturedInvoiceId", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "paymentMethod", "VARCHAR(32) DEFAULT 'personnel'");
+  await addColumnIfNotExists(db, "expense_notes", "bankTransactionId", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "supplierInvoiceNumber", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "expense_notes", "receiptVaultDocumentId", "VARCHAR(64) DEFAULT ''");
+
   // Comptes auxiliaires sur clients & fournisseurs (411xxx / 401xxx)
   await addColumnIfNotExists(db, "clients", "accountNumber", "VARCHAR(16) DEFAULT ''");
   await addColumnIfNotExists(db, "suppliers", "accountNumber", "VARCHAR(16) DEFAULT ''");

@@ -93,8 +93,9 @@ function init({ db, mainWindow }) {
           refacturable, refacturationMargePct,
           status, reimbursedDate, refacturedInvoiceId,
           receiptVaultDocumentId,
+          paymentMethod, bankTransactionId, supplierInvoiceNumber,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, reference,
         data.payerType || "dirigeant",
@@ -114,6 +115,9 @@ function init({ db, mainWindow }) {
         data.reimbursedDate || "",
         data.refacturedInvoiceId || "",
         data.receiptVaultDocumentId || "",
+        data.paymentMethod || "personnel",
+        data.bankTransactionId || "",
+        data.supplierInvoiceNumber || "",
         now, now
       );
       try {
@@ -139,6 +143,7 @@ function init({ db, mainWindow }) {
         "refacturable", "refacturationMargePct",
         "status", "reimbursedDate", "refacturedInvoiceId",
         "receiptVaultDocumentId",
+        "paymentMethod", "bankTransactionId", "supplierInvoiceNumber",
       ];
       const keys = Object.keys(data).filter(k => allowed.includes(k));
       if (keys.length === 0) return { success: true };

@@ -59,6 +59,8 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
 
   const [receiptVaultDocumentId, setReceiptVaultDocumentId] = useState("");
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
+  const [bankTransactionId, setBankTransactionId] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -84,6 +86,8 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
       setStatus(expense.status);
       setPaymentMethod(expense.paymentMethod);
       setReceiptVaultDocumentId(expense.receiptVaultDocumentId);
+      setSupplierInvoiceNumber(expense.supplierInvoiceNumber || "");
+      setBankTransactionId(expense.bankTransactionId || "");
     } else {
       // Reset pour création
       setSupplierId("");
@@ -101,6 +105,8 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
       setStatus("a_payer");
       setPaymentMethod("cb");
       setReceiptVaultDocumentId("");
+      setSupplierInvoiceNumber("");
+      setBankTransactionId("");
     }
     setConfirmDelete(false);
   }, [open, expense?.id]);
@@ -138,6 +144,8 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
       status,
       paymentMethod,
       receiptVaultDocumentId,
+      supplierInvoiceNumber: supplierInvoiceNumber.trim(),
+      bankTransactionId: bankTransactionId.trim(),
     };
 
     setSaving(true);
@@ -307,11 +315,39 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
                 <Label htmlFor="desc">Description</Label>
                 <Input
                   id="desc"
+                  smart
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Ex: Carrelage chantier Dupont"
                   className="mt-1.5"
                 />
+              </div>
+
+              {/* N° facture fournisseur + n° transaction bancaire */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="supInv">N° facture fournisseur</Label>
+                  <Input
+                    id="supInv"
+                    value={supplierInvoiceNumber}
+                    onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+                    placeholder="Ex: FA-2024-0512"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bankTx" className="flex items-center gap-1.5">
+                    N° transaction
+                    <span className="text-[10px] text-muted-foreground">(banque/Qonto)</span>
+                  </Label>
+                  <Input
+                    id="bankTx"
+                    value={bankTransactionId}
+                    onChange={(e) => setBankTransactionId(e.target.value)}
+                    placeholder="Réf. du paiement bancaire"
+                    className="mt-1.5"
+                  />
+                </div>
               </div>
 
               {/* Catégorie */}

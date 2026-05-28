@@ -16,9 +16,8 @@ import { QuoteEditorPage } from "@/features/quotes/components/QuoteEditorPage";
 import { InvoiceEditorPage } from "@/features/invoices/components/InvoiceEditorPage";
 import { VaultPage } from "@/features/vault/components/VaultPage";
 import { AgendaPage } from "@/features/agenda/components/AgendaPage";
-import { ExpensesPage } from "@/features/expenses/components/ExpensesPage";
+import { ExpensesHubPage } from "@/features/expenses/components/ExpensesHubPage";
 import { FinancesPage } from "@/features/finances/components/FinancesPage";
-import { ExpenseNotesPage } from "@/features/expense-notes/components/ExpenseNotesPage";
 import { SubcontractorsPage } from "@/features/subcontractors/components/SubcontractorsPage";
 import { SubcontractorDetailPage } from "@/features/subcontractors/components/SubcontractorDetailPage";
 import { PurchaseOrdersPage } from "@/features/purchase-orders/components/PurchaseOrdersPage";
@@ -186,11 +185,12 @@ const router = createBrowserRouter(
         },
         {
           path: "expenses",
-          element: <ExpensesPage />,
+          element: <ExpensesHubPage />,
         },
         {
+          // Ancienne route notes de frais → fusionnée dans "Dépenses & frais"
           path: "expense-notes",
-          element: <ExpenseNotesPage />,
+          element: <Navigate to="/expenses" replace />,
         },
         {
           path: "finances",

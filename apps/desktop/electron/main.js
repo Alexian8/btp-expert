@@ -848,6 +848,14 @@ async function initDB() {
     addColIfMissing("clients", "accountNumber", "TEXT DEFAULT ''");
     addColIfMissing("suppliers", "accountNumber", "TEXT DEFAULT ''");
 
+    // Session 31 : dépenses & notes de frais enrichies (justificatif, n° facture
+    // fournisseur, n° transaction bancaire Qonto, mode de paiement détaillé)
+    addColIfMissing("expenses", "supplierInvoiceNumber", "TEXT DEFAULT ''");
+    addColIfMissing("expenses", "bankTransactionId", "TEXT DEFAULT ''");
+    addColIfMissing("expense_notes", "bankTransactionId", "TEXT DEFAULT ''");
+    addColIfMissing("expense_notes", "paymentMethod", "TEXT DEFAULT 'personnel'");
+    addColIfMissing("expense_notes", "supplierInvoiceNumber", "TEXT DEFAULT ''");
+
     // Seed du plan comptable + journaux si tables vides
     try {
       const { seedChartOfAccounts, seedJournals } = require("./chartOfAccountsSeed");

@@ -70,6 +70,11 @@ export interface ExpenseNote {
   // Justificatif
   receiptVaultDocumentId: string;
 
+  // Session 31 — paiement & rapprochement bancaire
+  paymentMethod?: string;           // personnel / cb / virement / especes...
+  bankTransactionId?: string;       // id transaction bancaire (Qonto)
+  supplierInvoiceNumber?: string;   // n° du justificatif / facture
+
   // Métadonnées
   createdAt: string;
   updatedAt: string;

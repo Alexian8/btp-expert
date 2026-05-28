@@ -104,8 +104,9 @@ function init({ db, mainWindow }) {
           category, description, notes,
           expenseDate, dueDate, paidDate,
           status, paymentMethod, receiptVaultDocumentId,
+          supplierInvoiceNumber, bankTransactionId,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, reference,
         data.supplierId || "",
@@ -124,6 +125,8 @@ function init({ db, mainWindow }) {
         data.status || "a_payer",
         data.paymentMethod || "cb",
         data.receiptVaultDocumentId || "",
+        data.supplierInvoiceNumber || "",
+        data.bankTransactionId || "",
         now, now
       );
       try {
@@ -145,6 +148,7 @@ function init({ db, mainWindow }) {
         "category", "description", "notes",
         "expenseDate", "dueDate", "paidDate",
         "status", "paymentMethod", "receiptVaultDocumentId",
+        "supplierInvoiceNumber", "bankTransactionId",
       ];
       const keys = Object.keys(data).filter(k => allowedKeys.includes(k));
       if (keys.length === 0) return { success: true };

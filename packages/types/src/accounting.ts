@@ -67,6 +67,10 @@ export interface Expense {
   // Justificatif (auto vault)
   receiptVaultDocumentId: string;   // id du document vault si justificatif uploadé
 
+  // Session 31 — pièces & rapprochement bancaire
+  supplierInvoiceNumber?: string;   // n° de la facture du fournisseur (≠ référence interne)
+  bankTransactionId?: string;       // id transaction bancaire (Qonto) pour rapprochement
+
   // Métadonnées
   createdAt: string;
   updatedAt: string;
