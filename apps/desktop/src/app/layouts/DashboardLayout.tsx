@@ -32,7 +32,6 @@ import {
   FileSignature,
   Menu,
   RefreshCw,
-  BookOpen,
   HelpCircle,
 } from "lucide-react";
 
@@ -78,9 +77,7 @@ const navigation = [
   { id: "calendar",       to: "/calendar",          label: "Agenda", icon: Calendar, badgeKey: null },
   { id: "expenses",       to: "/expenses",          label: "Dépenses & frais", icon: Wallet, badgeKey: null },
   { id: "subcontractors", to: "/subcontractors",    label: "Sous-traitants", icon: HardHat, badgeKey: null },
-  { id: "finances",       to: "/finances",          label: "Finances", icon: BarChart3, badgeKey: null },
-  { id: "accounting",     to: "/accounting",        label: "Comptabilité", icon: BookOpen, badgeKey: null },
-  { id: "statistics",     to: "/statistics",        label: "Statistiques", icon: Activity, badgeKey: null },
+  { id: "finances",       to: "/finances",          label: "Finances & Compta", icon: BarChart3, badgeKey: null },
   { id: "admin-docs",     to: "/admin-docs",        label: "Documents admin", icon: FileSignature, badgeKey: null },
   { id: "vault",          to: "/vault",             label: "Coffre-fort", icon: Archive, badgeKey: null },
 ];

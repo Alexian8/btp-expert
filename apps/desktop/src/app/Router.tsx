@@ -17,15 +17,13 @@ import { InvoiceEditorPage } from "@/features/invoices/components/InvoiceEditorP
 import { VaultPage } from "@/features/vault/components/VaultPage";
 import { AgendaPage } from "@/features/agenda/components/AgendaPage";
 import { ExpensesHubPage } from "@/features/expenses/components/ExpensesHubPage";
-import { FinancesPage } from "@/features/finances/components/FinancesPage";
+import { FinanceHubPage } from "@/features/finances/components/FinanceHubPage";
 import { SubcontractorsPage } from "@/features/subcontractors/components/SubcontractorsPage";
 import { SubcontractorDetailPage } from "@/features/subcontractors/components/SubcontractorDetailPage";
 import { PurchaseOrdersPage } from "@/features/purchase-orders/components/PurchaseOrdersPage";
 import { PurchaseOrderEditorPage } from "@/features/purchase-orders/components/PurchaseOrderEditorPage";
 import { PurchaseOrderDetailPage } from "@/features/purchase-orders/components/PurchaseOrderDetailPage";
-import { StatisticsPage } from "@/features/stats/components/StatisticsPage";
 import { AdminDocsPage } from "@/features/admin-docs/components/AdminDocsPage";
-import { AccountingHubPage } from "@/features/accounting/components/AccountingHubPage";
 import { UsersAdminPage } from "@/features/admin-users/components/UsersAdminPage";
 import { LogsPage } from "@/features/admin-logs/components/LogsPage";
 import { CompaniesAdminPage } from "@/features/super-admin/components/CompaniesAdminPage";
@@ -193,12 +191,14 @@ const router = createBrowserRouter(
           element: <Navigate to="/expenses" replace />,
         },
         {
+          // Hub unifié : Tableau de bord · Comptabilité · Statistiques
+          // (les 3 routes rendent le même hub, l'onglet est déduit de l'URL)
           path: "finances",
-          element: <FinancesPage />,
+          element: <FinanceHubPage />,
         },
         {
           path: "accounting",
-          element: <AccountingHubPage />,
+          element: <FinanceHubPage />,
         },
         {
           path: "subcontractors",
@@ -226,7 +226,7 @@ const router = createBrowserRouter(
         },
         {
           path: "statistics",
-          element: <StatisticsPage />,
+          element: <FinanceHubPage />,
         },
         {
           path: "admin-docs",

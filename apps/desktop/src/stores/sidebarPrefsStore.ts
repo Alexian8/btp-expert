@@ -18,13 +18,14 @@ export const NAV_ITEM_IDS = [
   "suppliers",
   "calendar",
   "expenses",
-  "expense-notes",
   "subcontractors",
-  "finances",
-  "statistics",
+  "finances",     // hub : Tableau de bord + Comptabilité + Statistiques
   "admin-docs",
-  "vault",
+  "vault",        // Coffre-fort : volontairement en dernier (avant Paramètres)
 ] as const;
+
+// Items retirés (fusionnés ou renommés) — purgés des préférences persistées.
+const REMOVED_IDS = ["accounting", "statistics", "expense-notes"];
 
 export type NavItemId = (typeof NAV_ITEM_IDS)[number];
 
@@ -92,7 +93,20 @@ export const useSidebarPrefsStore = create<SidebarPrefsState>()(
     }),
     {
       name: "btp-sidebar-prefs",
-      version: 1,
+      version: 2,
+      // v1 → v2 : fusion finances/comptabilité/statistiques en un seul item
+      // « finances » + coffre-fort repositionné en dernier (avant Paramètres).
+      migrate: (persisted, version) => {
+        const state = (persisted as Pick<SidebarPrefsState, "order" | "hidden">) || DEFAULT_STATE;
+        if (version >= 2) return state;
+        let order = (state.order || []).filter((id) => !REMOVED_IDS.includes(id));
+        if (!order.includes("finances")) order.push("finances");
+        // Force le coffre-fort en dernière position
+        order = order.filter((id) => id !== "vault");
+        order.push("vault");
+        const hidden = (state.hidden || []).filter((id) => !REMOVED_IDS.includes(id));
+        return { order, hidden };
+      },
     }
   )
 );
