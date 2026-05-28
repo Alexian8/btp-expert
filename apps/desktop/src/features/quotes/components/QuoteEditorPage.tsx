@@ -318,6 +318,7 @@ ${company?.companyName || ""}`;
             <div>
               <Label>Titre du devis</Label>
               <Input
+                smart
                 value={formData.title}
                 onChange={(e) => update_("title", e.target.value)}
                 placeholder="Ex: Rénovation salle de bain Dupont"

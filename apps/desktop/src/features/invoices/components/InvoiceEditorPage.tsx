@@ -369,6 +369,7 @@ ${companyName}`,
             <div>
               <Label>Titre de la facture</Label>
               <Input
+                smart
                 value={formData.title}
                 onChange={(e) => update_("title", e.target.value)}
                 placeholder="Ex: Rénovation salle de bain"
