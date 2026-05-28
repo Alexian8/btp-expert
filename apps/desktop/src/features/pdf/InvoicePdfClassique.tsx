@@ -164,6 +164,12 @@ function computeLineTotal(item: { quantity: number; unitPriceHT: number; discoun
   return sub;
 }
 
+function lineDiscountLabel(item: { discountMode: string; discountPercent: number; discountAmount: number }): string {
+  if (item.discountMode === "percent" && item.discountPercent > 0) return `Remise −${item.discountPercent} %`;
+  if (item.discountMode === "amount" && item.discountAmount > 0) return `Remise −${formatEuros(item.discountAmount)}`;
+  return "";
+}
+
 export function InvoicePdfClassique({ invoice, client, company = {} }: Props) {
   const totals = computeQuoteTotals(invoice as unknown as Parameters<typeof computeQuoteTotals>[0]);
   const totalPaid = invoice.totalPaid ?? 0;
@@ -270,6 +276,11 @@ export function InvoicePdfClassique({ invoice, client, company = {} }: Props) {
                 <View style={[styles.td, styles.tdDesc]}>
                   {item.title && <Text style={{ fontFamily: "Times-Bold" }}>{item.title}</Text>}
                   {item.description && <Text>{item.description}</Text>}
+                  {lineDiscountLabel(item) ? (
+                    <Text style={{ fontSize: 8, color: "#777", fontStyle: "italic" }}>
+                      {lineDiscountLabel(item)}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={[styles.td, styles.tdUnit]}>{item.unit}</Text>
                 <Text style={[styles.td, styles.tdPu]}>{formatEuros(item.unitPriceHT)}</Text>

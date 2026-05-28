@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, GripVertical, BookOpen, ChevronDown, ChevronUp,
-  Percent, Euro, FolderOpen, Minus, Info,
+  Percent, Euro, FolderOpen, Info,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -403,9 +403,9 @@ function LineRow({
           <button
             type="button"
             onClick={() => setDiscountOpen(true)}
-            className="text-[11px] text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+            className="text-xs font-medium text-primary hover:text-primary/80 inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-dashed border-primary/40 hover:border-primary/60 hover:bg-primary/5 transition-colors"
           >
-            <Minus className="w-3 h-3" />
+            <Percent className="w-3.5 h-3.5" />
             Ajouter une remise sur cette ligne
           </button>
         ) : (

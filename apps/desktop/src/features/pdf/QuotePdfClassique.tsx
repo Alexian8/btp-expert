@@ -238,6 +238,12 @@ function clientLines(c: Client | undefined): string[] {
 function get(c: Record<string, unknown>, k: string): string {
   return typeof c[k] === "string" ? (c[k] as string) : "";
 }
+function lineDiscountLabel(item: { discountMode: string; discountPercent: number; discountAmount: number }): string {
+  if (item.discountMode === "percent" && item.discountPercent > 0) return `Remise −${item.discountPercent} %`;
+  if (item.discountMode === "amount" && item.discountAmount > 0) return `Remise −${formatEuros(item.discountAmount)}`;
+  return "";
+}
+
 function computeLineTotal(item: { quantity: number; unitPriceHT: number; discountMode: string; discountPercent: number; discountAmount: number }): number {
   const sub = item.quantity * item.unitPriceHT;
   if (item.discountMode === "percent") return sub * (1 - (item.discountPercent ?? 0) / 100);
@@ -354,6 +360,11 @@ export function QuotePdfClassique({ quote, client, company = {} }: Props) {
                 <View style={[styles.td, styles.tdDesc]}>
                   {item.title && <Text style={{ fontFamily: "Times-Bold" }}>{item.title}</Text>}
                   {item.description && <Text>{item.description}</Text>}
+                  {lineDiscountLabel(item) ? (
+                    <Text style={{ fontSize: 8, color: "#777", fontStyle: "italic" }}>
+                      {lineDiscountLabel(item)}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={[styles.td, styles.tdUnit]}>{item.unit}</Text>
                 <Text style={[styles.td, styles.tdPu]}>{formatEuros(item.unitPriceHT)}</Text>

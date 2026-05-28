@@ -325,6 +325,16 @@ function computeLineTotal(item: { quantity: number; unitPriceHT: number; discoun
   return subtotal;
 }
 
+function lineDiscountLabel(item: { discountMode: string; discountPercent: number; discountAmount: number }): string {
+  if (item.discountMode === "percent" && item.discountPercent > 0) {
+    return `Remise −${item.discountPercent} %`;
+  }
+  if (item.discountMode === "amount" && item.discountAmount > 0) {
+    return `Remise −${formatEuros(item.discountAmount)}`;
+  }
+  return "";
+}
+
 export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
   const totals = computeQuoteTotals(quote);
   const companyName = get(company, "companyName") || get(company, "name") || "Mon entreprise";
@@ -510,6 +520,11 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
                     <Text style={{ fontFamily: "Helvetica-Bold" }}>{item.title}</Text>
                   )}
                   {item.description && <Text>{item.description}</Text>}
+                  {lineDiscountLabel(item) ? (
+                    <Text style={{ fontSize: 7.5, color: "#777", fontStyle: "italic" }}>
+                      {lineDiscountLabel(item)}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={[styles.td, styles.tdPu]}>
                   {formatEuros(item.unitPriceHT)}

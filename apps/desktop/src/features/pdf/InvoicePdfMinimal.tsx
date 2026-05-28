@@ -183,6 +183,12 @@ function computeLineTotal(item: { quantity: number; unitPriceHT: number; discoun
   return subtotal;
 }
 
+function lineDiscountLabel(item: { discountMode: string; discountPercent: number; discountAmount: number }): string {
+  if (item.discountMode === "percent" && item.discountPercent > 0) return `Remise −${item.discountPercent} %`;
+  if (item.discountMode === "amount" && item.discountAmount > 0) return `Remise −${formatEuros(item.discountAmount)}`;
+  return "";
+}
+
 const TYPE_LABELS: Record<string, string> = {
   standard: "F A C T U R E",
   acompte: "FACTURE D'ACOMPTE",
@@ -339,6 +345,11 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
                 <View style={[styles.td, styles.tdDesc]}>
                   {item.title && <Text style={{ fontFamily: "Helvetica-Bold" }}>{item.title}</Text>}
                   {item.description && <Text>{item.description}</Text>}
+                  {lineDiscountLabel(item) ? (
+                    <Text style={{ fontSize: 7.5, color: "#777", fontStyle: "italic" }}>
+                      {lineDiscountLabel(item)}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={[styles.td, styles.tdPu]}>{formatEuros(item.unitPriceHT)}</Text>
                 <Text style={[styles.td, styles.tdMt]}>{formatEuros(computeLineTotal(item))}</Text>
