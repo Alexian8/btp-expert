@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, FileText, ListChecks, TrendingUp, Scale, Calculator, Settings as SettingsIcon, Receipt, GraduationCap } from "lucide-react";
+import { BookOpen, FileText, ListChecks, TrendingUp, Scale, Calculator, Settings as SettingsIcon, Receipt } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@btp/ui";
 import { useAccountingStore } from "@/stores/accountingStore";
@@ -12,18 +12,17 @@ import { BalanceSheetView } from "./BalanceSheetView";
 import { ChartOfAccountsView } from "./ChartOfAccountsView";
 import { AccountingSettingsView } from "./AccountingSettingsView";
 import { VatReportView } from "./VatReportView";
-import { AccountingGuideView } from "./AccountingGuideView";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AccountingHubPage — Hub central de la comptabilité partie double
-//   Onglets : Guide · Livre Journal · Grand Livre · Balance · Compte Résultat
+//   Onglets : Livre Journal · Grand Livre · Balance · Compte Résultat
 //           · Bilan · TVA · Plan Comptable · Paramètres
+//   (Le guide d'utilisation est désormais global, accessible depuis la topbar.)
 // ═══════════════════════════════════════════════════════════════════════════
 
-type TabId = "guide" | "journal" | "grandLivre" | "balance" | "incomeStatement" | "balanceSheet" | "vat" | "plan" | "settings";
+type TabId = "journal" | "grandLivre" | "balance" | "incomeStatement" | "balanceSheet" | "vat" | "plan" | "settings";
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "guide",           label: "Guide",           icon: GraduationCap },
   { id: "journal",         label: "Livre Journal",   icon: BookOpen },
   { id: "grandLivre",      label: "Grand Livre",     icon: FileText },
   { id: "balance",         label: "Balance",         icon: ListChecks },
@@ -35,7 +34,7 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 ];
 
 export function AccountingHubPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("guide");
+  const [activeTab, setActiveTab] = useState<TabId>("journal");
   const fetchSettings = useAccountingStore((s) => s.fetchSettings);
   const settings = useAccountingStore((s) => s.settings);
 
@@ -75,7 +74,7 @@ export function AccountingHubPage() {
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
-              const isDisabled = !modeChosen && tab.id !== "settings" && tab.id !== "guide";
+              const isDisabled = !modeChosen && tab.id !== "settings";
               return (
                 <button
                   key={tab.id}
@@ -104,11 +103,10 @@ export function AccountingHubPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        {/* Le Guide et les Paramètres sont toujours accessibles */}
-        {activeTab === "guide" && <AccountingGuideView />}
+        {/* Les Paramètres sont toujours accessibles (pour choisir le mode) */}
         {activeTab === "settings" && <AccountingSettingsView />}
 
-        {!modeChosen && activeTab !== "settings" && activeTab !== "guide" && (
+        {!modeChosen && activeTab !== "settings" && (
           <div className="text-center py-20">
             <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
             <h2 className="text-lg font-semibold mb-1">Configuration requise</h2>

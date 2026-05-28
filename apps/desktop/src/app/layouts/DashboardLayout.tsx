@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CommandPaletteProvider } from "@/features/command-palette/components/CommandPaletteProvider";
 import { useCommandPalette } from "@/features/command-palette/components/CommandPaletteProvider";
 import { OnboardingGate } from "@/features/onboarding/components/OnboardingGate";
+import { AppGuide } from "@/features/guide/AppGuide";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -32,6 +33,7 @@ import {
   Menu,
   RefreshCw,
   BookOpen,
+  HelpCircle,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -92,6 +94,7 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const isMobile = useIsMobile();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -196,6 +199,7 @@ export function DashboardLayout() {
     <CommandPaletteProvider>
     <div className="h-screen flex bg-background relative">
       <OnboardingGate />
+      <AppGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
       <OneDriveStartupCheck enabled={checkOneDriveOnStartup} />
 
       {/* OVERLAY mobile (clic pour fermer) */}
@@ -376,6 +380,18 @@ export function DashboardLayout() {
               aria-label="Synchroniser les données"
             >
               <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            </Button>
+
+            {/* Guide complet de l'application */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setGuideOpen(true)}
+              title="Guide d'utilisation"
+              aria-label="Guide d'utilisation"
+            >
+              <HelpCircle className="h-4 w-4" />
             </Button>
 
             <DropdownMenu>
