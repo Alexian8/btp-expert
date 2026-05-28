@@ -27,6 +27,7 @@ const vault_1 = require("./routes/vault");
 const admin_docs_1 = require("./routes/admin-docs");
 const accounting_1 = require("./routes/accounting");
 const references_1 = require("./accounting/references");
+const qonto_1 = require("./routes/qonto");
 const auth_2 = require("./auth");
 const rbac_1 = require("./rbac");
 const rate_limit_1 = require("./rate-limit");
@@ -559,6 +560,8 @@ async function createApp(cfg, db) {
     }));
     // ─── Accounting (compta partie double) ────────────────────────────────
     app.use("/api/accounting", auth, (0, accounting_1.buildAccountingRouter)(pool));
+    // ─── Qonto (intégration bancaire — socle lecture seule) ───────────────
+    app.use("/api/qonto", auth, (0, qonto_1.buildQontoRouter)(pool, cfg));
     // ─── Expense notes ─────────────────────────────────────────────────────
     const expenseNotes = new repository_1.MysqlRepository(pool, "expense_notes", {
         primaryKey: "client",

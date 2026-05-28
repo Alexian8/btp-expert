@@ -1654,10 +1654,28 @@ export function installBtpApiShim(): void {
   ]);
 
   // Assemblage final
+  // ─── Qonto (intégration bancaire) ──────────────────────────────────────
+  const qonto = {
+    qontoStatus: () =>
+      httpGet("/api/qonto/status").catch(() => ({ connected: false })),
+    qontoConnect: (login: string, secretKey: string) =>
+      http("POST", "/api/qonto/connect", { login, secretKey })
+        .then((r) => r as { success: boolean; organizationName?: string; accountsCount?: number; error?: string })
+        .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur" })),
+    qontoDisconnect: () =>
+      wrapAction(http("POST", "/api/qonto/disconnect", {})),
+    qontoAccounts: () =>
+      httpGet("/api/qonto/accounts").catch((e) => ({ error: e instanceof Error ? e.message : "Erreur", accounts: [] })),
+    qontoTransactions: (accountId: string, from?: string) =>
+      httpGet(`/api/qonto/transactions?accountId=${encodeURIComponent(accountId)}${from ? `&from=${encodeURIComponent(from)}` : ""}`)
+        .catch((e) => ({ error: e instanceof Error ? e.message : "Erreur", transactions: [] })),
+  };
+
   (window as unknown as { btpAPI: unknown }).btpAPI = {
     ...auth,
     ...settings,
     ...company,
+    ...qonto,
     ...clients,
     ...suppliers,
     ...chantiers,

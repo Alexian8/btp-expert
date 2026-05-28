@@ -8,6 +8,7 @@ import {
   Building2,
   BookOpen,
   FileText,
+  Landmark,
   Menu,
   ChevronRight,
   ArrowLeft,
@@ -32,6 +33,7 @@ import { BackupSection } from "./BackupSection";
 import { CompanySection } from "./CompanySection";
 import { LibrarySection } from "./LibrarySection";
 import { DocumentsSection } from "./DocumentsSection";
+import { QontoSection } from "./QontoSection";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SettingsPage — Layout 2 colonnes (desktop) / drill-down iOS (mobile)
@@ -51,6 +53,7 @@ type SectionKey =
   | "company"
   | "library"
   | "documents"
+  | "banking"
   | "account"
   | "security"
   | "about";
@@ -67,6 +70,7 @@ const sections: Array<{
   { key: "company", label: "Mon entreprise", description: "SIRET, TVA, assurances", icon: Building2 },
   { key: "library", label: "Bibliothèque", description: "Prestations récurrentes", icon: BookOpen },
   { key: "documents", label: "Documents", description: "PDF et templates email", icon: FileText },
+  { key: "banking", label: "Banque (Qonto)", description: "Connexion bancaire, soldes", icon: Landmark },
   { key: "account", label: "Mon compte", description: "Identifiants, mot de passe", icon: User },
   { key: "security", label: "Sauvegarde", description: "Backup local & cloud", icon: ShieldCheck },
   { key: "about", label: "À propos", description: "Version, mentions légales", icon: Info },
@@ -78,7 +82,7 @@ export function SettingsPage() {
   const isAdmin = user?.role === "admin";
   const isMobile = useIsMobile();
 
-  const adminOnlySections: SectionKey[] = ["company", "library", "documents", "security"];
+  const adminOnlySections: SectionKey[] = ["company", "library", "documents", "banking", "security"];
   const visibleSections = sections.filter(
     (s) => isAdmin || !adminOnlySections.includes(s.key)
   );
@@ -247,6 +251,8 @@ function SectionContent({ active }: { active: SectionKey }) {
       return <LibrarySection />;
     case "documents":
       return <DocumentsSection />;
+    case "banking":
+      return <QontoSection />;
     case "account":
       return <AccountSection />;
     case "security":

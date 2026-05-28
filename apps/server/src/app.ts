@@ -23,6 +23,7 @@ import { buildVaultRouter } from "./routes/vault";
 import { buildAdminDocsRouter } from "./routes/admin-docs";
 import { buildAccountingRouter, accountingHooks } from "./routes/accounting";
 import { makeReferenceHook } from "./accounting/references";
+import { buildQontoRouter } from "./routes/qonto";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
 import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
@@ -666,6 +667,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // ─── Accounting (compta partie double) ────────────────────────────────
   app.use("/api/accounting", auth, buildAccountingRouter(pool));
+
+  // ─── Qonto (intégration bancaire — socle lecture seule) ───────────────
+  app.use("/api/qonto", auth, buildQontoRouter(pool, cfg));
 
   // ─── Expense notes ─────────────────────────────────────────────────────
   const expenseNotes = new MysqlRepository(pool, "expense_notes", {
