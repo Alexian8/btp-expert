@@ -605,8 +605,10 @@ export function buildAccountingRouter(db: Pool): Router {
         WHERE coa.classe IN (6, 7)
       `;
       const resParams: unknown[] = [];
+      // Résultat cumulé (exerciceYear <= year) pour garantir l'équilibre du
+      // bilan tant qu'aucune clôture n'a soldé les comptes 6/7 antérieurs.
       if (req.query.year) {
-        resSql += " AND je.exerciceYear = ?";
+        resSql += " AND je.exerciceYear <= ?";
         resParams.push(Number(req.query.year));
       }
       if (req.query.asOfDate) {

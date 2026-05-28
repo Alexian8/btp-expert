@@ -1023,7 +1023,10 @@ function init({ db, mainWindow }) {
         WHERE coa.classe IN (6, 7)
       `;
       const resParams = [];
-      if (year) { resSql += " AND je.exerciceYear = ?"; resParams.push(Number(year)); }
+      // Résultat cumulé sur la MÊME période que l'actif/passif (exerciceYear <= year)
+      // pour garantir l'équilibre du bilan tant qu'aucune clôture (à-nouveaux)
+      // n'a soldé les comptes 6/7 des exercices précédents.
+      if (year) { resSql += " AND je.exerciceYear <= ?"; resParams.push(Number(year)); }
       if (asOfDate) { resSql += " AND je.date <= ?"; resParams.push(asOfDate); }
       resSql += " GROUP BY coa.classe";
       const resRows = db.prepare(resSql).all(...resParams);
