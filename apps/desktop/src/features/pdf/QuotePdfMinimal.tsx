@@ -33,12 +33,30 @@ const styles = StyleSheet.create({
   },
 
   // ── Header ────────────────────────────────────────────────────────────
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
-  companyAddress: {
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 16, marginBottom: 6 },
+  headerInfo: { flex: 1, paddingTop: 2 },
+  headerTagline: {
     fontSize: 9,
-    marginBottom: 18,
+    color: "#444",
+    fontStyle: "italic",
+    marginBottom: 4,
   },
-  companyDot: { fontSize: 14, marginBottom: 12 },
+  headerLine: {
+    fontSize: 9,
+    color: "#222",
+    lineHeight: 1.45,
+  },
+  headerLegal: {
+    fontSize: 7.5,
+    color: "#666",
+    marginTop: 3,
+  },
+  headerRule: {
+    borderBottomWidth: 1.2,
+    borderBottomColor: BLACK,
+    marginBottom: 16,
+    marginTop: 2,
+  },
 
   // ── Bandeau infos + destinataire ─────────────────────────────────────
   topRow: {
@@ -310,12 +328,29 @@ function computeLineTotal(item: { quantity: number; unitPriceHT: number; discoun
 export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
   const totals = computeQuoteTotals(quote);
   const companyName = get(company, "companyName") || get(company, "name") || "Mon entreprise";
-  const companyAddress = [
+
+  // Bloc d'informations entreprise (tiré des paramètres de l'app)
+  const tagline = (() => {
+    const trading = get(company, "tradingName");
+    const legal = get(company, "legalForm");
+    if (trading && trading !== companyName) return trading;
+    return legal || "";
+  })();
+  const addressLines = [
     get(company, "addressLine1"),
+    get(company, "addressLine2"),
     [get(company, "postalCode"), get(company, "city")].filter(Boolean).join(" "),
-  ]
-    .filter(Boolean)
-    .join(" - ");
+  ].filter(Boolean);
+  const contactLine = [
+    get(company, "phoneMobile") || get(company, "phoneFixed"),
+    get(company, "email"),
+  ].filter(Boolean).join("  ·  ");
+  const website = get(company, "website");
+  const legalLine = [
+    get(company, "siret") && `SIRET ${get(company, "siret")}`,
+    get(company, "tvaIntracom") && `TVA ${get(company, "tvaIntracom")}`,
+    get(company, "apeCode") && `APE ${get(company, "apeCode")}`,
+  ].filter(Boolean).join("  ·  ");
 
   // Tailles configurables depuis Paramètres > Documents
   const logoSizeMm = Number(company.pdfLogoSizeMm) || DEFAULT_LOGO_SIZE_MM;
@@ -333,7 +368,7 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
       fontSize: companyNameSize,
       fontFamily: "Helvetica-Bold",
       letterSpacing: 0.5,
-      marginBottom: 4,
+      marginBottom: 2,
     },
   };
 
@@ -351,15 +386,24 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
   return (
     <Document title={quote.reference || "Devis"} author={companyName}>
       <Page size="A4" style={styles.page}>
-        {/* Header company */}
+        {/* Header : logo à gauche + bloc infos entreprise à droite */}
         <View style={styles.headerRow}>
           {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
             <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
           )}
-          <Text style={dynStyles.companyName}>{companyName}</Text>
+          <View style={styles.headerInfo}>
+            <Text style={dynStyles.companyName}>{companyName}</Text>
+            {tagline ? <Text style={styles.headerTagline}>{tagline}</Text> : null}
+            {addressLines.map((l, i) => (
+              <Text key={`addr-${i}`} style={styles.headerLine}>{l}</Text>
+            ))}
+            {contactLine ? <Text style={styles.headerLine}>{contactLine}</Text> : null}
+            {website ? <Text style={styles.headerLine}>{website}</Text> : null}
+            {legalLine ? <Text style={styles.headerLegal}>{legalLine}</Text> : null}
+          </View>
         </View>
-        {companyAddress && <Text style={styles.companyAddress}>{companyAddress}</Text>}
-        <Text style={styles.companyDot}>•</Text>
+
+        <View style={styles.headerRule} />
 
         {/* Top row: infos + recipient */}
         <View style={styles.topRow}>

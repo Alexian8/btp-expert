@@ -212,7 +212,7 @@ export function InvoicePdfClassique({ invoice, client, company = {} }: Props) {
                   {[get(company, "postalCode"), get(company, "city")].filter(Boolean).length > 0 && (
                     <Text>{[get(company, "postalCode"), get(company, "city")].filter(Boolean).join(" ")}</Text>
                   )}
-                  {get(company, "phone") && <Text>Tél : {get(company, "phone")}</Text>}
+                  {(get(company, "phoneMobile") || get(company, "phoneFixed")) && <Text>Tél : {get(company, "phoneMobile") || get(company, "phoneFixed")}</Text>}
                   {get(company, "email") && <Text>{get(company, "email")}</Text>}
                   {get(company, "siret") && <Text>SIRET : {get(company, "siret")}</Text>}
                   {get(company, "tvaIntracom") && <Text>TVA : {get(company, "tvaIntracom")}</Text>}

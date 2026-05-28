@@ -20,9 +20,12 @@ const GREY_LIGHT = "#f5f5f5";
 const styles = StyleSheet.create({
   page: { padding: 30, fontSize: 9, color: BLACK, fontFamily: "Helvetica" },
 
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
-  companyAddress: { fontSize: 9, marginBottom: 18 },
-  companyDot: { fontSize: 14, marginBottom: 12 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 16, marginBottom: 6 },
+  headerInfo: { flex: 1, paddingTop: 2 },
+  headerTagline: { fontSize: 9, color: "#444", fontStyle: "italic", marginBottom: 4 },
+  headerLine: { fontSize: 9, color: "#222", lineHeight: 1.45 },
+  headerLegal: { fontSize: 7.5, color: "#666", marginTop: 3 },
+  headerRule: { borderBottomWidth: 1.2, borderBottomColor: BLACK, marginBottom: 16, marginTop: 2 },
 
   topRow: { flexDirection: "row", gap: 16, marginBottom: 18 },
   topCol: { flex: 1 },
@@ -192,10 +195,29 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
   const remainingDue = Math.max(0, totals.totalTTC - totalPaid);
   const isPaid = remainingDue <= 0.01 && totals.totalTTC > 0;
   const companyName = get(company, "companyName") || get(company, "name") || "Mon entreprise";
-  const companyAddress = [
+
+  // Bloc d'informations entreprise (paramètres de l'app)
+  const tagline = (() => {
+    const trading = get(company, "tradingName");
+    const legal = get(company, "legalForm");
+    if (trading && trading !== companyName) return trading;
+    return legal || "";
+  })();
+  const addressLines = [
     get(company, "addressLine1"),
+    get(company, "addressLine2"),
     [get(company, "postalCode"), get(company, "city")].filter(Boolean).join(" "),
-  ].filter(Boolean).join(" - ");
+  ].filter(Boolean);
+  const contactLine = [
+    get(company, "phoneMobile") || get(company, "phoneFixed"),
+    get(company, "email"),
+  ].filter(Boolean).join("  ·  ");
+  const website = get(company, "website");
+  const legalLine = [
+    get(company, "siret") && `SIRET ${get(company, "siret")}`,
+    get(company, "tvaIntracom") && `TVA ${get(company, "tvaIntracom")}`,
+    get(company, "apeCode") && `APE ${get(company, "apeCode")}`,
+  ].filter(Boolean).join("  ·  ");
 
   const cName = clientName(client);
   const cLines = clientLines(client);
@@ -231,10 +253,19 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
           {typeof company.logoDataUrl === "string" && company.logoDataUrl && (
             <Image style={dynStyles.companyLogo} src={company.logoDataUrl as string} />
           )}
-          <Text style={dynStyles.companyName}>{companyName}</Text>
+          <View style={styles.headerInfo}>
+            <Text style={dynStyles.companyName}>{companyName}</Text>
+            {tagline ? <Text style={styles.headerTagline}>{tagline}</Text> : null}
+            {addressLines.map((l, i) => (
+              <Text key={`addr-${i}`} style={styles.headerLine}>{l}</Text>
+            ))}
+            {contactLine ? <Text style={styles.headerLine}>{contactLine}</Text> : null}
+            {website ? <Text style={styles.headerLine}>{website}</Text> : null}
+            {legalLine ? <Text style={styles.headerLegal}>{legalLine}</Text> : null}
+          </View>
         </View>
-        {companyAddress && <Text style={styles.companyAddress}>{companyAddress}</Text>}
-        <Text style={styles.companyDot}>•</Text>
+
+        <View style={styles.headerRule} />
 
         <View style={styles.topRow}>
           <View style={styles.topCol}>

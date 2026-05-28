@@ -218,7 +218,7 @@ function companyHeaderLines(company: Record<string, unknown>): string[] {
   if (get("addressLine2")) lines.push(get("addressLine2"));
   const cityLine = [get("postalCode"), get("city")].filter(Boolean).join(" ");
   if (cityLine) lines.push(cityLine);
-  const contact = [get("phone"), get("email")].filter(Boolean).join(" · ");
+  const contact = [get("phoneMobile") || get("phoneFixed"), get("email")].filter(Boolean).join(" · ");
   if (contact) lines.push(contact);
   if (get("website")) lines.push(get("website"));
   if (get("siret")) lines.push(`SIRET ${get("siret")}`);
