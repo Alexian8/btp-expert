@@ -8,6 +8,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Invoice, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
+import { companyLegalLines } from "./pdfHelpers";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // InvoicePdfClassique — Template FACTURE classique BTP (Times serif + bordures)
@@ -330,6 +331,17 @@ export function InvoicePdfClassique({ invoice, client, company = {} }: Props) {
           <View style={styles.conditionsBlock}>
             <Text style={styles.conditionsTitle}>Conditions de Paiement</Text>
             <Text style={styles.conditionsText}>{invoice.conditionsText}</Text>
+          </View>
+        )}
+
+        {companyLegalLines(company).length > 0 && (
+          <View style={{ marginTop: 12, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: "#999" }}>
+            {companyLegalLines(company).map((l, i) => (
+              <Text key={i} style={{ fontSize: 8, color: "#444", lineHeight: 1.5 }}>
+                <Text style={{ fontFamily: "Times-Bold" }}>{l.label} : </Text>
+                {l.value}
+              </Text>
+            ))}
           </View>
         )}
 

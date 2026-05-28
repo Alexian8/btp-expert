@@ -8,6 +8,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Quote, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
+import { companyLegalLines } from "./pdfHelpers";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // QuotePdfMinimal — Template DEVIS sobre, noir & blanc, style classique BTP
@@ -239,6 +240,17 @@ const styles = StyleSheet.create({
     color: "#333333",
     lineHeight: 1.4,
     marginTop: 8,
+  },
+  companyLegalBox: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: "#cccccc",
+  },
+  companyLegalLine: {
+    fontSize: 7.5,
+    color: "#444444",
+    lineHeight: 1.5,
   },
 
   signatureRow: {
@@ -587,6 +599,18 @@ export function QuotePdfMinimal({ quote, client, company = {} }: Props) {
             <Text style={{ fontSize: 8 }}>{companyName}</Text>
           </View>
         </View>
+
+        {/* Assurances + coordonnées bancaires (depuis les paramètres entreprise) */}
+        {companyLegalLines(company).length > 0 && (
+          <View style={styles.companyLegalBox}>
+            {companyLegalLines(company).map((l, i) => (
+              <Text key={i} style={styles.companyLegalLine}>
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>{l.label} : </Text>
+                {l.value}
+              </Text>
+            ))}
+          </View>
+        )}
 
         {/* Mentions légales */}
         {quote.footerText ? (

@@ -8,6 +8,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Invoice, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
+import { companyLegalLines } from "./pdfHelpers";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // InvoicePdfDocument — Template PDF d'une facture
@@ -420,9 +421,21 @@ export function InvoicePdfDocument({ invoice, client, company = {} }: Props) {
           </View>
         )}
 
+        {/* Assurances + coordonnées bancaires (paramètres entreprise) */}
+        {companyLegalLines(company).length > 0 && (
+          <View style={{ marginTop: 16, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: "#d0d0d0" }}>
+            {companyLegalLines(company).map((l, i) => (
+              <Text key={i} style={{ fontSize: 7.5, color: "#555", lineHeight: 1.5 }}>
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>{l.label} : </Text>
+                {l.value}
+              </Text>
+            ))}
+          </View>
+        )}
+
         {/* Footer */}
         {invoice.footerText && (
-          <Text style={[styles.conditionsText, { marginTop: 20, fontSize: 7 }]}>
+          <Text style={[styles.conditionsText, { marginTop: 12, fontSize: 7 }]}>
             {invoice.footerText}
           </Text>
         )}

@@ -8,6 +8,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Invoice, Client } from "@btp/types";
 import { computeQuoteTotals, formatEuros } from "@/features/quotes/quoteEngine";
+import { companyLegalLines } from "./pdfHelpers";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // InvoicePdfMinimal — Template FACTURE sobre noir & blanc
@@ -400,6 +401,18 @@ export function InvoicePdfMinimal({ invoice, client, company = {} }: Props) {
         {invoice.conditionsText && (
           <View style={styles.noticeBox}>
             <Text style={styles.noticeText}>{invoice.conditionsText}</Text>
+          </View>
+        )}
+
+        {/* Assurances + coordonnées bancaires (paramètres entreprise) */}
+        {companyLegalLines(company).length > 0 && (
+          <View style={{ marginTop: 12, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: "#cccccc" }}>
+            {companyLegalLines(company).map((l, i) => (
+              <Text key={i} style={{ fontSize: 7.5, color: "#444", lineHeight: 1.5 }}>
+                <Text style={{ fontFamily: "Helvetica-Bold" }}>{l.label} : </Text>
+                {l.value}
+              </Text>
+            ))}
           </View>
         )}
 
