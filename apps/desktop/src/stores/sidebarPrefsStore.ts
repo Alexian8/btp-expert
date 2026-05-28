@@ -16,12 +16,12 @@ export const NAV_ITEM_IDS = [
   "chantiers",
   "clients",
   "suppliers",
-  "calendar",
   "expenses",
   "subcontractors",
   "finances",     // hub : Tableau de bord + Comptabilité + Statistiques
   "admin-docs",
-  "vault",        // Coffre-fort : volontairement en dernier (avant Paramètres)
+  "calendar",     // Agenda : avant-dernier (juste au-dessus du coffre-fort)
+  "vault",        // Coffre-fort : en dernier, juste au-dessus de Paramètres
 ] as const;
 
 // Items retirés (fusionnés ou renommés) — purgés des préférences persistées.
@@ -93,19 +93,19 @@ export const useSidebarPrefsStore = create<SidebarPrefsState>()(
     }),
     {
       name: "btp-sidebar-prefs",
-      version: 2,
-      // v1 → v2 : fusion finances/comptabilité/statistiques en un seul item
-      // « finances » + coffre-fort repositionné en dernier (avant Paramètres).
-      migrate: (persisted, version) => {
+      version: 3,
+      // Migrations :
+      //   v1 → v2 : fusion finances/comptabilité/statistiques en « finances ».
+      //   v2 → v3 : Agenda (calendar) placé avant-dernier, Coffre-fort (vault)
+      //             en dernier (juste au-dessus de Paramètres).
+      // On réapplique l'ordre de référence (NAV_ITEM_IDS) tout en conservant
+      // les éventuels items masqués par l'utilisateur.
+      migrate: (persisted) => {
         const state = (persisted as Pick<SidebarPrefsState, "order" | "hidden">) || DEFAULT_STATE;
-        if (version >= 2) return state;
-        let order = (state.order || []).filter((id) => !REMOVED_IDS.includes(id));
-        if (!order.includes("finances")) order.push("finances");
-        // Force le coffre-fort en dernière position
-        order = order.filter((id) => id !== "vault");
-        order.push("vault");
-        const hidden = (state.hidden || []).filter((id) => !REMOVED_IDS.includes(id));
-        return { order, hidden };
+        const hidden = (state.hidden || []).filter(
+          (id) => !REMOVED_IDS.includes(id) && (NAV_ITEM_IDS as readonly string[]).includes(id)
+        );
+        return { order: [...NAV_ITEM_IDS], hidden };
       },
     }
   )

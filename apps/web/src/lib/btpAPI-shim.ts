@@ -1361,6 +1361,28 @@ export function installBtpApiShim(): void {
       wrapAction(http("PATCH", `/api/subcontractors/${encodeURIComponent(String(id))}`, data)),
     subcontractorsDelete: (id: string | number) =>
       wrapAction(http("DELETE", `/api/subcontractors/${encodeURIComponent(String(id))}`)),
+    // Stats calculées côté client à partir de la liste (évite les "undefined").
+    subcontractorsGetStats: async () => {
+      try {
+        const list = (await httpGetList<Array<{ isActive?: boolean }>>("/api/subcontractors")) as Array<{ isActive?: boolean }>;
+        const arr = Array.isArray(list) ? list : [];
+        const totalActive = arr.filter((s) => s.isActive !== false).length;
+        return {
+          totalActive,
+          totalArchived: arr.length - totalActive,
+          attestationsExpired: 0,
+          attestationsExpiringSoon: 0,
+          totalContractsAmount: 0,
+          pendingPayments: 0,
+        };
+      } catch {
+        return {
+          totalActive: 0, totalArchived: 0,
+          attestationsExpired: 0, attestationsExpiringSoon: 0,
+          totalContractsAmount: 0, pendingPayments: 0,
+        };
+      }
+    },
   };
 
   // ─── Agenda events ─────────────────────────────────────────────────────
@@ -1617,7 +1639,6 @@ export function installBtpApiShim(): void {
     "expenseNotesGetStats",
     "expenseNotesExportMonth",
     // Subcontractors : stats uniquement (CRUD câblé au-dessus)
-    "subcontractorsGetStats",
     "subcontractorsListAttestations",
     "subcontractorsCreateAttestation",
     "subcontractorsUpdateAttestation",

@@ -1018,6 +1018,32 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
   await addColumnIfNotExists(db, "clients", "accountNumber", "VARCHAR(16) DEFAULT ''");
   await addColumnIfNotExists(db, "suppliers", "accountNumber", "VARCHAR(16) DEFAULT ''");
 
+  // Session 32 : alignement agenda_events serveur sur le desktop
+  // (le schéma serveur utilisait startDate/endDate/isAllDay — on ajoute les
+  // noms attendus par le front : startAt/endAt/allDay + liens + synchro Outlook)
+  await addColumnIfNotExists(db, "agenda_events", "startAt", "VARCHAR(32) DEFAULT ''");
+  await addColumnIfNotExists(db, "agenda_events", "endAt", "VARCHAR(32) DEFAULT ''");
+  await addColumnIfNotExists(db, "agenda_events", "allDay", "TINYINT(1) DEFAULT 0");
+  await addColumnIfNotExists(db, "agenda_events", "quoteId", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "agenda_events", "invoiceId", "VARCHAR(64) DEFAULT ''");
+  await addColumnIfNotExists(db, "agenda_events", "colorOverride", "VARCHAR(32) DEFAULT ''");
+  await addColumnIfNotExists(db, "agenda_events", "syncToOutlook", "TINYINT(1) DEFAULT 0");
+  await addColumnIfNotExists(db, "agenda_events", "outlookLastSyncAt", "VARCHAR(32) DEFAULT ''");
+  // Recopie les anciennes valeurs (startDate→startAt) si présentes et startAt vide
+  try {
+    await db.query(
+      "UPDATE agenda_events SET startAt = `startDate` WHERE (startAt IS NULL OR startAt = '') AND `startDate` IS NOT NULL AND `startDate` != ''"
+    );
+    await db.query(
+      "UPDATE agenda_events SET endAt = `endDate` WHERE (endAt IS NULL OR endAt = '') AND `endDate` IS NOT NULL AND `endDate` != ''"
+    );
+    await db.query(
+      "UPDATE agenda_events SET allDay = isAllDay WHERE allDay = 0 AND isAllDay = 1"
+    );
+  } catch (e) {
+    console.warn("[migrations] agenda backfill startAt/endAt:", e);
+  }
+
   // Initialiser la ligne unique de paramètres compta si absente
   try {
     const [rows] = await db.query<RowDataPacket[]>(

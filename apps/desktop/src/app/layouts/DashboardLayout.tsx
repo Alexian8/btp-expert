@@ -74,11 +74,11 @@ const navigation = [
   { id: "chantiers",      to: "/chantiers",         label: "Chantiers", icon: Hammer, badgeKey: "chantiers" as const },
   { id: "clients",        to: "/clients",           label: "Clients", icon: Users, badgeKey: "clients" as const },
   { id: "suppliers",      to: "/suppliers",         label: "Fournisseurs", icon: Package, badgeKey: "suppliers" as const },
-  { id: "calendar",       to: "/calendar",          label: "Agenda", icon: Calendar, badgeKey: null },
   { id: "expenses",       to: "/expenses",          label: "Dépenses & frais", icon: Wallet, badgeKey: null },
   { id: "subcontractors", to: "/subcontractors",    label: "Sous-traitants", icon: HardHat, badgeKey: null },
   { id: "finances",       to: "/finances",          label: "Finances & Compta", icon: BarChart3, badgeKey: null },
   { id: "admin-docs",     to: "/admin-docs",        label: "Documents admin", icon: FileSignature, badgeKey: null },
+  { id: "calendar",       to: "/calendar",          label: "Agenda", icon: Calendar, badgeKey: null },
   { id: "vault",          to: "/vault",             label: "Coffre-fort", icon: Archive, badgeKey: null },
 ];
 
@@ -91,6 +91,7 @@ export function DashboardLayout() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [todayEvents, setTodayEvents] = useState<Array<{ id: string; title: string; startAt: string; allDay?: number | boolean }>>([]);
   const isMobile = useIsMobile();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -157,6 +158,7 @@ export function DashboardLayout() {
       // Session 12 : toast si RDV aujourd'hui
       if (window.btpAPI?.agendaListToday) {
         window.btpAPI.agendaListToday().then((events) => {
+          setTodayEvents(Array.isArray(events) ? events : []);
           if (events.length === 0) return;
           // Petit délai pour ne pas être trop intrusif au démarrage
           setTimeout(() => {
@@ -377,6 +379,57 @@ export function DashboardLayout() {
             >
               <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
             </Button>
+
+            {/* Raccourci Agenda + aperçu des RDV du jour */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 relative"
+                  title="Agenda du jour"
+                  aria-label="Agenda du jour"
+                >
+                  <Calendar className="h-4 w-4" />
+                  {todayEvents.length > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-card" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-64">
+                <DropdownMenuLabel className="flex items-center justify-between">
+                  <span>Aujourd'hui</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {todayEvents.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                    Aucun événement aujourd'hui
+                  </div>
+                ) : (
+                  todayEvents.slice(0, 6).map((e) => (
+                    <DropdownMenuItem key={e.id} onClick={() => navigate("/calendar")} className="gap-2">
+                      <span className="text-[11px] font-mono text-muted-foreground w-10 shrink-0">
+                        {e.allDay ? "—" : new Date(e.startAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <span className="truncate">{e.title}</span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+                {todayEvents.length > 6 && (
+                  <div className="px-2 py-1 text-[11px] text-muted-foreground">
+                    +{todayEvents.length - 6} autre(s)…
+                  </div>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/calendar")}>
+                  <Calendar className="w-4 h-4" />
+                  <span>Ouvrir l'agenda</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Guide complet de l'application */}
             <Button

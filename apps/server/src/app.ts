@@ -782,8 +782,8 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // ─── Agenda events ─────────────────────────────────────────────────────
   const agendaEvents = new MysqlRepository(pool, "agenda_events", {
     primaryKey: "client",
-    filterableColumns: ["type", "clientId", "chantierId", "createdBy"],
-    sortableColumns: ["startDate", "createdAt"],
+    filterableColumns: ["type", "clientId", "chantierId", "quoteId", "invoiceId", "createdBy"],
+    sortableColumns: ["startAt", "startDate", "createdAt"],
     writableColumns: [
       "title",
       "description",
@@ -797,6 +797,15 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
       "reminderMinutes",
       "outlookEventId",
       "lastSyncedAt",
+      // Session 32 — alignement desktop (noms attendus par le front)
+      "startAt",
+      "endAt",
+      "allDay",
+      "quoteId",
+      "invoiceId",
+      "colorOverride",
+      "syncToOutlook",
+      "outlookLastSyncAt",
     ],
     hasUpdatedAt: true,
     hasAuditColumns: true,
