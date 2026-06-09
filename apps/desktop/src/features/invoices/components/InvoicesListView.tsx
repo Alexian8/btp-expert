@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Receipt, Plus, Search, FileText, AlertCircle, MoreHorizontal, Trash2, Copy } from "lucide-react";
+import { Receipt, Plus, Search, FileText, AlertCircle, MoreHorizontal, Trash2, Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
@@ -27,6 +27,7 @@ import {
 } from "@btp/types";
 import { formatEuros } from "@/features/quotes/quoteEngine";
 import { isInvoiceOverdue, daysOverdue, formatDateFR } from "../invoiceEngine";
+import { downloadCsv } from "@/lib/exportCsv";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // InvoicesListView — Vue liste des factures (intégrée dans QuotesAndInvoicesPage)
@@ -95,6 +96,36 @@ export function InvoicesListView() {
     return { byStatus, totalUnpaid, countUnpaid, countOverdue, totalOverdue };
   }, [invoices]);
 
+  const handleExportCsv = () => {
+    downloadCsv(
+      "factures",
+      ["Référence", "Type", "Titre", "Client", "Statut", "Émise le", "Échéance", "Retard (j)", "Total HT", "Total TTC", "Payé", "Reste dû"],
+      filtered.map((inv) => {
+        const client = getClient(inv.clientId);
+        const clientName = client
+          ? (client.type === "pro" && client.companyName
+            ? client.companyName
+            : `${client.firstName} ${client.lastName}`.trim())
+          : "";
+        const remaining = (inv.totalTTC || 0) - (inv.totalPaid || 0);
+        return [
+          inv.reference,
+          INVOICE_TYPE_META[inv.type].label,
+          inv.title || "",
+          clientName,
+          INVOICE_STATUS_META[inv.status].label,
+          inv.issueDate || "",
+          inv.dueDate || "",
+          isInvoiceOverdue(inv) ? daysOverdue(inv) : "",
+          (inv.totalHT || 0).toFixed(2),
+          (inv.totalTTC || 0).toFixed(2),
+          (inv.totalPaid || 0).toFixed(2),
+          remaining.toFixed(2),
+        ];
+      })
+    );
+  };
+
   return (
     <div>
       {/* Header */}
@@ -112,10 +143,16 @@ export function InvoicesListView() {
             Suivre vos encaissements et relancer les retards
           </p>
         </div>
-        <Button onClick={() => navigate("/invoices/new")}>
-          <Plus className="w-4 h-4" />
-          Nouvelle facture
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportCsv} disabled={filtered.length === 0}>
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+          <Button onClick={() => navigate("/invoices/new")}>
+            <Plus className="w-4 h-4" />
+            Nouvelle facture
+          </Button>
+        </div>
       </div>
 
       {/* Alerte retards */}

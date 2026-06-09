@@ -15,6 +15,7 @@ import { useChantiersStore } from "@/stores/chantiersStore";
 import { useQuotesStore } from "@/stores/quotesStore";
 import { useInvoicesStore } from "@/stores/invoicesStore";
 import { useStatsStore } from "@/stores/statsStore";
+import { useFinanceStore } from "@/stores/financeStore";
 import { useAdministrativeDocsStore } from "@/stores/administrativeDocsStore";
 import { formatEuro } from "@btp/types";
 import { UpcomingEventsWidget } from "@/features/agenda/components/UpcomingEventsWidget";
@@ -38,6 +39,8 @@ export function DashboardPage() {
 
   const { paymentDelays, pipeline, fetchAll: fetchStatsAll } = useStatsStore();
   const { receptions, fetchReceptions } = useAdministrativeDocsStore();
+  const chantierMargins = useFinanceStore((s) => s.chantierMargins);
+  const fetchFinances = useFinanceStore((s) => s.fetchAll);
 
   useEffect(() => {
     fetchClients();
@@ -46,7 +49,14 @@ export function DashboardPage() {
     fetchInvoices();
     fetchStatsAll();
     fetchReceptions();
+    fetchFinances();
   }, []);
+
+  // Top 5 chantiers par CA (marge calculée par la compta)
+  const topMargins = useMemo(
+    () => [...chantierMargins].sort((a, b) => b.ca - a.ca).slice(0, 5),
+    [chantierMargins]
+  );
 
   // ─── Calculs ─────────────────────────────────────────────────────────────
   const greeting = useMemo(() => getGreeting(), []);
@@ -293,6 +303,52 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Marge par chantier (top 5 par CA) */}
+      {topMargins.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Marge par chantier
+            </h3>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/finances")}>
+              Tout voir
+              <ArrowRight className="w-3 h-3" />
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {topMargins.map((m) => (
+              <button
+                key={m.chantierId}
+                onClick={() => navigate(`/chantiers/${m.chantierId}`)}
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent text-left transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{m.chantierTitle}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    CA {formatEuro(m.ca)} · Dépenses {formatEuro(m.expenses)}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    m.marge >= 0 ? "text-emerald-500" : "text-red-500"
+                  )}>
+                    {formatEuro(m.marge)}
+                  </p>
+                  <p className={cn(
+                    "text-[11px] tabular-nums",
+                    m.margePct >= 0 ? "text-emerald-500/80" : "text-red-500/80"
+                  )}>
+                    {m.margePct >= 0 ? "+" : ""}{m.margePct.toFixed(1)} %
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pas d'alerte = état zen */}
       {alerts.length === 0 && (

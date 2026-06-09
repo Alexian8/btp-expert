@@ -14,6 +14,7 @@ import {
   Trash2,
   Eye,
   Pencil,
+  Download,
 } from "lucide-react";
 
 import { cn } from "@btp/ui";
@@ -25,6 +26,7 @@ import type { Client, ContactType } from "@btp/types";
 import { ClientFormModal } from "./ClientFormModal";
 import { ClientDetailModal } from "./ClientDetailModal";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { downloadCsv } from "@/lib/exportCsv";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ClientsPage — Liste des clients avec recherche, filtres, tri
@@ -102,6 +104,28 @@ export function ClientsPage() {
     setFormOpen(true);
   };
 
+  const handleExportCsv = () => {
+    downloadCsv(
+      "clients",
+      ["Type", "Société", "Nom", "Prénom", "Email", "Tél. mobile", "Tél. fixe", "Adresse", "Code postal", "Ville", "SIRET", "TVA intracom.", "Créé le"],
+      filtered.map((c) => [
+        c.type === "pro" ? "Professionnel" : "Particulier",
+        c.companyName || "",
+        c.lastName || "",
+        c.firstName || "",
+        c.email || "",
+        c.phoneMobile || "",
+        c.phoneFixed || "",
+        c.addressLine1 || "",
+        c.postalCode || "",
+        c.city || "",
+        c.siret || "",
+        c.tvaIntracom || "",
+        c.createdAt ? c.createdAt.slice(0, 10) : "",
+      ])
+    );
+  };
+
   const handleConfirmDelete = async () => {
     if (!confirmDeleteId) return;
     await deleteClient(confirmDeleteId);
@@ -120,10 +144,16 @@ export function ClientsPage() {
             {clients.length} client{clients.length > 1 ? "s" : ""} dans votre base
           </p>
         </div>
-        <Button onClick={handleNew}>
-          <Plus className="w-4 h-4" />
-          Nouveau client
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportCsv} disabled={filtered.length === 0}>
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+          <Button onClick={handleNew}>
+            <Plus className="w-4 h-4" />
+            Nouveau client
+          </Button>
+        </div>
       </div>
 
       {/* Barre de recherche + filtres */}
