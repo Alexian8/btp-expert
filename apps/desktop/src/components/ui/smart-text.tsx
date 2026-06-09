@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@btp/ui";
 import {
   loadSpellchecker,
@@ -17,9 +18,11 @@ import {
 //   • correction orthographique FR (Hunspell) : fautes soulignées en rouge
 //     ondulé, clic pour corriger / ignorer / ajouter au dictionnaire ;
 //   • prédiction de mots (FR + BTP + apprentissage) : suggestions sous le
-//     champ, Tab/Entrée pour compléter.
+//     champ, Tab pour compléter.
 //
 // Les moteurs sont chargés à la demande au premier focus (lazy, ~1.4 Mo).
+// Les panneaux (prédictions, correction) sont rendus dans un Portal en
+// position fixe : ils ne sont jamais coupés par l'overflow des modales.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Découpe un texte en tokens { text, start, end, isWord }
@@ -39,6 +42,7 @@ function tokenize(text: string): Token[] {
 }
 
 interface MisspelledRange { word: string; start: number; end: number }
+interface FloatPos { left: number; top: number }
 
 function useEngines(enabled: boolean) {
   const [ready, setReady] = React.useState(false);
@@ -53,12 +57,63 @@ function useEngines(enabled: boolean) {
   return ready;
 }
 
+// Position viewport sous un élément, recadrée pour rester dans l'écran.
+function posBelow(el: HTMLElement, panelWidth = 240): FloatPos {
+  const r = el.getBoundingClientRect();
+  return {
+    left: Math.max(8, Math.min(r.left + 12, window.innerWidth - panelWidth - 8)),
+    top: r.bottom + 4,
+  };
+}
+
+// Panneau flottant rendu dans body (échappe aux overflow-hidden parents).
+function FloatingPanel({ pos, children }: { pos: FloatPos; children: React.ReactNode }) {
+  return createPortal(
+    <div
+      className="fixed z-[9999] bg-card border border-border rounded-md shadow-soft-lg py-1 min-w-[160px] max-w-[280px]"
+      style={{ left: pos.left, top: pos.top }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+function PredictionList({
+  predictions, predIndex, onPick,
+}: {
+  predictions: string[];
+  predIndex: number;
+  onPick: (word: string) => void;
+}) {
+  return (
+    <>
+      <div className="px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        Suggestions · Tab pour compléter
+      </div>
+      {predictions.map((s, i) => (
+        <button
+          key={s}
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); onPick(s); }}
+          className={cn(
+            "w-full text-left px-3 py-1 text-sm transition-colors",
+            i === predIndex ? "bg-primary/10 text-primary" : "hover:bg-muted",
+          )}
+        >
+          {s}
+        </button>
+      ))}
+    </>
+  );
+}
+
 // ─── Popover de correction d'un mot ────────────────────────────────────────
 interface CorrectionState {
   range: MisspelledRange;
   suggestions: string[];
-  x: number;
-  y: number;
+  pos: FloatPos;     // coordonnées viewport (rendu en portal fixe)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -83,6 +138,7 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
     const [correction, setCorrection] = React.useState<CorrectionState | null>(null);
     const [predictions, setPredictions] = React.useState<string[]>([]);
     const [predIndex, setPredIndex] = React.useState(0);
+    const [predPos, setPredPos] = React.useState<FloatPos | null>(null);
 
     // Recalcule les fautes quand le texte change (et que le moteur est prêt)
     React.useEffect(() => {
@@ -109,6 +165,7 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
         const sugg = predict(m[0], 5).filter((s) => s.toLowerCase() !== m[0].toLowerCase());
         setPredictions(sugg);
         setPredIndex(0);
+        if (sugg.length) setPredPos(posBelow(el));
       } else {
         setPredictions([]);
       }
@@ -141,13 +198,10 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (predictions.length > 0) {
-        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && predictions.length)) {
-          // Tab complète toujours ; Enter complète seulement s'il y a une prédiction visible
-          if (e.key === "Tab") {
-            e.preventDefault();
-            applyPrediction(predictions[predIndex]);
-            return;
-          }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          applyPrediction(predictions[predIndex]);
+          return;
         }
         if (e.key === "ArrowDown") { e.preventDefault(); setPredIndex((i) => (i + 1) % predictions.length); return; }
         if (e.key === "ArrowUp") { e.preventDefault(); setPredIndex((i) => (i - 1 + predictions.length) % predictions.length); return; }
@@ -159,17 +213,18 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
       if (!ready || misspelled.length === 0) return;
       const el = ref.current;
       if (!el) return;
-      // Position approximative du clic → on récupère le mot fautif le plus proche
+      // Position du clic → on récupère le mot fautif sous le curseur
       const pos = el.selectionStart ?? 0;
       const hit = misspelled.find((r) => pos >= r.start && pos <= r.end);
       if (hit) {
         e.preventDefault();
-        const rect = el.getBoundingClientRect();
         setCorrection({
           range: hit,
           suggestions: suggestWord(hit.word),
-          x: Math.min(e.clientX - rect.left, rect.width - 220),
-          y: e.clientY - rect.top + 18,
+          pos: {
+            left: Math.max(8, Math.min(e.clientX, window.innerWidth - 260)),
+            top: e.clientY + 14,
+          },
         });
       } else {
         setCorrection(null);
@@ -184,13 +239,15 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
 
     return (
       <div className="relative">
-        {/* Backdrop de soulignement (sous le textarea) */}
+        {/* Backdrop : porte le fond visuel du champ + les soulignements.
+            Le textarea au-dessus est transparent pour laisser voir les
+            soulignements, mais garde bordure/focus/placeholder. */}
         <div
           ref={backdropRef}
           aria-hidden
           className={cn(
             "absolute inset-0 overflow-hidden whitespace-pre-wrap break-words pointer-events-none",
-            "rounded-md border border-transparent px-3 py-2 text-sm",
+            "rounded-md border border-transparent bg-muted/50 px-3 py-2 text-sm",
             className,
           )}
           style={{ color: "transparent" }}
@@ -216,7 +273,7 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
           }}
           spellCheck={false}
           className={cn(
-            "relative flex min-h-[80px] w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-sm",
+            "relative flex min-h-[80px] w-full rounded-md border border-input px-3 py-2 text-sm",
             "ring-offset-background placeholder:text-muted-foreground transition-colors resize-y",
             "hover:border-muted-foreground/40",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:border-ring",
@@ -227,36 +284,23 @@ export const SmartTextarea = React.forwardRef<HTMLTextAreaElement, SmartTextarea
           {...props}
         />
 
-        {/* Dropdown de prédiction */}
-        {predictions.length > 0 && (
-          <div className="absolute left-3 z-30 mt-1 bg-card border border-border rounded-md shadow-soft-lg py-1 min-w-[160px]" style={{ top: "100%" }}>
-            <div className="px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Suggestions · Tab pour compléter
-            </div>
-            {predictions.map((s, i) => (
-              <button
-                key={s}
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); applyPrediction(s); }}
-                className={cn(
-                  "w-full text-left px-3 py-1 text-sm transition-colors",
-                  i === predIndex ? "bg-primary/10 text-primary" : "hover:bg-muted",
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        {/* Dropdown de prédiction (portal : jamais coupé par les modales) */}
+        {predictions.length > 0 && predPos && (
+          <FloatingPanel pos={predPos}>
+            <PredictionList predictions={predictions} predIndex={predIndex} onPick={applyPrediction} />
+          </FloatingPanel>
         )}
 
-        {/* Popover de correction */}
+        {/* Popover de correction (portal) */}
         {correction && (
-          <CorrectionPopover
-            state={correction}
-            onReplace={(rep) => replaceRange(correction.range, rep)}
-            onIgnore={() => setCorrection(null)}
-            onAdd={() => { addCustomWord(correction.range.word); setMisspelled((m) => m.filter((r) => r !== correction.range)); setCorrection(null); }}
-          />
+          <FloatingPanel pos={correction.pos}>
+            <CorrectionContent
+              state={correction}
+              onReplace={(rep) => replaceRange(correction.range, rep)}
+              onIgnore={() => setCorrection(null)}
+              onAdd={() => { addCustomWord(correction.range.word); setMisspelled((m) => m.filter((r) => r !== correction.range)); setCorrection(null); }}
+            />
+          </FloatingPanel>
         )}
       </div>
     );
@@ -281,6 +325,7 @@ export const SmartInput = React.forwardRef<HTMLInputElement, SmartInputProps>(
     const ready = useEngines(active);
     const [predictions, setPredictions] = React.useState<string[]>([]);
     const [predIndex, setPredIndex] = React.useState(0);
+    const [predPos, setPredPos] = React.useState<FloatPos | null>(null);
 
     const updatePredictions = React.useCallback((el: HTMLInputElement) => {
       if (!ready) { setPredictions([]); return; }
@@ -289,8 +334,10 @@ export const SmartInput = React.forwardRef<HTMLInputElement, SmartInputProps>(
       const m = before.match(/[A-Za-zÀ-ÿœæ]{2,}$/);
       const after = value.slice(pos, pos + 1);
       if (m && !/[A-Za-zÀ-ÿœæ]/.test(after)) {
-        setPredictions(predict(m[0], 5).filter((s) => s.toLowerCase() !== m[0].toLowerCase()));
+        const sugg = predict(m[0], 5).filter((s) => s.toLowerCase() !== m[0].toLowerCase());
+        setPredictions(sugg);
         setPredIndex(0);
+        if (sugg.length) setPredPos(posBelow(el));
       } else {
         setPredictions([]);
       }
@@ -343,25 +390,10 @@ export const SmartInput = React.forwardRef<HTMLInputElement, SmartInputProps>(
           )}
           {...props}
         />
-        {predictions.length > 0 && (
-          <div className="absolute left-0 z-30 mt-1 bg-card border border-border rounded-md shadow-soft-lg py-1 min-w-[160px]" style={{ top: "100%" }}>
-            <div className="px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Suggestions · Tab
-            </div>
-            {predictions.map((s, i) => (
-              <button
-                key={s}
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); applyPrediction(s); }}
-                className={cn(
-                  "w-full text-left px-3 py-1 text-sm transition-colors",
-                  i === predIndex ? "bg-primary/10 text-primary" : "hover:bg-muted",
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        {predictions.length > 0 && predPos && (
+          <FloatingPanel pos={predPos}>
+            <PredictionList predictions={predictions} predIndex={predIndex} onPick={applyPrediction} />
+          </FloatingPanel>
         )}
       </div>
     );
@@ -395,7 +427,7 @@ function renderHighlighted(text: string, ranges: MisspelledRange[]): React.React
   return parts;
 }
 
-function CorrectionPopover({
+function CorrectionContent({
   state, onReplace, onIgnore, onAdd,
 }: {
   state: CorrectionState;
@@ -404,11 +436,7 @@ function CorrectionPopover({
   onAdd: () => void;
 }) {
   return (
-    <div
-      className="absolute z-40 bg-card border border-border rounded-md shadow-soft-lg py-1 min-w-[200px] max-w-[260px]"
-      style={{ left: Math.max(0, state.x), top: state.y }}
-      onMouseDown={(e) => e.preventDefault()}
-    >
+    <>
       <div className="px-3 py-1 text-[11px] text-muted-foreground border-b border-border">
         « {state.range.word} »
       </div>
@@ -434,6 +462,6 @@ function CorrectionPopover({
           Ignorer
         </button>
       </div>
-    </div>
+    </>
   );
 }

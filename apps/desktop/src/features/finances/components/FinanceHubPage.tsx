@@ -61,11 +61,12 @@ export function FinanceHubPage() {
         </div>
       </div>
 
-      {/* Contenu */}
+      {/* Contenu — chaque page est h-full et gère son propre scroll interne :
+          pas de wrapper overflow ici (sinon double scrollbar). */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === "dashboard" && <div className="h-full overflow-y-auto"><FinancesPage /></div>}
+        {tab === "dashboard" && <FinancesPage />}
         {tab === "accounting" && <AccountingHubPage />}
-        {tab === "stats" && <div className="h-full overflow-y-auto"><StatisticsPage /></div>}
+        {tab === "stats" && <StatisticsPage />}
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  EXPENSE_CATEGORY_META, EXPENSE_STATUS_META, formatEuro,
+  EXPENSE_CATEGORY_META, EXPENSE_NOTE_CATEGORY_META, EXPENSE_STATUS_META, formatEuro,
   type Expense, type ExpenseNote,
 } from "@btp/types";
 import { useExpensesStore } from "@/stores/expensesStore";
@@ -170,7 +170,11 @@ export function ExpensesHubPage() {
                 )}
                 {filtered.map((r) => {
                   const isExp = r._kind === "fournisseur";
-                  const cat = EXPENSE_CATEGORY_META[r.category as keyof typeof EXPENSE_CATEGORY_META];
+                  // Les deux types ont des jeux de catégories différents (péage,
+                  // hôtel… n'existent qu'en note de frais) → meta adaptée au type.
+                  const cat = isExp
+                    ? EXPENSE_CATEGORY_META[(r as Expense).category]
+                    : EXPENSE_NOTE_CATEGORY_META[(r as ExpenseNote).category];
                   const who = isExp ? (r as Expense).supplierName : (r as ExpenseNote).payerName;
                   const statusMeta = isExp
                     ? EXPENSE_STATUS_META[(r as Expense).status]
