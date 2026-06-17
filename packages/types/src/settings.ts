@@ -78,12 +78,19 @@ export interface AppearanceSettings {
   radius?: "none" | "sm" | "md" | "lg" | "full";
 }
 
+export interface SecuritySettings {
+  /** Durée d'inactivité (en minutes) avant déconnexion automatique.
+   *  0 ou non défini avec valeur 0 = désactivé. Défaut applicatif : 30. */
+  sessionInactivityMinutes?: number;
+}
+
 export type AppSettings = EntrepriseSettings &
   AssuranceSettings &
   PdfSettings &
   CGVSettings &
   AppearanceSettings &
   EmailTemplateSettings &
+  SecuritySettings &
   InvoiceSettings & {
     // Autres settings divers
     conditions?: string;
@@ -91,3 +98,6 @@ export type AppSettings = EntrepriseSettings &
     acompteDefaut?: string;
     autoBackupFrequency?: number;
   };
+
+/** Durée d'inactivité par défaut (minutes) si non configurée. */
+export const DEFAULT_SESSION_INACTIVITY_MINUTES = 30;

@@ -4,6 +4,7 @@ import { Toaster, toast } from "sonner";
 
 import { AppRouter } from "@/app/Router";
 import { ChangePasswordModal } from "@/features/auth/components/ChangePasswordModal";
+import { InactivityLogout } from "@/features/auth/components/InactivityLogout";
 import { useThemeStore } from "@/stores/themeStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUsersStore } from "@/stores/usersStore";
@@ -90,6 +91,8 @@ export function App() {
       {/* Modal bloquant si l'utilisateur doit changer son mot de passe à
           la 1ère connexion (mustChangePassword = 1) */}
       <ChangePasswordModal />
+      {/* Déconnexion automatique après inactivité (durée réglable dans Paramètres) */}
+      <InactivityLogout />
       <Toaster
         position="bottom-right"
         toastOptions={{

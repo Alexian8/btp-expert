@@ -31,6 +31,20 @@ function verifyPassword(password: string, stored: string): boolean {
   return crypto.timingSafeEqual(expected, actual);
 }
 
+/**
+ * Politique de mot de passe (alignée sur l'UI ChangePasswordModal) :
+ * ≥ 10 caractères, au moins une majuscule, une minuscule et un chiffre.
+ * Retourne un message d'erreur, ou null si le mot de passe est conforme.
+ * Appliquée côté serveur (changement de mot de passe, réinitialisation).
+ */
+export function validatePasswordPolicy(pw: string): string | null {
+  if (pw.length < 10) return "Le mot de passe doit contenir au moins 10 caractères";
+  if (!/[A-Z]/.test(pw)) return "Le mot de passe doit contenir au moins une majuscule";
+  if (!/[a-z]/.test(pw)) return "Le mot de passe doit contenir au moins une minuscule";
+  if (!/[0-9]/.test(pw)) return "Le mot de passe doit contenir au moins un chiffre";
+  return null;
+}
+
 const LoginSchema = z.object({
   username: z.string().min(1).max(64),
   password: z.string().min(1).max(256),
@@ -47,6 +61,8 @@ interface UserRow extends RowDataPacket {
   firstName?: string;
   lastName?: string;
   companyId?: number;
+  failedLoginAttempts?: number;
+  lockedUntil?: number;
 }
 
 const wrap =
@@ -68,7 +84,7 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       }
       const [rows] = await db.query<UserRow[]>(
         `SELECT id, username, passwordHash, role, disabled, mustChangePassword,
-                email, firstName, lastName, companyId
+                email, firstName, lastName, companyId, failedLoginAttempts, lockedUntil
          FROM users WHERE username = ? LIMIT 1`,
         [parsed.data.username]
       );
@@ -76,23 +92,74 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       const ip = req.ip ?? "";
       const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
 
-      if (!row || !verifyPassword(parsed.data.password, row.passwordHash)) {
-        const reason = !row ? "unknown_user" : "bad_password";
-        console.warn(
-          `[auth] LOGIN FAIL ip=${ip} username=${parsed.data.username} reason=${reason}`
-        );
-        // Audit DB
+      // Délai constant pour limiter les attaques par timing (existence compte).
+      const failDelay = (): Promise<void> => new Promise((r) => setTimeout(r, 200));
+
+      // Utilisateur inconnu : message générique, pas de compteur (on ne peut
+      // pas verrouiller un compte qui n'existe pas).
+      if (!row) {
+        console.warn(`[auth] LOGIN FAIL ip=${ip} username=${parsed.data.username} reason=unknown_user`);
         void writeAudit(db, {
-          userId: row?.id ?? null,
+          userId: null,
           username: parsed.data.username,
-          companyId: row?.companyId ?? null,
+          companyId: null,
           action: "login_fail",
           ip,
           userAgent,
-          meta: { reason },
+          meta: { reason: "unknown_user" },
         });
-        // Délai constant pour éviter timing attack (existence du compte)
-        await new Promise((r) => setTimeout(r, 200));
+        await failDelay();
+        res.status(401).json({ message: "Identifiants invalides" });
+        return;
+      }
+
+      // Compte verrouillé (trop de tentatives) : refuser même si le mot de
+      // passe est correct, tant que la période de verrouillage n'est pas écoulée.
+      const lockedUntil = Number(row.lockedUntil ?? 0);
+      if (lockedUntil > Date.now()) {
+        const minutesLeft = Math.ceil((lockedUntil - Date.now()) / 60_000);
+        console.warn(`[auth] LOGIN BLOCKED locked ip=${ip} username=${row.username}`);
+        void writeAudit(db, {
+          userId: row.id,
+          username: row.username,
+          companyId: row.companyId ?? null,
+          action: "login_blocked",
+          ip,
+          userAgent,
+          meta: { reason: "locked", minutesLeft },
+        });
+        res.status(429).json({
+          message: `Compte temporairement verrouillé suite à trop de tentatives. Réessayez dans ${minutesLeft} min.`,
+        });
+        return;
+      }
+
+      // Mauvais mot de passe : incrémente le compteur, verrouille au seuil.
+      if (!verifyPassword(parsed.data.password, row.passwordHash)) {
+        const attempts = (row.failedLoginAttempts ?? 0) + 1;
+        const reachedMax = attempts >= cfg.LOGIN_LOCKOUT_MAX_ATTEMPTS;
+        if (reachedMax) {
+          const until = Date.now() + cfg.LOGIN_LOCKOUT_MINUTES * 60_000;
+          await db.execute(
+            "UPDATE users SET failedLoginAttempts = ?, lockedUntil = ? WHERE id = ?",
+            [attempts, until, row.id]
+          );
+        } else {
+          await db.execute("UPDATE users SET failedLoginAttempts = ? WHERE id = ?", [attempts, row.id]);
+        }
+        console.warn(
+          `[auth] LOGIN FAIL ip=${ip} username=${row.username} reason=bad_password attempts=${attempts}${reachedMax ? " LOCKED" : ""}`
+        );
+        void writeAudit(db, {
+          userId: row.id,
+          username: row.username,
+          companyId: row.companyId ?? null,
+          action: reachedMax ? "login_blocked" : "login_fail",
+          ip,
+          userAgent,
+          meta: reachedMax ? { reason: "locked", attempts } : { reason: "bad_password", attempts },
+        });
+        await failDelay();
         res.status(401).json({ message: "Identifiants invalides" });
         return;
       }
@@ -153,10 +220,12 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
         meta: { role: row.role },
       });
 
-      // Met à jour lastLoginAt (best-effort, ne bloque pas la réponse)
-      db.execute("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?", [row.id]).catch(
-        (e) => console.warn("[auth] update lastLoginAt failed:", e)
-      );
+      // Met à jour lastLoginAt + réinitialise le compteur d'échecs / le
+      // verrouillage (best-effort, ne bloque pas la réponse).
+      db.execute(
+        "UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP, failedLoginAttempts = 0, lockedUntil = 0 WHERE id = ?",
+        [row.id]
+      ).catch((e) => console.warn("[auth] update lastLoginAt failed:", e));
 
       const companyId = Number(row.companyId ?? 1);
       const payload: AuthPayload = {
@@ -206,11 +275,17 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       }
       const schema = z.object({
         oldPassword: z.string().min(1).max(256),
-        newPassword: z.string().min(8).max(256),
+        newPassword: z.string().min(1).max(256),
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ message: "Payload invalide" });
+        return;
+      }
+      // Politique de mot de passe appliquée côté serveur (pas seulement l'UI).
+      const policyError = validatePasswordPolicy(parsed.data.newPassword);
+      if (policyError) {
+        res.status(400).json({ message: policyError });
         return;
       }
       const [rows] = await db.query<UserRow[]>(

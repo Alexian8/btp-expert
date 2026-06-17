@@ -446,8 +446,10 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       const tenantId = req.user?.companyId ?? 1;
       const tempPassword = generateTempPassword();
       const hash = hashPassword(tempPassword);
+      // Réinitialise aussi le verrouillage : un reset par l'admin déverrouille
+      // le compte (failedLoginAttempts / lockedUntil remis à zéro).
       const [result] = await db.execute<ResultSetHeader>(
-        "UPDATE users SET passwordHash = ?, mustChangePassword = 1 WHERE id = ? AND companyId = ?",
+        "UPDATE users SET passwordHash = ?, mustChangePassword = 1, failedLoginAttempts = 0, lockedUntil = 0 WHERE id = ? AND companyId = ?",
         [hash, id, tenantId]
       );
       if (result.affectedRows === 0) {

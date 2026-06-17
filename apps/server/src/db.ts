@@ -919,6 +919,9 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
   // Multi-tenant : companyId sur users (default 1 = tenant existant)
   // NULL = super_admin (pas rattaché à une company)
   await addColumnIfNotExists(db, "users", "companyId", "INT NULL DEFAULT 1");
+  // Verrouillage de compte après échecs de connexion (Lot auth)
+  await addColumnIfNotExists(db, "users", "failedLoginAttempts", "INT NOT NULL DEFAULT 0");
+  await addColumnIfNotExists(db, "users", "lockedUntil", "BIGINT NOT NULL DEFAULT 0");
   // Si la colonne existait avec NOT NULL, on la rend nullable pour super_admin
   try {
     const [colRows] = await db.query<RowDataPacket[]>(

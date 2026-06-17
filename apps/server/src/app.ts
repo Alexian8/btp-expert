@@ -865,6 +865,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     "cgv",
     "theme",
     "appearance",
+    "session",
   ];
   const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
   const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

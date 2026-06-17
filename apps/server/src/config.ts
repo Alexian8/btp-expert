@@ -30,6 +30,10 @@ const Schema = z.object({
   RATE_LIMIT_API_MAX: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_API_WINDOW_MIN: z.coerce.number().int().positive().default(1),
 
+  // ─── Verrouillage de compte (après X échecs de connexion) ────────────────
+  LOGIN_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+  LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
+
   // ─── MySQL ─────────────────────────────────────────────────────────────
   MYSQL_HOST: z.string().default("localhost"),
   MYSQL_PORT: z.coerce.number().int().positive().default(3306),
