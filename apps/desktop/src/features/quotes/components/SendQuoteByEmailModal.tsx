@@ -19,12 +19,15 @@ interface Props {
   defaultTo: string;
   defaultSubject: string;
   defaultBody: string;
+  /** Génère le PDF du devis en base64 (utilisé côté web pour l'envoi SMTP avec
+   *  pièce jointe ; ignoré côté desktop qui génère le PDF lui-même). */
+  getPdfBase64?: () => Promise<string>;
   onClose: () => void;
   onSent: () => void;
 }
 
 export function SendQuoteByEmailModal({
-  open, quoteId, quoteReference, defaultTo, defaultSubject, defaultBody, onClose, onSent,
+  open, quoteId, quoteReference, defaultTo, defaultSubject, defaultBody, getPdfBase64, onClose, onSent,
 }: Props) {
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState("");
@@ -49,12 +52,29 @@ export function SendQuoteByEmailModal({
     if (!window.btpAPI?.quotesSendViaOutlook) return;
 
     setSending(true);
+
+    // Côté web : génération du PDF dans le navigateur + pièce jointe (envoi SMTP).
+    // Côté desktop : le PDF est généré par le main process.
+    let attachmentBase64: string | undefined;
+    let attachmentName: string | undefined;
+    if ((window.btpAPI as { isWeb?: boolean })?.isWeb && getPdfBase64) {
+      try {
+        attachmentBase64 = await getPdfBase64();
+        attachmentName = `${quoteReference}.pdf`;
+      } catch {
+        setSending(false);
+        toast.error("Impossible de générer le PDF du devis");
+        return;
+      }
+    }
+
     const r = await window.btpAPI.quotesSendViaOutlook({
       quoteId,
       to: to.trim(),
       cc: cc.trim(),
       subject: subject.trim() || `Votre devis ${quoteReference}`,
       body: body.trim(),
+      ...(attachmentBase64 ? { attachmentBase64, attachmentName } : {}),
     });
     setSending(false);
 

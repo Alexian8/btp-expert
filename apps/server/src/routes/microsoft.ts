@@ -450,10 +450,17 @@ export function buildEmailRouter(db: DB, cfg: Config): Router {
       // Le client SMTP envoie à un destinataire (cas usuel : un devis/une
       // facture à un client). Les destinataires supplémentaires (cc/to[1+])
       // ne sont pas encore gérés par ce transport.
+      // Corps en texte brut → HTML : on échappe puis on préserve les sauts de
+      // ligne (white-space: pre-wrap) sans imposer une police monospace.
+      const escapeHtml = (s: string): string =>
+        s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const html = isHtml
+        ? body
+        : `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#0f172a;white-space:pre-wrap;">${escapeHtml(body)}</div>`;
       const result = await sendMail(cfg, {
         to: to[0]!,
         subject,
-        html: isHtml ? body : `<pre>${body}</pre>`,
+        html,
         text: isHtml ? undefined : body,
         attachments: (attachments ?? []).map((a) => ({
           filename: a.name,

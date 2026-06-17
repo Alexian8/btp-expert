@@ -69,11 +69,15 @@ Mots de passe en scrypt. Les credentials Qonto sont chiffrés AES-256-GCM (clé 
 ### Emails — transports & canaux
 Le client SMTP maison est dans `apps/server/src/email.ts` (`sendMail`, zéro dépendance, supporte les **pièces jointes** en `multipart/mixed`). Deux routes serveur d'envoi (`apps/server/src/routes/microsoft.ts`, `buildEmailRouter`) :
 - `POST /api/email/send` → **Microsoft Graph** (`/me/sendMail`), nécessite un compte Microsoft 365 connecté.
-- `POST /api/email/send-smtp` → **SMTP** (mailbox de domaine via `SMTP_*`), **sans compte Microsoft**. C'est la voie privilégiée pour les devis/factures ; le shim web (`emailSendDocument`) l'utilise et transmet le PDF en base64 (généré côté client).
+- `POST /api/email/send-smtp` → **SMTP** (mailbox de domaine via `SMTP_*`), **sans compte Microsoft**. Voie privilégiée pour les devis/factures côté web.
 
-Usages : **documents clients** (devis/factures) et **mails système** (invitations utilisateurs via `sendMail`/SMTP). Pour la délivrabilité de la mailbox o2switch, configurer **SPF/DKIM/DMARC** sur le domaine et utiliser une vraie adresse `@<domaine>` (pas le sous-domaine de dev).
+**Flux devis/factures par plateforme** (modales `SendQuoteByEmailModal` / `SendInvoiceByEmailModal` → `window.btpAPI.quotesSendViaOutlook` / `invoicesSendViaOutlook`) :
+- **Desktop** : le main Electron génère le PDF et envoie via **Microsoft Graph**.
+- **Web** : le PDF est généré dans le navigateur (`pdfElementToBase64`, React-PDF) puis transmis en base64 ; le shim envoie via **SMTP** (`/api/email/send-smtp`) et marque le devis « envoyé » / la facture « envoyée » ou la relance (parité desktop). ⚠️ Le transport SMTP n'envoie qu'à **un destinataire** (cc/destinataires multiples non gérés).
 
-> ⏳ Reste à faire pour finaliser l'envoi SMTP des documents côté web : génération du PDF dans la modale `SendDocumentMailModal` + étape `prepare` (objet/corps) encore stub dans le shim web.
+Mails **système** (invitations utilisateurs) : `sendMail`/SMTP. Pour la délivrabilité de la mailbox o2switch, configurer **SPF/DKIM/DMARC** et utiliser une vraie adresse `@<domaine>` (pas le sous-domaine de dev).
+
+> ℹ️ `SendDocumentMailModal` + `emailSendDocument` (shim, branché aussi sur `/api/email/send-smtp`) sont un chemin alternatif **non câblé** dans l'UI actuelle.
 
 ### Premier démarrage
 La base est vide : créer le premier administrateur via `POST /api/auth/bootstrap` (one-shot), puis login via `POST /api/auth/login`.
