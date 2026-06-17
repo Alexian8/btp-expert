@@ -2,9 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-BatiDesk — logiciel de gestion pour artisans du bâtiment (clients, chantiers, devis, factures, dépenses, comptabilité en partie double, banque Qonto, agenda). Distribué en application **desktop** (Electron) et **web** (auto-hébergée cPanel) à partir d'une seule base de code UI.
+BatiDesk — logiciel de gestion pour artisans du bâtiment (clients, chantiers, devis, factures, dépenses, comptabilité en partie double, banque Qonto, agenda). Distribué en **desktop** (Electron), **web** (auto-hébergée) et **iOS** (natif), à partir d'une seule base de code UI.
 
 > Le code (commentaires, libellés, messages) est rédigé en **français**. Conserver cette langue.
+
+> 🔑 **Règle d'or — tout doit être inter-compatible web / desktop / iOS.** Aucune fonctionnalité ne doit être desktop-only ou web-only. Toute opération de données passe par le contrat partagé (voir [La couche `window.btpAPI`](#la-couche-windowbtpapi-clé-de-la-portabilité)) et doit être exposée côté serveur REST pour que le web ET iOS puissent la consommer. Avant de considérer une fonctionnalité « terminée », vérifier qu'elle fonctionne (ou dégrade proprement) sur les trois plateformes.
 
 ## Commandes
 
@@ -34,7 +36,7 @@ npm run build:server             # serveur → dist/ + copie des PDF CERFA
 npm run dist -w @btp/desktop      # installeurs Electron (.exe / .dmg)
 ```
 
-⚠️ **`apps/web/dist/` est versionné volontairement** (cPanel ne build pas au déploiement). Après toute modification de l'UI destinée au web, **rebuild `npm run build -w @btp/web` et committer le `dist/` régénéré** (les assets dans `dist/assets/` sont gitignored → `git add -f`).
+⚠️ **`apps/web/dist/` est versionné volontairement** — l'app web est hébergée chez **o2switch via cPanel** (Node.js App + Passenger + MySQL), qui ne lance **pas** de build au déploiement et sert directement le `dist/` poussé. Après toute modification de l'UI destinée au web, **rebuild `npm run build -w @btp/web` et committer le `dist/` régénéré** (les assets dans `dist/assets/` sont gitignored → `git add -f`). C'est aussi la cause des conflits de merge récurrents sur `apps/web/dist/` : régénérer le `dist` après merge plutôt que de résoudre à la main.
 
 ## Architecture
 
@@ -46,13 +48,13 @@ L'UI n'accède jamais directement à la base ni au réseau : elle appelle `windo
 - **Desktop** : le preload Electron expose `window.btpAPI` qui relaie en IPC vers le main process → SQLite (`better-sqlite3`).
 - **Web** : `apps/web/src/lib/btpAPI-shim.ts` réimplémente la même surface d'API en `fetch('/api/*')` vers le serveur Express.
 
-Ces deux implémentations honorent le contrat `IDataService` défini dans `packages/core`. Pour ajouter une opération de données, il faut donc la propager de bout en bout : type dans `packages/types` → méthode `IDataService` (`packages/core`) → implémentation desktop (IPC + handler main) → route serveur (`apps/server/src/routes`) → shim web. **Une fonctionnalité qui marche en desktop mais pas sur web est généralement un trou dans le shim** (beaucoup sont encore des stubs : PDF, CRUD complet, compta, agenda, coffre-fort).
+Ces deux implémentations honorent le contrat `IDataService` défini dans `packages/core`. **Pour ajouter une opération de données, la propager de bout en bout sur toute la chaîne** : type dans `packages/types` → méthode `IDataService` (`packages/core`) → implémentation desktop (IPC + handler main → SQLite) → route serveur REST (`apps/server/src/routes`) → shim web (`apps/web/src/lib/btpAPI-shim.ts`). L'app **iOS** (`apps/ios`) consomme la même API REST : exposer la route serveur, c'est aussi rendre la fonctionnalité disponible à iOS. **Une fonctionnalité qui marche en desktop mais pas sur web/iOS est généralement un trou dans le shim ou une route REST manquante** (beaucoup sont encore des stubs : PDF, CRUD complet, compta, agenda, coffre-fort).
 
 ### State (front)
 Stores **Zustand** dans `apps/desktop/src/stores/*` (un par domaine : `clientsStore`, `invoicesStore`, `financeStore`…). Pattern récurrent : `fetch()` peuple le store via `window.btpAPI`, les mutations appellent `window.btpAPI` puis re-`fetch()`. React Query est aussi présent. Les calculs métier vivent dans des moteurs purs et testés (`invoiceEngine.ts`, `quoteEngine.ts`).
 
 ### Serveur (`apps/server`)
-Express + MySQL (`mysql2`, requêtes paramétrées) + JWT. Le **schéma est auto-créé/migré au démarrage** (`db.ts`, `CREATE TABLE IF NOT EXISTS` — pas de migrations versionnées). Points d'entrée transverses : `auth.ts` (JWT + scrypt), `rbac.ts` (rôles hiérarchiques super_admin > admin > manager > accountant > worker > viewer), `token-revocation.ts` (blacklist au logout/changement de mot de passe), `audit.ts` (journal d'activité), `rate-limit.ts` (buckets **en mémoire** — ne scale pas en multi-instance). Le CRUD générique est dans `routes/crud.ts` ; les domaines spécialisés ont leur route (`accounting`, `qonto`, `vault`, `microsoft`, `admin-*`). Démarrage prod : `app.js` (Passenger/cPanel) ou `node dist/index.js`.
+Express + MySQL (`mysql2`, requêtes paramétrées) + JWT. Le **schéma est auto-créé/migré au démarrage** (`db.ts`, `CREATE TABLE IF NOT EXISTS` — pas de migrations versionnées). Points d'entrée transverses : `auth.ts` (JWT + scrypt), `rbac.ts` (rôles hiérarchiques super_admin > admin > manager > accountant > worker > viewer), `token-revocation.ts` (blacklist au logout/changement de mot de passe), `audit.ts` (journal d'activité), `rate-limit.ts` (buckets **en mémoire** — ne scale pas en multi-instance). Le CRUD générique est dans `routes/crud.ts` ; les domaines spécialisés ont leur route (`accounting`, `qonto`, `vault`, `microsoft`, `admin-*`). Démarrage prod : `app.js` (Passenger/cPanel chez o2switch) ou `node dist/index.js`. Le redémarrage de l'app o2switch se déclenche en touchant `tmp/restart.txt` (script `npm run restart`).
 
 ### Comptabilité
 Partie double complète (`apps/server/src/accounting`, types dans `packages/types/src/accounting.ts`) : journal, grand livre, balance, compte de résultat, bilan, TVA, export FEC. Les marges par chantier (`ChantierMargin`) sont calculées côté compta et exposées via `financeStore`.
