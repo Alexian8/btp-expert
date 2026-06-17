@@ -1089,21 +1089,25 @@ export function installBtpApiShim(): void {
       subject: string;
       body: string;
       isHtml?: boolean;
-      attachmentPath?: string;
-      attachmentName?: string;
+      /** Pièces jointes (ex: PDF du devis/facture) générées côté client. */
+      attachments?: Array<{ name: string; contentBase64: string; contentType?: string }>;
     }): Promise<{ success: boolean; error?: string }> => {
       try {
         // Normalise to/cc en tableaux
         const toArr = Array.isArray(args.to) ? args.to : [args.to];
-        const ccArr = args.cc ? (Array.isArray(args.cc) ? args.cc : [args.cc]) : undefined;
-        // L'attachment path vient du desktop (chemin local) — pas exploitable en
-        // web. À adapter quand on aura un endpoint d'upload pour pièces jointes.
-        await http<void>("POST", "/api/email/send", {
+        // Envoi via SMTP (mailbox de domaine côté serveur) plutôt que Graph :
+        // pas besoin d'un compte Microsoft connecté. La pièce jointe PDF est
+        // générée côté client et transmise en base64.
+        await http<{ success: boolean }>("POST", "/api/email/send-smtp", {
           to: toArr,
-          cc: ccArr,
           subject: args.subject,
           body: args.body,
           isHtml: args.isHtml ?? true,
+          attachments: (args.attachments ?? []).map((a) => ({
+            name: a.name,
+            contentType: a.contentType ?? "application/pdf",
+            contentBase64: a.contentBase64,
+          })),
         });
         return { success: true };
       } catch (e) {
