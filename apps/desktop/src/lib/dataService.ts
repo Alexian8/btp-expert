@@ -118,6 +118,10 @@ declare global {
     btpAPI?: {
       getSettings: () => Promise<AppSettings>;
       updateSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>;
+      isWeb?: boolean;
+      // Mot de passe oublié (self-service, web). Optionnels : absents sur desktop.
+      authRequestPasswordReset?: (identifier: string) => Promise<{ success: boolean; error?: string }>;
+      authResetPassword?: (token: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
       countUsers: () => Promise<number>;
       createFirstUser: (args: { username: string; passwordHash: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
       findUser: (username: string) => Promise<{ id: number; username: string; passwordHash: string; role: string } | null>;

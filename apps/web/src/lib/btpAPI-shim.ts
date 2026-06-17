@@ -228,6 +228,28 @@ export function installBtpApiShim(): void {
     webLogin, // exposé pour usage par dataService desktop en mode web
     webMe, // exposé pour rehydratation au boot
     webLogout, // exposé pour drop le token au logout
+    // Mot de passe oublié (self-service). request-reset répond toujours 200.
+    authRequestPasswordReset: async (
+      identifier: string
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await http("POST", "/api/auth/request-reset", { identifier });
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    authResetPassword: async (
+      token: string,
+      newPassword: string
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await http("POST", "/api/auth/reset-password", { token, newPassword });
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
     countUsers: async (): Promise<number> => {
       // Côté web : on renvoie 1 (admin déjà bootstrappé via /api/auth/bootstrap)
       // pour que l'app ne tente jamais l'écran "Créez votre compte"

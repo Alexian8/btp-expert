@@ -485,6 +485,18 @@ export async function runMigrations(db: Pool): Promise<void> {
       INDEX idx_revoked_expires (expiresAt)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
+    // ─── Réinitialisation de mot de passe (lien email, self-service) ──────
+    `CREATE TABLE IF NOT EXISTS password_resets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      userId INT NOT NULL,
+      tokenHash CHAR(64) NOT NULL,
+      expiresAt BIGINT NOT NULL,
+      usedAt BIGINT NOT NULL DEFAULT 0,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_pwreset_token (tokenHash),
+      INDEX idx_pwreset_user (userId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
     // ─── Documents administratifs : PV de réception (NF P 03-001) ─────────
     `CREATE TABLE IF NOT EXISTS reception_reports (
       id VARCHAR(64) PRIMARY KEY,
@@ -919,6 +931,9 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
   // Multi-tenant : companyId sur users (default 1 = tenant existant)
   // NULL = super_admin (pas rattaché à une company)
   await addColumnIfNotExists(db, "users", "companyId", "INT NULL DEFAULT 1");
+  // Verrouillage de compte après échecs de connexion (Lot auth)
+  await addColumnIfNotExists(db, "users", "failedLoginAttempts", "INT NOT NULL DEFAULT 0");
+  await addColumnIfNotExists(db, "users", "lockedUntil", "BIGINT NOT NULL DEFAULT 0");
   // Si la colonne existait avec NOT NULL, on la rend nullable pour super_admin
   try {
     const [colRows] = await db.query<RowDataPacket[]>(

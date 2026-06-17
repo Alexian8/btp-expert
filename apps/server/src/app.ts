@@ -26,7 +26,7 @@ import { makeReferenceHook } from "./accounting/references";
 import { buildQontoRouter } from "./routes/qonto";
 import { requireAuth } from "./auth";
 import { requireRole } from "./rbac";
-import { buildLoginRateLimiter, buildApiRateLimiter } from "./rate-limit";
+import { buildLoginRateLimiter, buildApiRateLimiter, buildPasswordResetRateLimiter } from "./rate-limit";
 import { startRevokedTokensPurgeJob } from "./token-revocation";
 
 export interface AppContext {
@@ -246,6 +246,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
 
   // Rate-limit STRICT sur le login (anti brute-force)
   app.use("/api/auth/login", buildLoginRateLimiter(cfg));
+  app.use("/api/auth/request-reset", buildPasswordResetRateLimiter(cfg));
   app.use("/api/auth", buildAuthRouter(pool, cfg));
 
   // ─── Admin : gestion utilisateurs (admin only) ─────────────────────────
@@ -865,6 +866,7 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
     "cgv",
     "theme",
     "appearance",
+    "session",
   ];
   const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
   const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

@@ -5,6 +5,7 @@ import { AuthLayout } from "@/app/layouts/AuthLayout";
 import { DashboardLayout } from "@/app/layouts/DashboardLayout";
 import { SuperAdminLayout } from "@/app/layouts/SuperAdminLayout";
 import { LoginPage } from "@/features/auth/components/LoginPage";
+import { ResetPasswordPage } from "@/features/auth/components/ResetPasswordPage";
 import { DashboardPage } from "@/features/dashboard/components/DashboardPage";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
 import { ClientsPage } from "@/features/clients/components/ClientsPage";
@@ -116,6 +117,15 @@ const router = createBrowserRouter(
       ),
       errorElement: <RouteErrorBoundary />,
       children: [{ index: true, element: <LoginPage /> }],
+    },
+    {
+      // Réinitialisation via lien email — accessible sans authentification et
+      // sans redirection (le token suffit). Pas de PublicRoute pour permettre
+      // l'accès même si un ancien token de session traîne.
+      path: "/reset-password",
+      element: <AuthLayout />,
+      errorElement: <RouteErrorBoundary />,
+      children: [{ index: true, element: <ResetPasswordPage /> }],
     },
     {
       path: "/",

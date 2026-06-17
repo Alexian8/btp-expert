@@ -112,3 +112,18 @@ export function buildApiRateLimiter(cfg: Config): RequestHandler {
     message: "Trop de requêtes. Réessayez plus tard.",
   });
 }
+
+/**
+ * Rate-limit pour la demande de réinitialisation de mot de passe.
+ * Compte TOUTES les requêtes (skipSuccess=false) car la réponse est toujours
+ * 200 (anti-énumération) : protège contre l'email-bombing. Réutilise la
+ * fenêtre/quota du login.
+ */
+export function buildPasswordResetRateLimiter(cfg: Config): RequestHandler {
+  return makeLimiter({
+    name: "password-reset",
+    windowMs: cfg.RATE_LIMIT_LOGIN_WINDOW_MIN * 60 * 1000,
+    limit: cfg.RATE_LIMIT_LOGIN_MAX,
+    message: "Trop de demandes de réinitialisation. Réessayez dans quelques minutes.",
+  });
+}

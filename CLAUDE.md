@@ -66,6 +66,14 @@ Partie double complète (`apps/server/src/accounting`, types dans `packages/type
 ### Sécurité / secrets
 Mots de passe en scrypt. Les credentials Qonto sont chiffrés AES-256-GCM (clé dérivée du `JWT_SECRET`) et ne sont jamais renvoyés au front. Config validée par Zod au boot (`config.ts`) ; `JWT_SECRET` doit faire ≥ 32 octets. Variables d'environnement principales du serveur : `JWT_SECRET` (requis), `MYSQL_HOST/USER/PASSWORD/DATABASE`, `CORS_ORIGINS`, `APP_URL`, `PORT`, et optionnelles `MS_*` (Outlook/OneDrive), `SMTP_*` (email), `SENTRY_DSN`. Voir le tableau complet dans `README.md`.
 
+### Authentification & sessions
+- **JWT** : validité `JWT_EXPIRES_IN` (défaut 7j), révocation au logout/changement de mot de passe (`token-revocation.ts`). Token web en `localStorage` ; à 401 le shim émet `btp:auth-required` → logout UI.
+- **Déconnexion automatique par inactivité** : composant `InactivityLogout` (monté dans `App.tsx`), 100 % client (web + desktop), avertissement 60 s avant. Durée réglable dans **Paramètres → Session & sécurité** (`SessionSection`) via le setting `sessionInactivityMinutes` (défaut 30, 0 = désactivé). Préfixe `session` ajouté à la whitelist `/api/settings`.
+- **Verrouillage de compte** : après `LOGIN_LOCKOUT_MAX_ATTEMPTS` échecs (défaut 10), compte verrouillé `LOGIN_LOCKOUT_MINUTES` (défaut 15) — colonnes `users.failedLoginAttempts` / `lockedUntil` ; déverrouillé au login réussi ou au reset admin. Réponse 429 (surfacée en toast côté web).
+- **Politique de mot de passe** : ≥ 10 car. + maj/min/chiffre, validée **côté serveur** (`validatePasswordPolicy` dans `routes/auth.ts`) en plus de l'UI (`ChangePasswordModal`).
+- **Mot de passe oublié (self-service, web)** : `POST /api/auth/request-reset` (réponse 200 anti-énumération, rate-limité, email SMTP avec lien `${APP_URL}/reset-password?token=`, table `password_resets`, token SHA-256, validité 1 h) puis `POST /api/auth/reset-password` (`{token,newPassword}`). UI : lien « Mot de passe oublié ? » sur `LoginPage` (si `isWeb`) + page publique `ResetPasswordPage` (`/reset-password`). Shim : `authRequestPasswordReset` / `authResetPassword`.
+- **Admin utilisateurs** (`routes/admin-users.ts`, RBAC) : CRUD, invitation (mot de passe temporaire + `mustChangePassword`), reset, désactivation.
+
 ### Emails — transports & canaux
 Le client SMTP maison est dans `apps/server/src/email.ts` (`sendMail`, zéro dépendance, supporte les **pièces jointes** en `multipart/mixed`). Deux routes serveur d'envoi (`apps/server/src/routes/microsoft.ts`, `buildEmailRouter`) :
 - `POST /api/email/send` → **Microsoft Graph** (`/me/sendMail`), nécessite un compte Microsoft 365 connecté.
