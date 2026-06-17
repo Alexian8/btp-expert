@@ -11,7 +11,29 @@ import { signToken, verifyToken, type AuthPayload } from "../auth";
 import { writeAudit } from "../audit";
 import { changeMailboxPassword, isCpanelConfigured } from "../cpanel-email";
 import { revokeToken } from "../token-revocation";
+import { sendMail } from "../email";
 import type { Config } from "../config";
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 heure
+
+function sha256(s: string): string {
+  return crypto.createHash("sha256").update(s).digest("hex");
+}
+
+function resetEmailHtml(link: string, expiresMinutes: number): string {
+  return `<!DOCTYPE html><html lang="fr"><body style="margin:0;background:#f4f6fa;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;"><tr><td align="center">
+    <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;max-width:560px;width:100%;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+      <tr><td style="background:linear-gradient(135deg,#2563eb,#1e40af);padding:28px 36px;color:#fff;"><h1 style="margin:0;font-size:20px;">BatiDesk</h1></td></tr>
+      <tr><td style="padding:32px 36px;">
+        <h2 style="margin:0 0 12px;font-size:18px;">Réinitialisation de votre mot de passe</h2>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#475569;">Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous (lien valable ${expiresMinutes} minutes).</p>
+        <a href="${link}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:8px;">Choisir un nouveau mot de passe</a>
+        <p style="margin:22px 0 0;font-size:12px;color:#64748b;line-height:1.6;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email : votre mot de passe reste inchangé.<br>Lien : <a href="${link}" style="color:#2563eb;word-break:break-all;">${link}</a></p>
+      </td></tr>
+    </table>
+  </td></tr></table></body></html>`;
+}
 
 const SALT_LEN = 16;
 const KEY_LEN = 64;
@@ -351,6 +373,113 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
       }
 
       res.status(204).end();
+    })
+  );
+
+  // ─── Demande de réinitialisation (self-service, lien par email) ───────
+  // Anti-énumération : réponse 200 identique que le compte existe ou non.
+  router.post(
+    "/request-reset",
+    wrap(async (req, res) => {
+      const schema = z.object({ identifier: z.string().min(1).max(255) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: "Identifiant manquant" });
+        return;
+      }
+      const identifier = parsed.data.identifier.trim();
+      const ip = req.ip ?? "";
+      const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
+
+      const [rows] = await db.query<UserRow[]>(
+        `SELECT id, username, email, companyId, disabled
+         FROM users WHERE (username = ? OR email = ?) LIMIT 1`,
+        [identifier, identifier]
+      );
+      const row = rows[0];
+      const smtpReady = Boolean(cfg.SMTP_HOST && cfg.SMTP_USER && cfg.SMTP_PASS);
+      if (row && !row.disabled && row.email && smtpReady) {
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = Date.now() + RESET_TOKEN_TTL_MS;
+        await db.execute(
+          "INSERT INTO password_resets (userId, tokenHash, expiresAt) VALUES (?, ?, ?)",
+          [row.id, sha256(token), expiresAt]
+        );
+        const base = (cfg.APP_URL || "").replace(/\/+$/, "");
+        const link = `${base}/reset-password?token=${token}`;
+        const r = await sendMail(cfg, {
+          to: row.email,
+          subject: "Réinitialisation de votre mot de passe — BatiDesk",
+          html: resetEmailHtml(link, Math.round(RESET_TOKEN_TTL_MS / 60000)),
+        });
+        void writeAudit(db, {
+          userId: row.id,
+          username: row.username,
+          companyId: row.companyId ?? null,
+          action: "password_reset_requested",
+          ip,
+          userAgent,
+          meta: { emailSent: r.ok },
+        });
+      }
+      // Toujours 200 (ne révèle pas l'existence du compte).
+      res.json({ success: true });
+    })
+  );
+
+  // ─── Réinitialisation effective via le token reçu par email ───────────
+  router.post(
+    "/reset-password",
+    wrap(async (req, res) => {
+      const schema = z.object({
+        token: z.string().min(16).max(256),
+        newPassword: z.string().min(1).max(256),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: "Payload invalide" });
+        return;
+      }
+      const policyError = validatePasswordPolicy(parsed.data.newPassword);
+      if (policyError) {
+        res.status(400).json({ message: policyError });
+        return;
+      }
+      const tokenHash = sha256(parsed.data.token);
+      const [rows] = await db.query<RowDataPacket[]>(
+        `SELECT id, userId, expiresAt, usedAt FROM password_resets
+         WHERE tokenHash = ? ORDER BY id DESC LIMIT 1`,
+        [tokenHash]
+      );
+      const reset = rows[0] as
+        | { id: number; userId: number; expiresAt: number; usedAt: number }
+        | undefined;
+      if (!reset || reset.usedAt > 0 || Number(reset.expiresAt) < Date.now()) {
+        res.status(400).json({ message: "Lien invalide ou expiré. Refaites une demande." });
+        return;
+      }
+      const newHash = hashPassword(parsed.data.newPassword);
+      // Met à jour le mot de passe, lève mustChangePassword et déverrouille.
+      await db.execute(
+        "UPDATE users SET passwordHash = ?, mustChangePassword = 0, failedLoginAttempts = 0, lockedUntil = 0 WHERE id = ?",
+        [newHash, reset.userId]
+      );
+      await db.execute("UPDATE password_resets SET usedAt = ? WHERE id = ?", [Date.now(), reset.id]);
+
+      const [urows] = await db.query<UserRow[]>(
+        "SELECT username, companyId FROM users WHERE id = ? LIMIT 1",
+        [reset.userId]
+      );
+      void writeAudit(db, {
+        userId: reset.userId,
+        username: urows[0]?.username ?? "",
+        companyId: urows[0]?.companyId ?? null,
+        action: "password_reset_done",
+        ip: req.ip ?? "",
+        userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+        meta: {},
+      });
+      res.json({ success: true });
     })
   );
 

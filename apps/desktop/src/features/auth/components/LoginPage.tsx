@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Lock, User as UserIcon } from "lucide-react";
+import { Lock, User as UserIcon, Mail, ArrowLeft, MailCheck } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,33 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
 
+  // Mot de passe oublié (self-service, web). Le lien de réinitialisation est
+  // envoyé par email et ouvre /reset-password.
+  const canForgot = Boolean(window.btpAPI?.isWeb && window.btpAPI?.authRequestPasswordReset);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotId, setForgotId] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
+  const handleForgot = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (!forgotId.trim()) {
+      setError("Renseignez votre identifiant ou votre email");
+      return;
+    }
+    setError("");
+    setForgotLoading(true);
+    try {
+      await window.btpAPI?.authRequestPasswordReset?.(forgotId.trim());
+      // Toujours afficher le même message (anti-énumération).
+      setForgotSent(true);
+    } catch {
+      toast.error("Une erreur est survenue. Réessayez.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -58,6 +86,91 @@ export function LoginPage() {
       else setError("Identifiants incorrects");
     }
   };
+
+  // ─── Vue « Mot de passe oublié » ─────────────────────────────────────────
+  if (forgotMode) {
+    return (
+      <Card className="shadow-soft-xl">
+        <CardHeader className="space-y-3 text-center pt-8">
+          <div className="mx-auto w-14 h-14 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+            {forgotSent ? <MailCheck className="w-7 h-7" /> : <Mail className="w-7 h-7" />}
+          </div>
+          <CardDescription className="text-sm">
+            {forgotSent
+              ? "Vérifiez votre boîte mail"
+              : "Réinitialiser votre mot de passe"}
+          </CardDescription>
+        </CardHeader>
+
+        {forgotSent ? (
+          <>
+            <CardContent>
+              <p className="text-sm text-muted-foreground text-center">
+                Si un compte existe pour cet identifiant, un email contenant un
+                lien de réinitialisation vient d'être envoyé. Le lien est valable
+                1 heure.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setForgotMode(false);
+                  setForgotSent(false);
+                  setForgotId("");
+                  setError("");
+                }}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Retour à la connexion
+              </Button>
+            </CardFooter>
+          </>
+        ) : (
+          <form onSubmit={handleForgot}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgotId">Identifiant ou email</Label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="forgotId"
+                    type="text"
+                    placeholder="Votre identifiant ou email"
+                    value={forgotId}
+                    onChange={(e) => setForgotId(e.target.value)}
+                    className="pl-9"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              {error && (
+                <div className="p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                  {error}
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="flex-col gap-2">
+              <Button type="submit" className="w-full" loading={forgotLoading}>
+                Envoyer le lien de réinitialisation
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotMode(false);
+                  setError("");
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Retour à la connexion
+              </button>
+            </CardFooter>
+          </form>
+        )}
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -115,6 +228,21 @@ export function LoginPage() {
                 autoComplete={needsSetup ? "new-password" : "current-password"}
               />
             </div>
+            {!needsSetup && canForgot && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotMode(true);
+                    setForgotId(username.trim());
+                    setError("");
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            )}
           </div>
 
           {needsSetup && (
