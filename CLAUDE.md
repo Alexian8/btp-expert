@@ -65,6 +65,21 @@ Mots de passe en scrypt. Les credentials Qonto sont chiffrés AES-256-GCM (clé 
 ### Premier démarrage
 La base est vide : créer le premier administrateur via `POST /api/auth/bootstrap` (one-shot), puis login via `POST /api/auth/login`.
 
+## Navigation & vocabulaire métier
+
+Instance de référence (dev) : `intranet.jacobhabitat-dev.fr` (déploiement Jacob Habitat, o2switch). Thème **sombre par défaut** (toggle clair/sombre), **palette de commandes ⌘K / Ctrl+K**, barre latérale repliable.
+
+**Sidebar** (définie dans `apps/desktop/src/app/layouts/DashboardLayout.tsx`) → routes :
+`/` Tableau de bord · `/quotes` **Devis & Factures** · `/chantiers` Chantiers · `/clients` Clients · `/suppliers` Fournisseurs · `/expenses` Dépenses & frais · `/subcontractors` Sous-traitants · `/finances` **Finances & Compta** · `/admin-docs` Documents admin · `/calendar` Agenda · `/vault` Coffre-fort · `/settings` Paramètres (épinglé en bas).
+⚠️ Pièges de routing : **Devis + Factures** sont une seule page à onglets (`/quotes`), **Finances + Compta** sont regroupées (`/finances`), et l'**Agenda est sur `/calendar`** (pas `/agenda`).
+
+**Numérotation** : `<PREFIX>-<AAAA>-<NNNN>`, compteur **remis à 1 chaque année** (`DEVIS-2026-0001`, `FACT-2026-0001`, `DEP-…`). ⚠️ Générée à **deux endroits qui doivent rester alignés** (exemple concret de la règle d'inter-compatibilité) : desktop `apps/desktop/electron/main.js` et serveur `apps/server/src/accounting/references.ts`.
+
+**Statuts** (libellés & couleurs dans `packages/types`) :
+- **Devis** : brouillon · envoyé · accepté · refusé.
+- **Facture** : brouillon · envoyée · partiellement-payée · payée · annulée. Types : standard · acompte · avoir.
+- **Chantier** : prospect · en-cours · terminé · annulé — vues **Kanban (drag-drop)** + Liste.
+
 ## Conventions
 
 ### UI responsive — « visible sur tous les supports »
