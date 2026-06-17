@@ -54,13 +54,21 @@ Ces deux implémentations honorent le contrat `IDataService` défini dans `packa
 Stores **Zustand** dans `apps/desktop/src/stores/*` (un par domaine : `clientsStore`, `invoicesStore`, `financeStore`…). Pattern récurrent : `fetch()` peuple le store via `window.btpAPI`, les mutations appellent `window.btpAPI` puis re-`fetch()`. React Query est aussi présent. Les calculs métier vivent dans des moteurs purs et testés (`invoiceEngine.ts`, `quoteEngine.ts`).
 
 ### Serveur (`apps/server`)
-Express + MySQL (`mysql2`, requêtes paramétrées) + JWT. Le **schéma est auto-créé/migré au démarrage** (`db.ts`, `CREATE TABLE IF NOT EXISTS` — pas de migrations versionnées). Points d'entrée transverses : `auth.ts` (JWT + scrypt), `rbac.ts` (rôles hiérarchiques super_admin > admin > manager > accountant > worker > viewer), `token-revocation.ts` (blacklist au logout/changement de mot de passe), `audit.ts` (journal d'activité), `rate-limit.ts` (buckets **en mémoire** — ne scale pas en multi-instance). Le CRUD générique est dans `routes/crud.ts` ; les domaines spécialisés ont leur route (`accounting`, `qonto`, `vault`, `microsoft`, `admin-*`). Démarrage prod : `app.js` (Passenger/cPanel chez o2switch) ou `node dist/index.js`. Le redémarrage de l'app o2switch se déclenche en touchant `tmp/restart.txt` (script `npm run restart`).
+Express + MySQL (`mysql2`, requêtes paramétrées) + JWT. Le **schéma est auto-créé/migré au démarrage** (`db.ts`, `CREATE TABLE IF NOT EXISTS` — pas de migrations versionnées). Points d'entrée transverses : `auth.ts` (JWT + scrypt), `rbac.ts` (rôles hiérarchiques super_admin > admin > manager > accountant > worker > viewer), `token-revocation.ts` (blacklist au logout/changement de mot de passe), `audit.ts` (journal d'activité), `rate-limit.ts` (buckets **en mémoire** — ne scale pas en multi-instance). Le CRUD générique est dans `routes/crud.ts` ; les domaines spécialisés ont leur route (`accounting`, `qonto`, `vault`, `microsoft`, `admin-*`).
+
+**Déploiement (o2switch / cPanel)** : le hosting clone le dépôt côté serveur via *Git Version Control* (sous `/home/<user-cpanel>/repositories/btp-expert`, branche **`main`**) et l'exécute via *Setup Node.js App* (Passenger) — **Node 22**, `NODE_ENV=production`, fichier de démarrage **`apps/server/app.js`**, dans un virtualenv `nodevenv`. Pas de build au déploiement → cf. `dist/` web versionné. Redémarrage : bouton *Redémarrer* de cPanel ou `touch tmp/restart.txt` (`npm run restart`).
 
 ### Comptabilité
 Partie double complète (`apps/server/src/accounting`, types dans `packages/types/src/accounting.ts`) : journal, grand livre, balance, compte de résultat, bilan, TVA, export FEC. Les marges par chantier (`ChantierMargin`) sont calculées côté compta et exposées via `financeStore`.
 
 ### Sécurité / secrets
 Mots de passe en scrypt. Les credentials Qonto sont chiffrés AES-256-GCM (clé dérivée du `JWT_SECRET`) et ne sont jamais renvoyés au front. Config validée par Zod au boot (`config.ts`) ; `JWT_SECRET` doit faire ≥ 32 octets. Variables d'environnement principales du serveur : `JWT_SECRET` (requis), `MYSQL_HOST/USER/PASSWORD/DATABASE`, `CORS_ORIGINS`, `APP_URL`, `PORT`, et optionnelles `MS_*` (Outlook/OneDrive), `SMTP_*` (email), `SENTRY_DSN`. Voir le tableau complet dans `README.md`.
+
+### Emails (deux canaux distincts)
+- **Documents clients** (devis / factures) : envoyés via **Microsoft Graph** depuis le compte Outlook connecté (`window.btpAPI.invoicesSendViaOutlook` / `emailSendDocument` → `apps/server/src/routes/microsoft.ts`, `POST /me/sendMail`). Nécessite un compte Microsoft 365 connecté côté Réglages.
+- **Mails système** (invitations utilisateurs…) : via **SMTP** (client maison `apps/server/src/email.ts`, vars `SMTP_*`). No-op si SMTP non configuré.
+
+> Mailbox de domaine hébergée chez o2switch : pour automatiser et tracer l'envoi des devis/factures **sans dépendre d'un compte Microsoft connecté**, l'option naturelle est de basculer ce canal sur **SMTP** (mailbox `@<domaine>`), avec **SPF/DKIM/DMARC** configurés pour la délivrabilité.
 
 ### Premier démarrage
 La base est vide : créer le premier administrateur via `POST /api/auth/bootstrap` (one-shot), puis login via `POST /api/auth/login`.
