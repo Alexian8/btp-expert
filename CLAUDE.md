@@ -80,6 +80,11 @@ Instance de référence (dev) : `intranet.jacobhabitat-dev.fr` (déploiement Jac
 - **Facture** : brouillon · envoyée · partiellement-payée · payée · annulée. Types : standard · acompte · avoir.
 - **Chantier** : prospect · en-cours · terminé · annulé — vues **Kanban (drag-drop)** + Liste.
 
+### Documents PDF (devis / factures)
+Rendus par **React-PDF** dans `apps/desktop/src/features/pdf/` — deux styles par type : `QuotePdfClassique`/`QuotePdfMinimal`, `InvoicePdfClassique`/`InvoicePdfMinimal`. **Toute l'identité d'entreprise et les mentions légales sont paramétrables dans Paramètres** (`packages/types/src/settings.ts`) et ne doivent **jamais être codées en dur** : identité (SIRET, TVA intracom., APE), coordonnées bancaires (IBAN/BIC, affichées si `pdfIbanShown`), assurances (`assuranceDecennale*` — **obligatoire en BTP** —, `assuranceRC*`), acompte par défaut (`acompteDefaut`), clause de réserve de propriété, validité du devis.
+
+Mentions attendues sur un devis (conformité BTP, pour référence) : **assurance décennale** + RC pro, coordonnées bancaires, **réserve de propriété**, **validité (30 j)**, **acompte** (ex. 30 % à la commande), bloc signature « **Bon pour accord** ». La **TVA est gérée par ligne** (totaux regroupés par taux ; 20 % dans les exemples courants).
+
 ## Conventions
 
 ### UI responsive — « visible sur tous les supports »
