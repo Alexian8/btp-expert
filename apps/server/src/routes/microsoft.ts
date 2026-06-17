@@ -16,6 +16,7 @@ import { z } from "zod";
 import type { DB, RowDataPacket, ResultSetHeader } from "../db";
 import type { Config } from "../config";
 import { verifyToken, type AuthPayload } from "../auth";
+import { sendMail } from "../email";
 
 const wrap =
   (handler: (req: Request, res: Response) => Promise<void>) =>
@@ -420,6 +421,61 @@ export function buildEmailRouter(db: DB, cfg: Config): Router {
       const errBody = await graphRes.text();
       console.error("[ms-graph] sendMail failed:", graphRes.status, errBody);
       res.status(502).json({ success: false, error: `Graph API ${graphRes.status}`, details: errBody });
+    })
+  );
+
+  // ─── Envoi via SMTP (mailbox de domaine, sans compte Microsoft) ──────────
+  // Alternative à /send (Graph) : envoie depuis la mailbox SMTP configurée
+  // côté serveur (SMTP_*). Permet d'envoyer devis/factures sans qu'un compte
+  // Microsoft soit connecté. Consommé par le web et (à terme) iOS.
+  router.post(
+    "/send-smtp",
+    wrap(async (req, res) => {
+      const payload = userFromAuthHeader(req, cfg);
+      if (!payload) {
+        res.status(401).json({ message: "Non authentifié" });
+        return;
+      }
+      const parsed = SendEmailSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: "Payload invalide", details: parsed.error.issues });
+        return;
+      }
+      if (!cfg.SMTP_HOST || !cfg.SMTP_USER || !cfg.SMTP_PASS) {
+        res.status(503).json({ success: false, error: "SMTP non configuré sur le serveur" });
+        return;
+      }
+
+      const { to, subject, body, isHtml, attachments } = parsed.data;
+      // Le client SMTP envoie à un destinataire (cas usuel : un devis/une
+      // facture à un client). Les destinataires supplémentaires (cc/to[1+])
+      // ne sont pas encore gérés par ce transport.
+      // Corps en texte brut → HTML : on échappe puis on préserve les sauts de
+      // ligne (white-space: pre-wrap) sans imposer une police monospace.
+      const escapeHtml = (s: string): string =>
+        s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const html = isHtml
+        ? body
+        : `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#0f172a;white-space:pre-wrap;">${escapeHtml(body)}</div>`;
+      const result = await sendMail(cfg, {
+        to: to[0]!,
+        subject,
+        html,
+        text: isHtml ? undefined : body,
+        attachments: (attachments ?? []).map((a) => ({
+          filename: a.name,
+          contentType: a.contentType,
+          contentBase64: a.contentBase64,
+        })),
+      });
+
+      if (result.ok) {
+        res.status(200).json({ success: true, messageId: result.messageId });
+        return;
+      }
+      res
+        .status(502)
+        .json({ success: false, error: result.error || "Échec de l'envoi SMTP" });
     })
   );
 

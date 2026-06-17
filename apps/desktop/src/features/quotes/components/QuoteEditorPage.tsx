@@ -34,6 +34,7 @@ import {
 import { QuotePdfDocument } from "@/features/pdf/QuotePdfDocument";
 import { QuotePdfMinimal } from "@/features/pdf/QuotePdfMinimal";
 import { QuotePdfClassique } from "@/features/pdf/QuotePdfClassique";
+import { pdfElementToBase64 } from "@/features/pdf/pdfToBase64";
 import { usePdfActions, PDF_TEMPLATE_LABELS } from "@/features/pdf/usePdfActions";
 import { PdfPreviewPortal } from "@/features/pdf/PdfPreviewPortal";
 import {
@@ -219,6 +220,24 @@ export function QuoteEditorPage() {
     const c = useClientsStore.getState().clients.find((c) => c.id === formData.clientId);
     return c?.email || "";
   })();
+
+  // Génère le PDF du devis en base64 (web : joint à l'email SMTP). Reprend le
+  // template choisi par l'utilisateur (persisté par usePdfActions).
+  const buildQuotePdfBase64 = async (): Promise<string> => {
+    if (!existing) throw new Error("Devis indisponible");
+    const client = useClientsStore.getState().clients.find((c) => c.id === existing.clientId);
+    const tmpl =
+      (typeof localStorage !== "undefined" && localStorage.getItem("btp.pdf.quote-template")) || "modern";
+    const el =
+      tmpl === "sobre" ? (
+        <QuotePdfMinimal quote={existing} client={client} company={company} />
+      ) : tmpl === "classique" ? (
+        <QuotePdfClassique quote={existing} client={client} company={company} />
+      ) : (
+        <QuotePdfDocument quote={existing} client={client} company={company} />
+      );
+    return pdfElementToBase64(el);
+  };
 
   const defaultEmailSubject = existing
     ? `Devis ${existing.reference} — ${company?.companyName || "Votre entreprise"}`
@@ -504,6 +523,7 @@ ${company?.companyName || ""}`;
           defaultTo={clientEmail}
           defaultSubject={defaultEmailSubject}
           defaultBody={defaultEmailBody}
+          getPdfBase64={buildQuotePdfBase64}
           onClose={() => setEmailModalOpen(false)}
           onSent={() => {
             fetch();

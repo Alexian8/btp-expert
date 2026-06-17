@@ -21,13 +21,16 @@ interface Props {
   defaultSubject: string;
   defaultBody: string;
   isReminder?: boolean;
+  /** Génère le PDF de la facture en base64 (utilisé côté web pour l'envoi SMTP
+   *  avec pièce jointe ; ignoré côté desktop qui génère le PDF lui-même). */
+  getPdfBase64?: () => Promise<string>;
   onClose: () => void;
   onSent: () => void;
 }
 
 export function SendInvoiceByEmailModal({
   open, invoiceId, invoiceReference, defaultTo, defaultSubject, defaultBody,
-  isReminder = false, onClose, onSent,
+  isReminder = false, getPdfBase64, onClose, onSent,
 }: Props) {
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState("");
@@ -52,6 +55,22 @@ export function SendInvoiceByEmailModal({
     if (!window.btpAPI?.invoicesSendViaOutlook) return;
 
     setSending(true);
+
+    // Côté web : on génère le PDF dans le navigateur et on le joint (l'envoi
+    // passe par SMTP). Côté desktop : le PDF est généré par le main process.
+    let attachmentBase64: string | undefined;
+    let attachmentName: string | undefined;
+    if ((window.btpAPI as { isWeb?: boolean })?.isWeb && getPdfBase64) {
+      try {
+        attachmentBase64 = await getPdfBase64();
+        attachmentName = `${invoiceReference}.pdf`;
+      } catch {
+        setSending(false);
+        toast.error("Impossible de générer le PDF de la facture");
+        return;
+      }
+    }
+
     const r = await window.btpAPI.invoicesSendViaOutlook({
       invoiceId,
       to: to.trim(),
@@ -59,6 +78,7 @@ export function SendInvoiceByEmailModal({
       subject: subject.trim() || `${isReminder ? "Relance : " : "Votre facture "}${invoiceReference}`,
       body: body.trim(),
       markAsReminder: isReminder,
+      ...(attachmentBase64 ? { attachmentBase64, attachmentName } : {}),
     });
     setSending(false);
 

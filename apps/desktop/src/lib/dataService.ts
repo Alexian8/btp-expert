@@ -231,7 +231,7 @@ declare global {
       quotesExportPdfPreview: (quoteId: string) => Promise<{ success: boolean; path?: string; error?: string; vault?: { stored: boolean; replaced?: boolean; folderId?: string; error?: string } }>;
       quotesExportPdfSaveAs: (quoteId: string) => Promise<{ success: boolean; path?: string; cancelled?: boolean; error?: string; vault?: { stored: boolean; replaced?: boolean; folderId?: string; error?: string } }>;
       quotesOpenPdfExternal: (pdfPath: string) => Promise<{ success: boolean; error?: string }>;
-      quotesSendViaOutlook: (args: { quoteId: string; to: string; subject: string; body: string; cc?: string }) => Promise<{ success: boolean; needsLogin?: boolean; error?: string }>;
+      quotesSendViaOutlook: (args: { quoteId: string; to: string; subject: string; body: string; cc?: string; attachmentBase64?: string; attachmentName?: string }) => Promise<{ success: boolean; needsLogin?: boolean; error?: string }>;
       quotesGetDesignationHistory: () => Promise<Array<{ title: string; description: string; unit: string; unitPriceHT: number; vatRate: number; count: number }>>;
       // Session 10 — Invoices
       invoicesList: () => Promise<any[]>;
@@ -255,7 +255,7 @@ declare global {
       invoicesExportPdfPreview: (invoiceId: string) => Promise<{ success: boolean; path?: string; error?: string; vault?: { stored: boolean; replaced?: boolean; folderId?: string; error?: string } }>;
       invoicesExportPdfSaveAs: (invoiceId: string) => Promise<{ success: boolean; path?: string; cancelled?: boolean; error?: string; vault?: { stored: boolean; replaced?: boolean; folderId?: string; error?: string } }>;
       invoicesOpenPdfExternal: (pdfPath: string) => Promise<{ success: boolean; error?: string }>;
-      invoicesSendViaOutlook: (args: { invoiceId: string; to: string; subject: string; body: string; cc?: string; markAsReminder?: boolean }) => Promise<{ success: boolean; needsLogin?: boolean; error?: string }>;
+      invoicesSendViaOutlook: (args: { invoiceId: string; to: string; subject: string; body: string; cc?: string; markAsReminder?: boolean; attachmentBase64?: string; attachmentName?: string }) => Promise<{ success: boolean; needsLogin?: boolean; error?: string }>;
       // Session 11 — Vault
       vaultListFolders: () => Promise<any[]>;
       vaultCreateFolder: (data: any) => Promise<{ success: boolean; id?: string; error?: string }>;

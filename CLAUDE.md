@@ -66,11 +66,18 @@ Partie double complète (`apps/server/src/accounting`, types dans `packages/type
 ### Sécurité / secrets
 Mots de passe en scrypt. Les credentials Qonto sont chiffrés AES-256-GCM (clé dérivée du `JWT_SECRET`) et ne sont jamais renvoyés au front. Config validée par Zod au boot (`config.ts`) ; `JWT_SECRET` doit faire ≥ 32 octets. Variables d'environnement principales du serveur : `JWT_SECRET` (requis), `MYSQL_HOST/USER/PASSWORD/DATABASE`, `CORS_ORIGINS`, `APP_URL`, `PORT`, et optionnelles `MS_*` (Outlook/OneDrive), `SMTP_*` (email), `SENTRY_DSN`. Voir le tableau complet dans `README.md`.
 
-### Emails (deux canaux distincts)
-- **Documents clients** (devis / factures) : envoyés via **Microsoft Graph** depuis le compte Outlook connecté (`window.btpAPI.invoicesSendViaOutlook` / `emailSendDocument` → `apps/server/src/routes/microsoft.ts`, `POST /me/sendMail`). Nécessite un compte Microsoft 365 connecté côté Réglages.
-- **Mails système** (invitations utilisateurs…) : via **SMTP** (client maison `apps/server/src/email.ts`, vars `SMTP_*`). No-op si SMTP non configuré.
+### Emails — transports & canaux
+Le client SMTP maison est dans `apps/server/src/email.ts` (`sendMail`, zéro dépendance, supporte les **pièces jointes** en `multipart/mixed`). Deux routes serveur d'envoi (`apps/server/src/routes/microsoft.ts`, `buildEmailRouter`) :
+- `POST /api/email/send` → **Microsoft Graph** (`/me/sendMail`), nécessite un compte Microsoft 365 connecté.
+- `POST /api/email/send-smtp` → **SMTP** (mailbox de domaine via `SMTP_*`), **sans compte Microsoft**. Voie privilégiée pour les devis/factures côté web.
 
-> Mailbox de domaine hébergée chez o2switch : pour automatiser et tracer l'envoi des devis/factures **sans dépendre d'un compte Microsoft connecté**, l'option naturelle est de basculer ce canal sur **SMTP** (mailbox `@<domaine>`), avec **SPF/DKIM/DMARC** configurés pour la délivrabilité.
+**Flux devis/factures par plateforme** (modales `SendQuoteByEmailModal` / `SendInvoiceByEmailModal` → `window.btpAPI.quotesSendViaOutlook` / `invoicesSendViaOutlook`) :
+- **Desktop** : le main Electron génère le PDF et envoie via **Microsoft Graph**.
+- **Web** : le PDF est généré dans le navigateur (`pdfElementToBase64`, React-PDF) puis transmis en base64 ; le shim envoie via **SMTP** (`/api/email/send-smtp`) et marque le devis « envoyé » / la facture « envoyée » ou la relance (parité desktop). ⚠️ Le transport SMTP n'envoie qu'à **un destinataire** (cc/destinataires multiples non gérés).
+
+Mails **système** (invitations utilisateurs) : `sendMail`/SMTP. Pour la délivrabilité de la mailbox o2switch, configurer **SPF/DKIM/DMARC** et utiliser une vraie adresse `@<domaine>` (pas le sous-domaine de dev).
+
+> ℹ️ `SendDocumentMailModal` + `emailSendDocument` (shim, branché aussi sur `/api/email/send-smtp`) sont un chemin alternatif **non câblé** dans l'UI actuelle.
 
 ### Premier démarrage
 La base est vide : créer le premier administrateur via `POST /api/auth/bootstrap` (one-shot), puis login via `POST /api/auth/login`.

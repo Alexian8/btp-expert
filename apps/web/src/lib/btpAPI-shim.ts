@@ -570,7 +570,50 @@ export function installBtpApiShim(): void {
     quotesExportPdfPreview: stub("quotesExportPdfPreview", { success: false, error: "PDF web pas encore implémenté" }),
     quotesExportPdfSaveAs: stub("quotesExportPdfSaveAs", { success: false }),
     quotesOpenPdfExternal: stub("quotesOpenPdfExternal", { success: false }),
-    quotesSendViaOutlook: stub("quotesSendViaOutlook", { success: false, error: "Envoi via Outlook : passer par /api/email/send" }),
+    // Envoi du devis par email via SMTP (mailbox de domaine), avec le PDF en
+    // pièce jointe (généré côté client). Marque le devis "envoyé" si brouillon.
+    quotesSendViaOutlook: async (args: {
+      quoteId: string;
+      to: string;
+      cc?: string;
+      subject: string;
+      body: string;
+      attachmentBase64?: string;
+      attachmentName?: string;
+    }): Promise<{ success: boolean; needsLogin?: boolean; error?: string }> => {
+      try {
+        if (!args.to) return { success: false, error: "Destinataire manquant" };
+        const attachments = args.attachmentBase64
+          ? [{
+              name: args.attachmentName || `devis-${args.quoteId}.pdf`,
+              contentType: "application/pdf",
+              contentBase64: args.attachmentBase64,
+            }]
+          : [];
+        await http("POST", "/api/email/send-smtp", {
+          to: [args.to],
+          subject: args.subject,
+          body: args.body,
+          isHtml: false,
+          attachments,
+        });
+        // Parité desktop : passe le devis en "envoyé" s'il était en brouillon.
+        try {
+          const q = await httpGet<{ status?: string }>(`/api/quotes/${encodeURIComponent(args.quoteId)}`);
+          if (q && q.status === "brouillon") {
+            await http("PATCH", `/api/quotes/${encodeURIComponent(args.quoteId)}`, {
+              status: "envoye",
+              sentAt: new Date().toISOString(),
+            });
+          }
+        } catch {
+          /* marquage best-effort : n'empêche pas l'envoi */
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Échec de l'envoi" };
+      }
+    },
     quotesGetDesignationHistory: stub("quotesGetDesignationHistory", [] as unknown[]),
   };
 
@@ -702,7 +745,58 @@ export function installBtpApiShim(): void {
     invoicesExportPdfPreview: stub("invoicesExportPdfPreview", { success: false, error: "PDF web pas encore implémenté" }),
     invoicesExportPdfSaveAs: stub("invoicesExportPdfSaveAs", { success: false }),
     invoicesOpenPdfExternal: stub("invoicesOpenPdfExternal", { success: false }),
-    invoicesSendViaOutlook: stub("invoicesSendViaOutlook", { success: false, error: "Outlook web pas encore implémenté" }),
+    // Envoi de la facture (ou relance) par email via SMTP, avec le PDF en
+    // pièce jointe (généré côté client). Parité desktop pour le statut/relance.
+    invoicesSendViaOutlook: async (args: {
+      invoiceId: string;
+      to: string;
+      cc?: string;
+      subject: string;
+      body: string;
+      markAsReminder?: boolean;
+      attachmentBase64?: string;
+      attachmentName?: string;
+    }): Promise<{ success: boolean; needsLogin?: boolean; error?: string }> => {
+      try {
+        if (!args.to) return { success: false, error: "Destinataire manquant" };
+        const attachments = args.attachmentBase64
+          ? [{
+              name: args.attachmentName || `facture-${args.invoiceId}.pdf`,
+              contentType: "application/pdf",
+              contentBase64: args.attachmentBase64,
+            }]
+          : [];
+        await http("POST", "/api/email/send-smtp", {
+          to: [args.to],
+          subject: args.subject,
+          body: args.body,
+          isHtml: false,
+          attachments,
+        });
+        // Parité desktop : relance (incrémente le compteur) ou passage en "envoyée".
+        try {
+          const inv = await httpGet<{ status?: string; remindersCount?: number }>(
+            `/api/invoices/${encodeURIComponent(args.invoiceId)}`
+          );
+          if (args.markAsReminder) {
+            await http("PATCH", `/api/invoices/${encodeURIComponent(args.invoiceId)}`, {
+              lastReminderSentAt: new Date().toISOString(),
+              remindersCount: (inv?.remindersCount ?? 0) + 1,
+            });
+          } else if (inv && inv.status === "brouillon") {
+            await http("PATCH", `/api/invoices/${encodeURIComponent(args.invoiceId)}`, {
+              status: "envoyee",
+              sentAt: new Date().toISOString(),
+            });
+          }
+        } catch {
+          /* marquage best-effort : n'empêche pas l'envoi */
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Échec de l'envoi" };
+      }
+    },
   };
 
   // ─── Backup système (web utilise /api/backup/*) ────────────────────────
@@ -1089,21 +1183,25 @@ export function installBtpApiShim(): void {
       subject: string;
       body: string;
       isHtml?: boolean;
-      attachmentPath?: string;
-      attachmentName?: string;
+      /** Pièces jointes (ex: PDF du devis/facture) générées côté client. */
+      attachments?: Array<{ name: string; contentBase64: string; contentType?: string }>;
     }): Promise<{ success: boolean; error?: string }> => {
       try {
         // Normalise to/cc en tableaux
         const toArr = Array.isArray(args.to) ? args.to : [args.to];
-        const ccArr = args.cc ? (Array.isArray(args.cc) ? args.cc : [args.cc]) : undefined;
-        // L'attachment path vient du desktop (chemin local) — pas exploitable en
-        // web. À adapter quand on aura un endpoint d'upload pour pièces jointes.
-        await http<void>("POST", "/api/email/send", {
+        // Envoi via SMTP (mailbox de domaine côté serveur) plutôt que Graph :
+        // pas besoin d'un compte Microsoft connecté. La pièce jointe PDF est
+        // générée côté client et transmise en base64.
+        await http<{ success: boolean }>("POST", "/api/email/send-smtp", {
           to: toArr,
-          cc: ccArr,
           subject: args.subject,
           body: args.body,
           isHtml: args.isHtml ?? true,
+          attachments: (args.attachments ?? []).map((a) => ({
+            name: a.name,
+            contentType: a.contentType ?? "application/pdf",
+            contentBase64: a.contentBase64,
+          })),
         });
         return { success: true };
       } catch (e) {

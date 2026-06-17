@@ -30,6 +30,7 @@ import { PdfPreviewPortal } from "@/features/pdf/PdfPreviewPortal";
 import { InvoicePdfDocument } from "@/features/pdf/InvoicePdfDocument";
 import { InvoicePdfMinimal } from "@/features/pdf/InvoicePdfMinimal";
 import { InvoicePdfClassique } from "@/features/pdf/InvoicePdfClassique";
+import { pdfElementToBase64 } from "@/features/pdf/pdfToBase64";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -232,6 +233,24 @@ export function InvoiceEditorPage() {
     ? useClientsStore.getState().clients.find((c) => c.id === existing.clientId)
     : null;
   const clientEmail = clientForEmail?.email || "";
+
+  // Génère le PDF de la facture en base64 (web : joint à l'email SMTP). Reprend
+  // le template choisi par l'utilisateur (persisté par usePdfActions).
+  const buildInvoicePdfBase64 = async (): Promise<string> => {
+    if (!existing) throw new Error("Facture indisponible");
+    const client = clientForEmail ?? undefined;
+    const tmpl =
+      (typeof localStorage !== "undefined" && localStorage.getItem("btp.pdf.invoice-template")) || "modern";
+    const el =
+      tmpl === "sobre" ? (
+        <InvoicePdfMinimal invoice={existing} client={client} company={company} />
+      ) : tmpl === "classique" ? (
+        <InvoicePdfClassique invoice={existing} client={client} company={company} />
+      ) : (
+        <InvoicePdfDocument invoice={existing} client={client} company={company} />
+      );
+    return pdfElementToBase64(el);
+  };
 
   const meta = existing ? INVOICE_STATUS_META[existing.status] : INVOICE_STATUS_META.brouillon;
   const typeMeta = existing ? INVOICE_TYPE_META[existing.type] : INVOICE_TYPE_META[formData.type];
@@ -578,6 +597,7 @@ ${companyName}`,
             defaultSubject={buildEmailBody(false).subject}
             defaultBody={buildEmailBody(false).body}
             isReminder={false}
+            getPdfBase64={buildInvoicePdfBase64}
             onClose={() => setEmailModalOpen(false)}
             onSent={() => fetch()}
           />
@@ -589,6 +609,7 @@ ${companyName}`,
             defaultSubject={buildEmailBody(true).subject}
             defaultBody={buildEmailBody(true).body}
             isReminder={true}
+            getPdfBase64={buildInvoicePdfBase64}
             onClose={() => setReminderModalOpen(false)}
             onSent={() => fetch()}
           />

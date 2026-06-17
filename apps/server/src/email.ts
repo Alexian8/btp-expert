@@ -16,11 +16,22 @@ import * as net from "node:net";
 import * as tls from "node:tls";
 import type { Config } from "./config";
 
+/** Pièce jointe d'un email (ex: PDF d'un devis/facture). */
+export interface MailAttachment {
+  /** Nom du fichier affiché au destinataire (ex: "DEVIS-2026-0001.pdf"). */
+  filename: string;
+  /** Contenu encodé en base64. */
+  contentBase64: string;
+  /** Type MIME (défaut: application/octet-stream). */
+  contentType?: string;
+}
+
 export interface SendMailInput {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: MailAttachment[];
 }
 
 export interface SendMailResult {
@@ -47,6 +58,7 @@ export async function sendMail(cfg: Config, input: SendMailInput): Promise<SendM
       subject: input.subject,
       html: input.html,
       text: input.text ?? stripHtml(input.html),
+      attachments: input.attachments,
     });
     if (result.ok) {
       console.log(`[email] sent OK to=${input.to} messageId=${result.messageId}`);
@@ -73,6 +85,7 @@ interface SmtpSendInput {
   subject: string;
   html: string;
   text: string;
+  attachments?: MailAttachment[];
 }
 
 /**
@@ -230,23 +243,58 @@ function extractEmail(s: string): string {
   return m && m[1] ? m[1] : s.trim();
 }
 
-function buildMimeMessage(input: SmtpSendInput, messageId: string): string {
+/** Wrap base64 à 76 chars/ligne (convention MIME ; évite l'erreur Exim
+ *  "lines too long for transport" sur les contenus volumineux). */
+function wrapB64(encoded: string): string {
+  const chunks: string[] = [];
+  for (let i = 0; i < encoded.length; i += 76) {
+    chunks.push(encoded.slice(i, i + 76));
+  }
+  return chunks.join("\r\n");
+}
+
+export function buildMimeMessage(input: SmtpSendInput, messageId: string): string {
   const date = new Date().toUTCString();
-  const boundary = `bd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const rand = (): string => Math.random().toString(36).slice(2, 8);
+  const altBoundary = `alt-${Date.now().toString(36)}-${rand()}`;
 
-  // Encoding base64 : auto-wrap à 76 chars/ligne (max RFC 5322 = 998 mais
-  // base64 est conventionnellement à 76). Évite l'erreur Exim
-  // "lines too long for transport" sur les emails HTML volumineux.
-  const b64 = (s: string): string => {
-    const encoded = Buffer.from(s, "utf8").toString("base64");
-    // Wrap à 76 chars
-    const chunks: string[] = [];
-    for (let i = 0; i < encoded.length; i += 76) {
-      chunks.push(encoded.slice(i, i + 76));
-    }
-    return chunks.join("\r\n");
-  };
+  const b64 = (s: string): string => wrapB64(Buffer.from(s, "utf8").toString("base64"));
 
+  // ─── Corps text/html (multipart/alternative) ────────────────────────────
+  const alternative = [
+    `--${altBoundary}`,
+    `Content-Type: text/plain; charset=utf-8`,
+    `Content-Transfer-Encoding: base64`,
+    "",
+    b64(input.text),
+    "",
+    `--${altBoundary}`,
+    `Content-Type: text/html; charset=utf-8`,
+    `Content-Transfer-Encoding: base64`,
+    "",
+    b64(input.html),
+    "",
+    `--${altBoundary}--`,
+  ].join("\r\n");
+
+  const attachments = input.attachments ?? [];
+
+  // ─── Sans pièce jointe : multipart/alternative directement ───────────────
+  if (attachments.length === 0) {
+    const headers = [
+      `From: ${input.from}`,
+      `To: ${input.to}`,
+      `Subject: ${encodeHeader(input.subject)}`,
+      `Date: ${date}`,
+      `Message-ID: ${messageId}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    ].join("\r\n");
+    return headers + "\r\n\r\n" + alternative + "\r\n";
+  }
+
+  // ─── Avec pièces jointes : multipart/mixed enveloppant l'alternative ─────
+  const mixedBoundary = `mix-${Date.now().toString(36)}-${rand()}`;
   const headers = [
     `From: ${input.from}`,
     `To: ${input.to}`,
@@ -254,28 +302,33 @@ function buildMimeMessage(input: SmtpSendInput, messageId: string): string {
     `Date: ${date}`,
     `Message-ID: ${messageId}`,
     `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
   ].join("\r\n");
 
-  const body = [
+  const parts: string[] = [
+    `--${mixedBoundary}`,
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
     "",
-    `--${boundary}`,
-    `Content-Type: text/plain; charset=utf-8`,
-    `Content-Transfer-Encoding: base64`,
-    "",
-    b64(input.text),
-    "",
-    `--${boundary}`,
-    `Content-Type: text/html; charset=utf-8`,
-    `Content-Transfer-Encoding: base64`,
-    "",
-    b64(input.html),
-    "",
-    `--${boundary}--`,
-    "",
-  ].join("\r\n");
+    alternative,
+  ];
 
-  return headers + "\r\n" + body;
+  for (const att of attachments) {
+    const contentType = att.contentType || "application/octet-stream";
+    // Le base64 fourni peut déjà contenir des retours ligne ou un préfixe
+    // data: — on normalise puis on re-wrappe à 76 chars.
+    const cleanB64 = att.contentBase64.replace(/^data:[^;]+;base64,/, "").replace(/\s+/g, "");
+    parts.push(
+      `--${mixedBoundary}`,
+      `Content-Type: ${contentType}; name="${att.filename}"`,
+      `Content-Transfer-Encoding: base64`,
+      `Content-Disposition: attachment; filename="${att.filename}"`,
+      "",
+      wrapB64(cleanB64),
+    );
+  }
+  parts.push(`--${mixedBoundary}--`);
+
+  return headers + "\r\n\r\n" + parts.join("\r\n") + "\r\n";
 }
 
 /** RFC 2047 encoding pour les headers contenant du non-ASCII (sujet en UTF-8). */
