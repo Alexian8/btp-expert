@@ -8,6 +8,8 @@ BatiDesk — logiciel de gestion pour artisans du bâtiment (clients, chantiers,
 
 > 🔑 **Règle d'or — tout doit être inter-compatible web / desktop / iOS.** Aucune fonctionnalité ne doit être desktop-only, web-only, ni inaccessible sur iOS. Toute opération de données passe par le contrat partagé (voir [La couche `window.btpAPI`](#la-couche-windowbtpapi-clé-de-la-portabilité)) et doit être exposée côté serveur REST pour que le web ET iOS puissent la consommer. Avant de considérer une fonctionnalité « terminée », vérifier qu'elle fonctionne sur les trois plateformes. **L'app iOS ne doit PAS rester en lecture seule** : viser la parité CRUD avec desktop/web (voir [Limitations & direction produit](#limitations-connues--direction-produit)).
 
+> 📝 **Tenir ce fichier à jour (obligatoire).** Dès qu'une fonctionnalité ajoutée ou modifiée change ce qui est décrit ici — nouvelle route/page, nouveau module ou store, nouveau champ de `settings`, nouvelle intégration, changement d'architecture, de navigation, de convention, de workflow de déploiement ou de statut métier — **mettre à jour `CLAUDE.md` dans le même commit/PR que le code**. Le contexte doit toujours refléter l'état réel du dépôt ; une fonctionnalité n'est pas « terminée » si elle a rendu une section de ce fichier obsolète sans la corriger.
+
 ## Commandes
 
 Prérequis : Node ≥ 18. Lancer `npm install` à la racine (installe tous les workspaces ; le postinstall recompile `better-sqlite3` pour Electron et build le serveur).
@@ -104,7 +106,7 @@ La version **web doit être utilisable sur mobile, tablette et desktop** (le des
 - Composants de base dans `@btp/ui` (Radix + CVA) et `@/components/ui/*` ; réutiliser `ConfirmDialog`, `Button`, `Input`, `NativeSelect`… La logique d'écran vit dans `apps/desktop/src/features/<domaine>/components`.
 
 ### Workflow Git
-Développer sur une branche `claude/*`, PR vers `main`. Avant commit : `npm run typecheck` + `npm test`. **Avant toute PR touchant l'UI : `npm run build -w @btp/web` puis committer le `dist/` régénéré** (sinon conflits et déploiement o2switch obsolète).
+Développer sur une branche `claude/*`, PR vers `main`. Avant commit : `npm run typecheck` + `npm test`. **Avant toute PR touchant l'UI : `npm run build -w @btp/web` puis committer le `dist/` régénéré** (sinon conflits et déploiement o2switch obsolète). **Si le changement redéfinit le contexte documenté ici, mettre à jour `CLAUDE.md` dans le même commit** (cf. règle « Tenir ce fichier à jour » en tête de fichier).
 
 ### Tests
 Vitest. La logique métier est isolée dans des moteurs purs et testés (`invoiceEngine.ts`, `quoteEngine.ts`) — y placer tout nouveau calcul (totaux, TVA, échéances, marges) et le couvrir par un test. Pas encore d'E2E.
