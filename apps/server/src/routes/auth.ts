@@ -376,6 +376,130 @@ export function buildAuthRouter(db: DB, cfg: Config): Router {
     })
   );
 
+  // ─── Mise à jour de son propre profil (prénom, nom, email) ────────────
+  router.patch(
+    "/me",
+    wrap(async (req, res) => {
+      const header = req.headers.authorization;
+      if (!header?.startsWith("Bearer ")) {
+        res.status(401).json({ message: "Token manquant" });
+        return;
+      }
+      const payload = verifyToken(header.slice(7), cfg);
+      if (!payload) {
+        res.status(401).json({ message: "Token invalide" });
+        return;
+      }
+      const schema = z.object({
+        firstName: z.string().max(128).optional(),
+        lastName: z.string().max(128).optional(),
+        email: z.union([z.string().email().max(255), z.literal("")]).optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: "Payload invalide", details: parsed.error.issues });
+        return;
+      }
+      const sets: string[] = [];
+      const values: Array<string | number> = [];
+      const changed: string[] = [];
+      for (const key of ["firstName", "lastName", "email"] as const) {
+        const v = parsed.data[key];
+        if (v !== undefined) {
+          sets.push(`${key} = ?`);
+          values.push(v.trim());
+          changed.push(key);
+        }
+      }
+      if (sets.length === 0) {
+        res.status(400).json({ message: "Aucun champ à mettre à jour" });
+        return;
+      }
+      values.push(payload.sub);
+      await db.execute(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, values);
+      void writeAudit(db, {
+        userId: payload.sub,
+        username: payload.username,
+        companyId: payload.companyId ?? null,
+        action: "profile_updated",
+        ip: req.ip ?? "",
+        userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+        meta: { changedFields: changed },
+      });
+      res.json({ success: true });
+    })
+  );
+
+  // ─── Changement de son propre identifiant (confirmé par mot de passe) ──
+  router.post(
+    "/change-username",
+    wrap(async (req, res) => {
+      const header = req.headers.authorization;
+      if (!header?.startsWith("Bearer ")) {
+        res.status(401).json({ message: "Token manquant" });
+        return;
+      }
+      const payload = verifyToken(header.slice(7), cfg);
+      if (!payload) {
+        res.status(401).json({ message: "Token invalide" });
+        return;
+      }
+      const schema = z.object({
+        newUsername: z.string().min(3).max(64).regex(/^[a-zA-Z0-9._@-]+$/, {
+          message: "Identifiant invalide (lettres, chiffres, . _ @ - uniquement)",
+        }),
+        password: z.string().min(1).max(256),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        const msg = parsed.error.issues[0]?.message ?? "Payload invalide";
+        res.status(400).json({ message: msg });
+        return;
+      }
+      const [rows] = await db.query<UserRow[]>(
+        "SELECT id, username, passwordHash, companyId FROM users WHERE id = ? LIMIT 1",
+        [payload.sub]
+      );
+      const row = rows[0];
+      if (!row || !verifyPassword(parsed.data.password, row.passwordHash)) {
+        res.status(401).json({ message: "Mot de passe incorrect" });
+        return;
+      }
+      const newUsername = parsed.data.newUsername.trim();
+      if (newUsername === row.username) {
+        res.status(400).json({ message: "Le nouvel identifiant est identique à l'actuel" });
+        return;
+      }
+      // Unicité globale (l'identifiant est la clé de connexion)
+      const [dupRows] = await db.query<RowDataPacket[]>(
+        "SELECT id FROM users WHERE username = ? LIMIT 1",
+        [newUsername]
+      );
+      if (dupRows[0]) {
+        res.status(409).json({ message: "Cet identifiant est déjà utilisé" });
+        return;
+      }
+      await db.execute("UPDATE users SET username = ? WHERE id = ?", [newUsername, row.id]);
+      void writeAudit(db, {
+        userId: row.id,
+        username: newUsername,
+        companyId: row.companyId ?? null,
+        action: "username_changed",
+        ip: req.ip ?? "",
+        userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500),
+        meta: { oldUsername: row.username },
+      });
+      // Le JWT courant contient l'ancien username → on le révoque pour forcer
+      // une reconnexion propre avec le nouvel identifiant.
+      try {
+        await revokeToken(db, header.slice(7).trim(), payload);
+      } catch (e) {
+        console.warn("[auth] revokeToken failed at change-username:", e);
+      }
+      res.json({ success: true });
+    })
+  );
+
   // ─── Demande de réinitialisation (self-service, lien par email) ───────
   // Anti-énumération : réponse 200 identique que le compte existe ou non.
   router.post(

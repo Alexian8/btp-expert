@@ -15,6 +15,8 @@ export type AuditAction =
   | "login_blocked"
   | "logout"
   | "change_password"
+  | "profile_updated"
+  | "username_changed"
   | "password_reset_requested"
   | "password_reset_done"
   | "bootstrap"

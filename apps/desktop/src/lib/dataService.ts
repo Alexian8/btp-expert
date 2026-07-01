@@ -122,6 +122,10 @@ declare global {
       // Mot de passe oublié (self-service, web). Optionnels : absents sur desktop.
       authRequestPasswordReset?: (identifier: string) => Promise<{ success: boolean; error?: string }>;
       authResetPassword?: (token: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+      // Profil self-service (web, API REST). Optionnels : absents sur desktop.
+      authUpdateProfile?: (patch: { firstName?: string; lastName?: string; email?: string }) => Promise<{ success: boolean; error?: string }>;
+      authChangeUsername?: (args: { newUsername: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+      authChangePassword?: (args: { oldPassword: string; newPassword: string }) => Promise<{ success: boolean; error?: string }>;
       countUsers: () => Promise<number>;
       createFirstUser: (args: { username: string; passwordHash: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
       findUser: (username: string) => Promise<{ id: number; username: string; passwordHash: string; role: string } | null>;

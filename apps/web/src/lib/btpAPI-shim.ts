@@ -250,6 +250,41 @@ export function installBtpApiShim(): void {
         return { success: false, error: e instanceof Error ? e.message : "Erreur" };
       }
     },
+    // ─── Profil (self-service) ───────────────────────────────────────────
+    authUpdateProfile: async (patch: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    }): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await http("PATCH", "/api/auth/me", patch);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    authChangeUsername: async (args: {
+      newUsername: string;
+      password: string;
+    }): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await http("POST", "/api/auth/change-username", args);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
+    authChangePassword: async (args: {
+      oldPassword: string;
+      newPassword: string;
+    }): Promise<{ success: boolean; error?: string }> => {
+      try {
+        await http("POST", "/api/auth/change-password", args);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : "Erreur" };
+      }
+    },
     countUsers: async (): Promise<number> => {
       // Côté web : on renvoie 1 (admin déjà bootstrappé via /api/auth/bootstrap)
       // pour que l'app ne tente jamais l'écran "Créez votre compte"
