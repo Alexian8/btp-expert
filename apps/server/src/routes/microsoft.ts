@@ -479,6 +479,74 @@ export function buildEmailRouter(db: DB, cfg: Config): Router {
     })
   );
 
+  // ─── Diagnostic SMTP (admin) ──────────────────────────────────────────
+  // GET  /smtp-status : la config SMTP vue par le serveur (jamais le password)
+  // POST /test-smtp   : envoie un email de test et renvoie l'erreur EXACTE
+  router.get(
+    "/smtp-status",
+    wrap(async (req, res) => {
+      const payload = userFromAuthHeader(req, cfg);
+      if (!payload || (payload.role !== "admin" && payload.role !== "super_admin")) {
+        res.status(403).json({ message: "Réservé aux administrateurs" });
+        return;
+      }
+      res.json({
+        configured: Boolean(cfg.SMTP_HOST && cfg.SMTP_USER && cfg.SMTP_PASS),
+        host: cfg.SMTP_HOST || "",
+        port: cfg.SMTP_PORT,
+        user: cfg.SMTP_USER || "",
+        from: cfg.SMTP_FROM || "",
+        appUrl: cfg.APP_URL || "",
+      });
+    })
+  );
+
+  router.post(
+    "/test-smtp",
+    wrap(async (req, res) => {
+      const payload = userFromAuthHeader(req, cfg);
+      if (!payload || (payload.role !== "admin" && payload.role !== "super_admin")) {
+        res.status(403).json({ message: "Réservé aux administrateurs" });
+        return;
+      }
+      const schema = z.object({ to: z.string().email().max(255) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Adresse email invalide" });
+        return;
+      }
+      if (!cfg.SMTP_HOST || !cfg.SMTP_USER || !cfg.SMTP_PASS) {
+        res.status(200).json({
+          success: false,
+          error:
+            "SMTP non configuré : variables SMTP_HOST / SMTP_USER / SMTP_PASS absentes côté serveur (.env non chargé ?)",
+        });
+        return;
+      }
+      const startedAt = Date.now();
+      const result = await sendMail(cfg, {
+        to: parsed.data.to,
+        subject: "Test d'envoi — BatiDesk",
+        html: `<div style="font-family:sans-serif;font-size:14px;color:#0f172a;">
+          <p><strong>✅ Ceci est un email de test envoyé par BatiDesk.</strong></p>
+          <p>Si vous le recevez, l'envoi SMTP fonctionne (serveur : ${cfg.SMTP_HOST}:${cfg.SMTP_PORT}, expéditeur : ${cfg.SMTP_USER}).</p>
+          <p style="color:#64748b;font-size:12px;">Envoyé le ${new Date().toLocaleString("fr-FR")} depuis ${cfg.APP_URL || "BatiDesk"}.</p>
+        </div>`,
+      });
+      // On renvoie 200 dans tous les cas : c'est un diagnostic, l'erreur
+      // exacte EST l'information attendue par l'UI.
+      res.status(200).json({
+        success: result.ok,
+        error: result.skipped ? "SMTP non configuré" : result.error,
+        messageId: result.messageId,
+        durationMs: Date.now() - startedAt,
+        host: cfg.SMTP_HOST,
+        port: cfg.SMTP_PORT,
+        user: cfg.SMTP_USER,
+      });
+    })
+  );
+
   return router;
 }
 
