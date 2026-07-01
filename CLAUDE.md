@@ -90,6 +90,8 @@ Mails **système** (invitations utilisateurs) : `sendMail`/SMTP. Pour la délivr
 
 > ℹ️ `SendDocumentMailModal` + `emailSendDocument` (shim, branché aussi sur `/api/email/send-smtp`) sont un chemin alternatif **non câblé** dans l'UI actuelle.
 
+**Diagnostic SMTP intégré (admin, web)** : Paramètres → **Emails (SMTP)** (`EmailSection`) — affiche la config vue par le serveur (`GET /api/email/smtp-status`, jamais le mot de passe) et envoie un email de test avec remontée de l'erreur SMTP exacte (`POST /api/email/test-smtp`). Premier réflexe quand « je ne reçois aucun email ».
+
 ### Premier démarrage
 La base est vide : créer le premier administrateur via `POST /api/auth/bootstrap` (one-shot), puis login via `POST /api/auth/login`.
 
