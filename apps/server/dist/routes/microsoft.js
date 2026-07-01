@@ -20,6 +20,7 @@ const express_1 = require("express");
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const zod_1 = require("zod");
 const auth_1 = require("../auth");
+const email_1 = require("../email");
 const wrap = (handler) => (req, res, next) => {
     handler(req, res).catch(next);
 };
@@ -345,6 +346,113 @@ function buildEmailRouter(db, cfg) {
         const errBody = await graphRes.text();
         console.error("[ms-graph] sendMail failed:", graphRes.status, errBody);
         res.status(502).json({ success: false, error: `Graph API ${graphRes.status}`, details: errBody });
+    }));
+    // ─── Envoi via SMTP (mailbox de domaine, sans compte Microsoft) ──────────
+    // Alternative à /send (Graph) : envoie depuis la mailbox SMTP configurée
+    // côté serveur (SMTP_*). Permet d'envoyer devis/factures sans qu'un compte
+    // Microsoft soit connecté. Consommé par le web et (à terme) iOS.
+    router.post("/send-smtp", wrap(async (req, res) => {
+        const payload = userFromAuthHeader(req, cfg);
+        if (!payload) {
+            res.status(401).json({ message: "Non authentifié" });
+            return;
+        }
+        const parsed = SendEmailSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ message: "Payload invalide", details: parsed.error.issues });
+            return;
+        }
+        if (!cfg.SMTP_HOST || !cfg.SMTP_USER || !cfg.SMTP_PASS) {
+            res.status(503).json({ success: false, error: "SMTP non configuré sur le serveur" });
+            return;
+        }
+        const { to, subject, body, isHtml, attachments } = parsed.data;
+        // Le client SMTP envoie à un destinataire (cas usuel : un devis/une
+        // facture à un client). Les destinataires supplémentaires (cc/to[1+])
+        // ne sont pas encore gérés par ce transport.
+        // Corps en texte brut → HTML : on échappe puis on préserve les sauts de
+        // ligne (white-space: pre-wrap) sans imposer une police monospace.
+        const escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const html = isHtml
+            ? body
+            : `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#0f172a;white-space:pre-wrap;">${escapeHtml(body)}</div>`;
+        const result = await (0, email_1.sendMail)(cfg, {
+            to: to[0],
+            subject,
+            html,
+            text: isHtml ? undefined : body,
+            attachments: (attachments ?? []).map((a) => ({
+                filename: a.name,
+                contentType: a.contentType,
+                contentBase64: a.contentBase64,
+            })),
+        });
+        if (result.ok) {
+            res.status(200).json({ success: true, messageId: result.messageId });
+            return;
+        }
+        res
+            .status(502)
+            .json({ success: false, error: result.error || "Échec de l'envoi SMTP" });
+    }));
+    // ─── Diagnostic SMTP (admin) ──────────────────────────────────────────
+    // GET  /smtp-status : la config SMTP vue par le serveur (jamais le password)
+    // POST /test-smtp   : envoie un email de test et renvoie l'erreur EXACTE
+    router.get("/smtp-status", wrap(async (req, res) => {
+        const payload = userFromAuthHeader(req, cfg);
+        if (!payload || (payload.role !== "admin" && payload.role !== "super_admin")) {
+            res.status(403).json({ message: "Réservé aux administrateurs" });
+            return;
+        }
+        res.json({
+            configured: Boolean(cfg.SMTP_HOST && cfg.SMTP_USER && cfg.SMTP_PASS),
+            host: cfg.SMTP_HOST || "",
+            port: cfg.SMTP_PORT,
+            user: cfg.SMTP_USER || "",
+            from: cfg.SMTP_FROM || "",
+            appUrl: cfg.APP_URL || "",
+        });
+    }));
+    router.post("/test-smtp", wrap(async (req, res) => {
+        const payload = userFromAuthHeader(req, cfg);
+        if (!payload || (payload.role !== "admin" && payload.role !== "super_admin")) {
+            res.status(403).json({ message: "Réservé aux administrateurs" });
+            return;
+        }
+        const schema = zod_1.z.object({ to: zod_1.z.string().email().max(255) });
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ success: false, error: "Adresse email invalide" });
+            return;
+        }
+        if (!cfg.SMTP_HOST || !cfg.SMTP_USER || !cfg.SMTP_PASS) {
+            res.status(200).json({
+                success: false,
+                error: "SMTP non configuré : variables SMTP_HOST / SMTP_USER / SMTP_PASS absentes côté serveur (.env non chargé ?)",
+            });
+            return;
+        }
+        const startedAt = Date.now();
+        const result = await (0, email_1.sendMail)(cfg, {
+            to: parsed.data.to,
+            subject: "Test d'envoi — BatiDesk",
+            html: `<div style="font-family:sans-serif;font-size:14px;color:#0f172a;">
+          <p><strong>✅ Ceci est un email de test envoyé par BatiDesk.</strong></p>
+          <p>Si vous le recevez, l'envoi SMTP fonctionne (serveur : ${cfg.SMTP_HOST}:${cfg.SMTP_PORT}, expéditeur : ${cfg.SMTP_USER}).</p>
+          <p style="color:#64748b;font-size:12px;">Envoyé le ${new Date().toLocaleString("fr-FR")} depuis ${cfg.APP_URL || "BatiDesk"}.</p>
+        </div>`,
+        });
+        // On renvoie 200 dans tous les cas : c'est un diagnostic, l'erreur
+        // exacte EST l'information attendue par l'UI.
+        res.status(200).json({
+            success: result.ok,
+            error: result.skipped ? "SMTP non configuré" : result.error,
+            messageId: result.messageId,
+            durationMs: Date.now() - startedAt,
+            host: cfg.SMTP_HOST,
+            port: cfg.SMTP_PORT,
+            user: cfg.SMTP_USER,
+        });
     }));
     return router;
 }

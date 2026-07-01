@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildLoginRateLimiter = buildLoginRateLimiter;
 exports.buildApiRateLimiter = buildApiRateLimiter;
+exports.buildPasswordResetRateLimiter = buildPasswordResetRateLimiter;
 function makeLimiter(opts) {
     const buckets = new Map();
     // Garbage-collect périodique des buckets expirés (évite de fuir de la mémoire
@@ -84,5 +85,19 @@ function buildApiRateLimiter(cfg) {
         // Le health check est exempt (utile pour monitoring externe)
         skip: (req) => req.path === "/api/health",
         message: "Trop de requêtes. Réessayez plus tard.",
+    });
+}
+/**
+ * Rate-limit pour la demande de réinitialisation de mot de passe.
+ * Compte TOUTES les requêtes (skipSuccess=false) car la réponse est toujours
+ * 200 (anti-énumération) : protège contre l'email-bombing. Réutilise la
+ * fenêtre/quota du login.
+ */
+function buildPasswordResetRateLimiter(cfg) {
+    return makeLimiter({
+        name: "password-reset",
+        windowMs: cfg.RATE_LIMIT_LOGIN_WINDOW_MIN * 60 * 1000,
+        limit: cfg.RATE_LIMIT_LOGIN_MAX,
+        message: "Trop de demandes de réinitialisation. Réessayez dans quelques minutes.",
     });
 }

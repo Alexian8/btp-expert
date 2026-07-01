@@ -38,7 +38,11 @@ npm run build:server             # serveur → dist/ + copie des PDF CERFA
 npm run dist -w @btp/desktop      # installeurs Electron (.exe / .dmg)
 ```
 
-⚠️ **`apps/web/dist/` est versionné volontairement** — l'app web est hébergée chez **o2switch via cPanel** (Node.js App + Passenger + MySQL), qui ne lance **pas** de build au déploiement et sert directement le `dist/` poussé. Après toute modification de l'UI destinée au web, **rebuild `npm run build -w @btp/web` et committer le `dist/` régénéré** (les assets dans `dist/assets/` sont gitignored → `git add -f`). C'est aussi la cause des conflits de merge récurrents sur `apps/web/dist/` : régénérer le `dist` après merge plutôt que de résoudre à la main.
+⚠️ **DEUX `dist/` sont versionnés volontairement** — o2switch/cPanel ne lance **aucun build** au déploiement (`.cpanel.yml` fait uniquement un rsync + restart) et sert/exécute directement ce qui est poussé :
+- **`apps/web/dist/`** (SPA) : après toute modif UI → `npm run build -w @btp/web` puis committer (assets gitignored → `git add -f`).
+- **`apps/server/dist/`** (serveur compilé, exécuté par Passenger via `app.js`) : après **toute modif de `apps/server/src`** → `npm run build:server` puis committer. **Oublier cette étape = les nouvelles routes n'existent pas en prod** (l'UI à jour affiche alors « Route inconnue »).
+
+C'est aussi la cause des conflits de merge récurrents sur ces `dist/` : régénérer après merge plutôt que résoudre à la main.
 
 ## Architecture
 
@@ -58,7 +62,7 @@ Stores **Zustand** dans `apps/desktop/src/stores/*` (un par domaine : `clientsSt
 ### Serveur (`apps/server`)
 Express + MySQL (`mysql2`, requêtes paramétrées) + JWT. Le **schéma est auto-créé/migré au démarrage** (`db.ts`, `CREATE TABLE IF NOT EXISTS` — pas de migrations versionnées). Points d'entrée transverses : `auth.ts` (JWT + scrypt), `rbac.ts` (rôles hiérarchiques super_admin > admin > manager > accountant > worker > viewer), `token-revocation.ts` (blacklist au logout/changement de mot de passe), `audit.ts` (journal d'activité), `rate-limit.ts` (buckets **en mémoire** — ne scale pas en multi-instance). Le CRUD générique est dans `routes/crud.ts` ; les domaines spécialisés ont leur route (`accounting`, `qonto`, `vault`, `microsoft`, `admin-*`).
 
-**Déploiement (o2switch / cPanel)** : le hosting clone le dépôt côté serveur via *Git Version Control* (sous `/home/<user-cpanel>/repositories/btp-expert`, branche **`main`**) et l'exécute via *Setup Node.js App* (Passenger) — **Node 22**, `NODE_ENV=production`, fichier de démarrage **`apps/server/app.js`**, dans un virtualenv `nodevenv`. Pas de build au déploiement → cf. `dist/` web versionné. Redémarrage : bouton *Redémarrer* de cPanel ou `touch tmp/restart.txt` (`npm run restart`).
+**Déploiement (o2switch / cPanel)** : le hosting clone le dépôt côté serveur via *Git Version Control* (sous `/home/<user-cpanel>/repositories/btp-expert`, branche **`main`**) et l'exécute via *Setup Node.js App* (Passenger) — **Node 22**, `NODE_ENV=production`, fichier de démarrage **`apps/server/app.js`**, dans un virtualenv `nodevenv`. Le déploiement se déclenche par **« Deploy HEAD Commit »** dans Git Version Control (exécute `.cpanel.yml` : rsync du dépôt vers le doc root + copie de `apps/web/dist` vers `public/` + restart) — un simple *Pull* ne suffit pas. **Aucun build côté serveur** → les deux `dist/` (web ET serveur) doivent être committés. Redémarrage seul : bouton *Redémarrer* de cPanel ou `touch tmp/restart.txt` (`npm run restart`).
 
 ### Comptabilité
 Partie double complète (`apps/server/src/accounting`, types dans `packages/types/src/accounting.ts`) : journal, grand livre, balance, compte de résultat, bilan, TVA, export FEC. Les marges par chantier (`ChantierMargin`) sont calculées côté compta et exposées via `financeStore`.
@@ -126,7 +130,7 @@ La version **web doit être utilisable sur mobile, tablette et desktop** (le des
 - Composants de base dans `@btp/ui` (Radix + CVA) et `@/components/ui/*` ; réutiliser `ConfirmDialog`, `Button`, `Input`, `NativeSelect`… La logique d'écran vit dans `apps/desktop/src/features/<domaine>/components`.
 
 ### Workflow Git
-Développer sur une branche `claude/*`, PR vers `main`. Avant commit : `npm run typecheck` + `npm test`. **Avant toute PR touchant l'UI : `npm run build -w @btp/web` puis committer le `dist/` régénéré** (sinon conflits et déploiement o2switch obsolète). **Si le changement redéfinit le contexte documenté ici, mettre à jour `CLAUDE.md` dans le même commit** (cf. règle « Tenir ce fichier à jour » en tête de fichier).
+Développer sur une branche `claude/*`, PR vers `main`. Avant commit : `npm run typecheck` + `npm test`. **Avant toute PR : rebuilder et committer le(s) `dist/` impactés** — `npm run build -w @btp/web` si l'UI a changé, **`npm run build:server` si `apps/server/src` a changé** (sinon la prod o2switch reste sur l'ancien code : « Route inconnue »). **Si le changement redéfinit le contexte documenté ici, mettre à jour `CLAUDE.md` dans le même commit** (cf. règle « Tenir ce fichier à jour » en tête de fichier).
 
 ### Tests
 Vitest. La logique métier est isolée dans des moteurs purs et testés (`invoiceEngine.ts`, `quoteEngine.ts`) — y placer tout nouveau calcul (totaux, TVA, échéances, marges) et le couvrir par un test. Pas encore d'E2E.

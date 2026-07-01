@@ -219,6 +219,7 @@ async function createApp(cfg, db) {
     });
     // Rate-limit STRICT sur le login (anti brute-force)
     app.use("/api/auth/login", (0, rate_limit_1.buildLoginRateLimiter)(cfg));
+    app.use("/api/auth/request-reset", (0, rate_limit_1.buildPasswordResetRateLimiter)(cfg));
     app.use("/api/auth", (0, auth_1.buildAuthRouter)(pool, cfg));
     // ─── Admin : gestion utilisateurs (admin only) ─────────────────────────
     app.use("/api/admin/users", (0, admin_users_1.buildAdminUsersRouter)(pool, cfg));
@@ -737,6 +738,7 @@ async function createApp(cfg, db) {
         "cgv",
         "theme",
         "appearance",
+        "session",
     ];
     const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
     const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

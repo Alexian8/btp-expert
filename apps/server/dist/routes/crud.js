@@ -23,9 +23,12 @@ const wrap = (handler) => (req, res, next) => {
 function buildCrudRouter(repo, opts = {}) {
     const router = (0, express_1.Router)();
     // Helper : construit le ScopeContext (auditUserId + tenantId) depuis le JWT.
+    // Le rôle `worker` est restreint à ses propres lignes (createdBy) CÔTÉ
+    // SERVEUR — le filtre `?createdBy=ME` du shim web n'est qu'un confort d'UI.
     const ctxFromReq = (req) => ({
         auditUserId: req.user?.sub,
         tenantId: req.user?.companyId,
+        restrictToCreatedBy: req.user?.role === "worker" ? req.user.sub : undefined,
     });
     router.get("/count", wrap(async (req, res) => {
         res.json({

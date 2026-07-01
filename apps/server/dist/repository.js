@@ -18,6 +18,13 @@ class MysqlRepository {
         this.table = table;
         this.opts = opts;
     }
+    /** Ajoute la restriction `createdBy = ?` (rôle worker) si applicable. */
+    applyCreatedByScope(wheres, params, ctx) {
+        if (this.opts.hasAuditColumns && ctx.restrictToCreatedBy != null) {
+            wheres.push(`${ident("createdBy")} = ?`);
+            params.push(ctx.restrictToCreatedBy);
+        }
+    }
     async findAll(filter = {}, query = {}, ctx = {}) {
         const wheres = [];
         const params = [];
@@ -26,12 +33,17 @@ class MysqlRepository {
             wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
             params.push(ctx.tenantId);
         }
+        // Scope worker (createdBy) — imposé serveur, non contournable par filter
+        this.applyCreatedByScope(wheres, params, ctx);
         for (const [key, value] of Object.entries(filter)) {
             if (!this.opts.filterableColumns.includes(key))
                 continue;
             // SÉCURITÉ : un client ne peut pas filtrer sur tenantColumn (sinon il
             // pourrait voir d'autres tenants en passant un autre companyId)
             if (this.opts.tenantColumn && key === this.opts.tenantColumn)
+                continue;
+            // SÉCURITÉ : le scope worker impose déjà createdBy — pas d'override
+            if (ctx.restrictToCreatedBy != null && key === "createdBy")
                 continue;
             wheres.push(`${ident(key)} = ?`);
             params.push(value);
@@ -64,6 +76,7 @@ class MysqlRepository {
             wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
             params.push(ctx.tenantId);
         }
+        this.applyCreatedByScope(wheres, params, ctx);
         const [rows] = await this.db.query(`SELECT * FROM ${ident(this.table)} WHERE ${wheres.join(" AND ")} LIMIT 1`, params);
         return rows[0] ?? null;
     }
@@ -162,6 +175,7 @@ class MysqlRepository {
             wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
             values.push(ctx.tenantId);
         }
+        this.applyCreatedByScope(wheres, values, ctx);
         const sql = `UPDATE ${ident(this.table)} SET ${sets.join(", ")} WHERE ${wheres.join(" AND ")}`;
         await this.db.execute(sql, values);
         return this.findById(id, ctx);
@@ -173,6 +187,7 @@ class MysqlRepository {
             wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
             params.push(ctx.tenantId);
         }
+        this.applyCreatedByScope(wheres, params, ctx);
         const [result] = await this.db.execute(`DELETE FROM ${ident(this.table)} WHERE ${wheres.join(" AND ")}`, params);
         return result.affectedRows > 0;
     }
@@ -183,10 +198,13 @@ class MysqlRepository {
             wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
             params.push(ctx.tenantId);
         }
+        this.applyCreatedByScope(wheres, params, ctx);
         for (const [key, value] of Object.entries(filter)) {
             if (!this.opts.filterableColumns.includes(key))
                 continue;
             if (this.opts.tenantColumn && key === this.opts.tenantColumn)
+                continue;
+            if (ctx.restrictToCreatedBy != null && key === "createdBy")
                 continue;
             wheres.push(`${ident(key)} = ?`);
             params.push(value);
