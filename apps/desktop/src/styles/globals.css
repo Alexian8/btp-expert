@@ -210,6 +210,58 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   STYLES VISUELS GLOBAUX — data-ui-style (réglé par l'admin, Paramètres →
+   Apparence → Style de l'application). 4 styles : classique (défaut, aucun
+   override), epure, liquid, techno. Hors @layer pour primer sur utilities.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Épuré : aéré, sans ombres, bordures discrètes ─────────────────────── */
+:root[data-ui-style="epure"] {
+  --radius: 0.875rem;
+}
+:root[data-ui-style="epure"] :is(.shadow-soft-sm, .shadow-soft-md, .shadow-soft-lg, .shadow-soft-xl) {
+  box-shadow: none;
+}
+:root[data-ui-style="epure"] .bg-card {
+  border-color: hsl(var(--border) / 0.55);
+}
+
+/* ─── Liquid glass : surfaces translucides + flou, coins très arrondis ──── */
+:root[data-ui-style="liquid"] {
+  --radius: 1.1rem;
+}
+:root[data-ui-style="liquid"] .bg-card {
+  background-color: hsl(var(--card) / 0.62);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  border-color: hsl(var(--border) / 0.55);
+}
+:root[data-ui-style="liquid"] .bg-muted {
+  background-color: hsl(var(--muted) / 0.55);
+}
+:root[data-ui-style="liquid"] body {
+  background-image:
+    radial-gradient(ellipse 50% 40% at 15% 0%, hsl(var(--primary) / 0.10), transparent 65%),
+    radial-gradient(ellipse 45% 40% at 90% 100%, hsl(var(--primary) / 0.08), transparent 65%);
+  background-attachment: fixed;
+}
+
+/* ─── Techno : coins nets, grille de fond, bordures accentuées ──────────── */
+:root[data-ui-style="techno"] {
+  --radius: 0.3rem;
+}
+:root[data-ui-style="techno"] body {
+  background-image:
+    linear-gradient(to right, hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 42px 42px;
+  background-attachment: fixed;
+}
+:root[data-ui-style="techno"] .bg-card {
+  border-color: hsl(var(--primary) / 0.22);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    UTILITIES
    ═══════════════════════════════════════════════════════════════════════ */
 

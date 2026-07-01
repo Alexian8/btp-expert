@@ -85,6 +85,33 @@ export function App() {
     if (user) void loadUsers();
   }, [user, loadUsers]);
 
+  // Style visuel global (choisi par l'admin, partagé via settings serveur) :
+  // synchronisé au login puis à chaque mise à jour des réglages.
+  useEffect(() => {
+    if (!user) return;
+    const sync = async (): Promise<void> => {
+      try {
+        const { getDataService } = await import("@/lib/dataService");
+        const s = await getDataService().getSettings();
+        const style = (s as { themeStyle?: string })?.themeStyle;
+        const store = useThemeStore.getState();
+        if (
+          style &&
+          (style === "classique" || style === "epure" || style === "liquid" || style === "techno") &&
+          style !== store.uiStyle
+        ) {
+          store.setUiStyle(style);
+        }
+      } catch {
+        /* best-effort : garde le style local */
+      }
+    };
+    void sync();
+    const onUpdated = (): void => void sync();
+    window.addEventListener("btp:settings-updated", onUpdated);
+    return () => window.removeEventListener("btp:settings-updated", onUpdated);
+  }, [user]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppRouter />

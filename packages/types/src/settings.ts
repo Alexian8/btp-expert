@@ -76,6 +76,9 @@ export interface AppearanceSettings {
   accentColor?: "blue" | "violet" | "emerald" | "amber" | "rose" | "slate";
   density?: "compact" | "normal" | "comfortable";
   radius?: "none" | "sm" | "md" | "lg" | "full";
+  /** Style visuel global de l'app (réglé par l'admin, appliqué à tous) :
+   *  classique · epure · liquid (verre dépoli) · techno. */
+  themeStyle?: "classique" | "epure" | "liquid" | "techno";
 }
 
 export interface SecuritySettings {

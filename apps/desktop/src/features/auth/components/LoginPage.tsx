@@ -35,30 +35,30 @@ function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {/* Marque */}
       <div className="text-center space-y-4">
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.92, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.05, duration: 0.35 }}
-          className="mx-auto w-20 h-20 rounded-2xl overflow-hidden ring-1 ring-border shadow-soft-lg bg-white"
+          className="mx-auto w-[4.5rem] h-[4.5rem] rounded-[1.35rem] overflow-hidden ring-1 ring-border/50 bg-white"
         >
           <img src={logoSquareUrl} alt="BatiDesk" className="w-full h-full object-contain" />
         </motion.div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">{subtitle}</p>
         </div>
       </div>
 
-      {/* Carte */}
-      <div className="bg-card/80 backdrop-blur-sm border border-border rounded-2xl shadow-soft-xl p-6 sm:p-7">
+      {/* Carte — verre liquide */}
+      <div className="bg-card/55 backdrop-blur-2xl backdrop-saturate-150 border border-border/50 rounded-3xl p-6 sm:p-8">
         {children}
       </div>
 
       {/* Footer */}
-      <p className="text-center text-xs text-muted-foreground/70">
+      <p className="text-center text-xs text-muted-foreground/60">
         BatiDesk · Gestion pour artisans du bâtiment
       </p>
     </div>
