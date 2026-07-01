@@ -1,16 +1,50 @@
 import { motion } from "framer-motion";
-import { Sun, Moon, Monitor, Check, Smartphone, LaptopMinimal, Sparkles } from "lucide-react";
+import {
+  Sun,
+  Moon,
+  Monitor,
+  Check,
+  Smartphone,
+  LaptopMinimal,
+  Sparkles,
+  Square,
+  Feather,
+  Droplets,
+  Grid3x3,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SettingsSectionWrapper } from "./SettingsPage";
-import { useThemeStore, type Mode, type AccentColor, type Radius, type Density } from "@/stores/themeStore";
+import {
+  useThemeStore,
+  type Mode,
+  type AccentColor,
+  type Radius,
+  type Density,
+  type UiStyle,
+} from "@/stores/themeStore";
 import { useDeviceModeStore, type DeviceMode } from "@/stores/deviceModeStore";
+import { useAuthStore } from "@/stores/authStore";
+import { getDataService } from "@/lib/dataService";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppearanceSection — Personnalisation visuelle en temps réel
 // ═══════════════════════════════════════════════════════════════════════════
+
+const UI_STYLE_OPTIONS: Array<{
+  key: UiStyle;
+  label: string;
+  desc: string;
+  icon: React.ElementType;
+}> = [
+  { key: "classique", label: "Classique", desc: "L'interface BatiDesk standard", icon: Square },
+  { key: "epure", label: "Épuré", desc: "Minimal et aéré, sans ombres", icon: Feather },
+  { key: "liquid", label: "Liquid glass", desc: "Verre dépoli, surfaces translucides", icon: Droplets },
+  { key: "techno", label: "Techno", desc: "Coins nets, grille de fond", icon: Grid3x3 },
+];
 
 const MODE_OPTIONS: Array<{ key: Mode; label: string; icon: React.ElementType }> = [
   { key: "light", label: "Clair", icon: Sun },
@@ -54,13 +88,27 @@ const DEVICE_MODE_OPTIONS: Array<{
 ];
 
 export function AppearanceSection() {
-  const { mode, accent, radius, density, hideSidebarBadges, setMode, setAccent, setRadius, setDensity, setHideSidebarBadges, reset } =
+  const { mode, accent, radius, density, uiStyle, hideSidebarBadges, setMode, setAccent, setRadius, setDensity, setUiStyle, setHideSidebarBadges, reset } =
     useThemeStore();
   const deviceMode = useDeviceModeStore((s) => s.mode);
   const setDeviceMode = useDeviceModeStore((s) => s.setMode);
   const isAutoMobile = useDeviceModeStore((s) => s.isAutoMobile);
   const isAutoStandalone = useDeviceModeStore((s) => s.isAutoStandalone);
   const isIOS = useDeviceModeStore((s) => s.isIOS);
+  const isAdmin = useAuthStore((s) => s.user)?.role === "admin";
+
+  // Style global : appliqué localement tout de suite, puis persisté dans les
+  // settings serveur pour que TOUS les utilisateurs le récupèrent au login.
+  const handleUiStyle = async (style: UiStyle): Promise<void> => {
+    setUiStyle(style);
+    try {
+      await getDataService().updateSettings({ themeStyle: style });
+      window.dispatchEvent(new Event("btp:settings-updated"));
+      toast.success(`Style « ${UI_STYLE_OPTIONS.find((o) => o.key === style)?.label} » appliqué à toute l'application`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement du style");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -95,6 +143,45 @@ export function AppearanceSection() {
           ))}
         </div>
       </SettingsSectionWrapper>
+
+      {/* Style visuel global (admin : appliqué à toute l'application) */}
+      {isAdmin && (
+        <SettingsSectionWrapper
+          title="Style de l'application"
+          description="Personnalité visuelle globale — appliquée à tous les utilisateurs, sur toutes les pages."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {UI_STYLE_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const selected = uiStyle === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => void handleUiStyle(opt.key)}
+                  className={cn(
+                    "relative flex flex-col items-start gap-2 p-4 rounded-lg border-2 text-left transition-all",
+                    selected
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/40 hover:bg-accent/50"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{opt.label}</span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground leading-snug">{opt.desc}</span>
+                  {selected && (
+                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </SettingsSectionWrapper>
+      )}
 
       {/* Mode d'affichage : Auto / Mobile / Desktop */}
       <SettingsSectionWrapper

@@ -10,12 +10,17 @@ export type Mode = "light" | "dark" | "system";
 export type AccentColor = "blue" | "violet" | "emerald" | "amber" | "rose" | "slate";
 export type Radius = "none" | "sm" | "md" | "lg" | "xl" | "full";
 export type Density = "compact" | "normal" | "comfortable";
+/** Style visuel global de l'app (réglé par l'admin, partagé via settings). */
+export type UiStyle = "classique" | "epure" | "liquid" | "techno";
+
+export const UI_STYLES: UiStyle[] = ["classique", "epure", "liquid", "techno"];
 
 interface ThemeState {
   mode: Mode;
   accent: AccentColor;
   radius: Radius;
   density: Density;
+  uiStyle: UiStyle;
 
   // Préférences sidebar (Session 20)
   hideSidebarBadges: boolean;
@@ -24,6 +29,7 @@ interface ThemeState {
   setAccent: (accent: AccentColor) => void;
   setRadius: (radius: Radius) => void;
   setDensity: (density: Density) => void;
+  setUiStyle: (style: UiStyle) => void;
   setHideSidebarBadges: (v: boolean) => void;
   reset: () => void;
 
@@ -36,10 +42,11 @@ const DEFAULT_STATE = {
   accent: "blue" as AccentColor,
   radius: "lg" as Radius,
   density: "normal" as Density,
+  uiStyle: "classique" as UiStyle,
   hideSidebarBadges: false,
 };
 
-function applyToDOM(state: Pick<ThemeState, "mode" | "accent" | "radius" | "density">) {
+function applyToDOM(state: Pick<ThemeState, "mode" | "accent" | "radius" | "density" | "uiStyle">) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
 
@@ -53,10 +60,11 @@ function applyToDOM(state: Pick<ThemeState, "mode" | "accent" | "radius" | "dens
   if (resolvedMode === "dark") root.classList.add("dark");
   else root.classList.remove("dark");
 
-  // Accent / radius / density (via data attributes)
+  // Accent / radius / density / style visuel (via data attributes)
   root.setAttribute("data-accent", state.accent);
   root.setAttribute("data-radius", state.radius);
   root.setAttribute("data-density", state.density);
+  root.setAttribute("data-ui-style", state.uiStyle);
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -79,6 +87,10 @@ export const useThemeStore = create<ThemeState>()(
       setDensity: (density) => {
         set({ density });
         applyToDOM({ ...get(), density });
+      },
+      setUiStyle: (uiStyle) => {
+        set({ uiStyle });
+        applyToDOM({ ...get(), uiStyle });
       },
       setHideSidebarBadges: (hideSidebarBadges) => set({ hideSidebarBadges }),
       reset: () => {
