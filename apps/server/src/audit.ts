@@ -27,6 +27,8 @@ export type AuditAction =
   | "user_enabled"
   | "user_role_changed"
   | "user_password_reset"
+  | "user_unlocked"
+  | "user_invite_resent"
   // CRUD
   | "create"
   | "update"

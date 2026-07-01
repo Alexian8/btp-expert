@@ -21,6 +21,7 @@ import { requireRole, ROLES, isValidRole } from "../rbac";
 import { writeAudit, audited } from "../audit";
 import { sendMail, welcomeEmailHtml } from "../email";
 import { createMailbox, deleteMailbox, isCpanelConfigured } from "../cpanel-email";
+import { revokeAllUserSessions } from "../token-revocation";
 import type { Config } from "../config";
 
 const SALT_LEN = 16;
@@ -90,10 +91,18 @@ interface UserRow extends RowDataPacket {
   createdAt: string;
   updatedAt: string;
   companyId: number;
+  failedLoginAttempts?: number;
+  lockedUntil?: number;
 }
+
+/** Colonnes exposées à l'admin (jamais passwordHash). */
+const USER_SELECT = `id, username, email, firstName, lastName, avatarUrl,
+                role, disabled, mustChangePassword, lastLoginAt,
+                createdAt, updatedAt, companyId, failedLoginAttempts, lockedUntil`;
 
 /** Convertit une row MySQL en réponse JSON publique (pas de hash). */
 function publicUser(row: UserRow) {
+  const lockedUntil = Number(row.lockedUntil ?? 0);
   return {
     id: row.id,
     username: row.username,
@@ -108,6 +117,10 @@ function publicUser(row: UserRow) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     companyId: row.companyId,
+    failedLoginAttempts: Number(row.failedLoginAttempts ?? 0),
+    lockedUntil,
+    /** Compte actuellement verrouillé (trop de tentatives) ? */
+    locked: lockedUntil > Date.now(),
   };
 }
 
@@ -123,9 +136,7 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
     wrap(async (req, res) => {
       const tenantId = req.user?.companyId ?? 1;
       const [rows] = await db.query<UserRow[]>(
-        `SELECT id, username, email, firstName, lastName, avatarUrl,
-                role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt, companyId
+        `SELECT ${USER_SELECT}
          FROM users WHERE companyId = ? ORDER BY createdAt DESC`,
         [tenantId]
       );
@@ -143,9 +154,7 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         return;
       }
       const [rows] = await db.query<UserRow[]>(
-        `SELECT id, username, email, firstName, lastName, avatarUrl,
-                role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt, companyId
+        `SELECT ${USER_SELECT}
          FROM users WHERE id = ? AND companyId = ? LIMIT 1`,
         [id, req.user?.companyId ?? 1]
       );
@@ -207,9 +216,7 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         ]
       );
       const [rows] = await db.query<UserRow[]>(
-        `SELECT id, username, email, firstName, lastName, avatarUrl,
-                role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt, companyId
+        `SELECT ${USER_SELECT}
          FROM users WHERE id = ? LIMIT 1`,
         [result.insertId]
       );
@@ -382,9 +389,7 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       );
 
       const [rows] = await db.query<UserRow[]>(
-        `SELECT id, username, email, firstName, lastName, avatarUrl,
-                role, disabled, mustChangePassword, lastLoginAt,
-                createdAt, updatedAt, companyId
+        `SELECT ${USER_SELECT}
          FROM users WHERE id = ? AND companyId = ? LIMIT 1`,
         [id, req.user?.companyId ?? 1]
       );
@@ -409,6 +414,15 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         });
       }
       if (before && parsed.data.disabled !== undefined && Boolean(before.disabled) !== parsed.data.disabled) {
+        // À la désactivation : coupe immédiatement toutes les sessions actives
+        // (sinon le JWT resterait valide jusqu'à expiration).
+        if (parsed.data.disabled) {
+          try {
+            await revokeAllUserSessions(db, id);
+          } catch (e) {
+            console.warn("[admin-users] revokeAllUserSessions failed:", e);
+          }
+        }
         void writeAudit(db, {
           ...audited(req),
           action: parsed.data.disabled ? "user_disabled" : "user_enabled",
@@ -456,6 +470,13 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         res.status(404).json({ message: "Utilisateur introuvable" });
         return;
       }
+      // Coupe les sessions actives : si l'admin reset parce que le compte est
+      // compromis, l'ancien détenteur ne doit pas garder une session vivante.
+      try {
+        await revokeAllUserSessions(db, id);
+      } catch (e) {
+        console.warn("[admin-users] revokeAllUserSessions failed:", e);
+      }
       // Récupérer username pour log lisible
       const [rows] = await db.query<UserRow[]>(
         "SELECT username FROM users WHERE id = ? LIMIT 1",
@@ -469,6 +490,118 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
         meta: { username: rows[0]?.username ?? "" },
       });
       res.json({ tempPassword });
+    })
+  );
+
+  // ─── Déverrouillage (compte verrouillé après trop d'échecs) ────────────
+  // Contrairement au reset-password, ne touche PAS au mot de passe : remet
+  // simplement les compteurs de verrouillage à zéro.
+  router.post(
+    "/:id/unlock",
+    wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ message: "ID invalide" });
+        return;
+      }
+      const tenantId = req.user?.companyId ?? 1;
+      const [result] = await db.execute<ResultSetHeader>(
+        "UPDATE users SET failedLoginAttempts = 0, lockedUntil = 0 WHERE id = ? AND companyId = ?",
+        [id, tenantId]
+      );
+      if (result.affectedRows === 0) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
+      const [rows] = await db.query<UserRow[]>(
+        "SELECT username FROM users WHERE id = ? LIMIT 1",
+        [id]
+      );
+      void writeAudit(db, {
+        ...audited(req),
+        action: "user_unlocked",
+        resource: "users",
+        resourceId: String(id),
+        meta: { username: rows[0]?.username ?? "" },
+      });
+      res.json({ success: true });
+    })
+  );
+
+  // ─── Renvoyer l'email d'invitation ──────────────────────────────────────
+  // Le mot de passe temporaire n'est jamais stocké en clair : renvoyer
+  // l'invitation implique d'en régénérer un (mustChangePassword = 1) puis de
+  // renvoyer le welcome email. Déverrouille et coupe les sessions au passage.
+  router.post(
+    "/:id/resend-invite",
+    wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ message: "ID invalide" });
+        return;
+      }
+      const tenantId = req.user?.companyId ?? 1;
+      const [rows] = await db.query<UserRow[]>(
+        `SELECT ${USER_SELECT} FROM users WHERE id = ? AND companyId = ? LIMIT 1`,
+        [id, tenantId]
+      );
+      const target = rows[0];
+      if (!target) {
+        res.status(404).json({ message: "Utilisateur introuvable" });
+        return;
+      }
+      const notifyTo = String((req.body as { notificationEmail?: string })?.notificationEmail || target.email || "");
+      if (!notifyTo) {
+        res.status(400).json({
+          message: "Cet utilisateur n'a pas d'adresse email — renseignez-en une d'abord (Modifier), ou utilisez « Régénérer le mot de passe ».",
+        });
+        return;
+      }
+
+      const tempPassword = generateTempPassword();
+      const hash = hashPassword(tempPassword);
+      await db.execute(
+        "UPDATE users SET passwordHash = ?, mustChangePassword = 1, failedLoginAttempts = 0, lockedUntil = 0 WHERE id = ? AND companyId = ?",
+        [hash, id, tenantId]
+      );
+      try {
+        await revokeAllUserSessions(db, id);
+      } catch (e) {
+        console.warn("[admin-users] revokeAllUserSessions failed:", e);
+      }
+
+      const [companyRows] = await db.query<RowDataPacket[]>(
+        "SELECT name FROM company WHERE id = ? LIMIT 1",
+        [tenantId]
+      );
+      const companyName = (companyRows[0] as { name?: string })?.name ?? "BatiDesk";
+      const html = welcomeEmailHtml({
+        firstName: target.firstName ?? "",
+        username: target.username,
+        tempPassword,
+        loginUrl: cfg.APP_URL || "https://intranet.jacobhabitat-dev.fr",
+        companyName,
+      });
+      const mail = await sendMail(cfg, {
+        to: notifyTo,
+        subject: `[${companyName}] Vos accès BatiDesk`,
+        html,
+      });
+
+      void writeAudit(db, {
+        ...audited(req),
+        action: "user_invite_resent",
+        resource: "users",
+        resourceId: String(id),
+        meta: { username: target.username, emailSent: mail.ok, emailSentTo: notifyTo },
+      });
+
+      res.json({
+        tempPassword,
+        emailSent: mail.ok,
+        emailError: mail.skipped ? "SMTP non configuré" : mail.error,
+        emailSentTo: notifyTo,
+      });
     })
   );
 
@@ -499,6 +632,12 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
       if (result.affectedRows === 0) {
         res.status(404).json({ message: "Utilisateur introuvable" });
         return;
+      }
+      // Coupe immédiatement les sessions actives du compte désactivé
+      try {
+        await revokeAllUserSessions(db, id);
+      } catch (e) {
+        console.warn("[admin-users] revokeAllUserSessions failed:", e);
       }
       void writeAudit(db, {
         ...audited(req),
@@ -564,6 +703,14 @@ export function buildAdminUsersRouter(db: DB, cfg: Config): Router {
           });
           return;
         }
+      }
+
+      // Coupe les sessions AVANT le delete (met aussi le cache à jour ; après
+      // suppression, un user introuvable est de toute façon considéré révoqué).
+      try {
+        await revokeAllUserSessions(db, id);
+      } catch (e) {
+        console.warn("[admin-users] revokeAllUserSessions failed:", e);
       }
 
       // Hard delete

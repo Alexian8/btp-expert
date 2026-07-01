@@ -15,15 +15,22 @@ import {
   Copy,
   Check,
   X,
+  Lock,
+  LockOpen,
+  Pencil,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { cn } from "@btp/ui";
 
 import { CreateUserModal } from "./CreateUserModal";
+import { EditUserModal } from "./EditUserModal";
 import {
   usersAdminApi,
   type AdminUser,
@@ -34,7 +41,7 @@ import {
 // UsersAdminPage — Panel admin de gestion des utilisateurs
 //
 // Accessible uniquement aux users de rôle "admin" (gardé côté serveur).
-// Le menu de navigation devra cacher cette page pour les autres rôles.
+// Responsive : cartes empilées en mobile (md:hidden) + tableau en desktop.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ROLE_META: Record<Role, { label: string; color: string }> = {
@@ -60,6 +67,8 @@ const ROLE_META: Record<Role, { label: string; color: string }> = {
   },
 };
 
+type StatusFilter = "all" | "active" | "disabled" | "locked" | "mustchange";
+
 function fullName(u: AdminUser): string {
   const n = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
   return n || u.username;
@@ -77,11 +86,17 @@ function formatDate(s: string | null): string {
   }
 }
 
+function lockedMinutesLeft(u: AdminUser): number {
+  return Math.max(1, Math.ceil(((u.lockedUntil ?? 0) - Date.now()) / 60_000));
+}
+
 export function UsersAdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState<"all" | Role>("all");
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
 
   const loadUsers = useCallback(async () => {
@@ -102,6 +117,11 @@ export function UsersAdminPage() {
   }, [loadUsers]);
 
   const filtered = users.filter((u) => {
+    if (filterRole !== "all" && u.role !== filterRole) return false;
+    if (filterStatus === "active" && (u.disabled || u.locked)) return false;
+    if (filterStatus === "disabled" && !u.disabled) return false;
+    if (filterStatus === "locked" && !u.locked) return false;
+    if (filterStatus === "mustchange" && !u.mustChangePassword) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -115,12 +135,13 @@ export function UsersAdminPage() {
     total: users.length,
     admins: users.filter((u) => u.role === "admin").length,
     actifs: users.filter((u) => !u.disabled).length,
+    verrouilles: users.filter((u) => u.locked).length,
   };
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-primary" />
@@ -137,21 +158,45 @@ export function UsersAdminPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard label="Total" value={stats.total} icon={Users} />
         <StatCard label="Actifs" value={stats.actifs} icon={Power} accent="emerald" />
         <StatCard label="Administrateurs" value={stats.admins} icon={ShieldCheck} accent="rose" />
+        <StatCard label="Verrouillés" value={stats.verrouilles} icon={Lock} accent="amber" />
       </div>
 
-      {/* Search */}
-      <div className="mb-4 relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher (nom, email, identifiant)…"
-          className="pl-10"
-        />
+      {/* Search + filtres */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher (nom, email, identifiant)…"
+            className="pl-10"
+          />
+        </div>
+        <NativeSelect
+          value={filterRole}
+          onChange={(e) => setFilterRole(e.target.value as "all" | Role)}
+          className="w-auto min-w-[150px]"
+        >
+          <option value="all">Tous rôles</option>
+          {(Object.keys(ROLE_META) as Role[]).map((r) => (
+            <option key={r} value={r}>{ROLE_META[r].label}</option>
+          ))}
+        </NativeSelect>
+        <NativeSelect
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}
+          className="w-auto min-w-[150px]"
+        >
+          <option value="all">Tous statuts</option>
+          <option value="active">Actifs</option>
+          <option value="locked">Verrouillés</option>
+          <option value="mustchange">MdP à changer</option>
+          <option value="disabled">Désactivés</option>
+        </NativeSelect>
       </div>
 
       {/* List */}
@@ -173,23 +218,35 @@ export function UsersAdminPage() {
         <div className="text-center py-12 text-muted-foreground text-sm">Chargement…</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">
-          {search ? "Aucun résultat" : "Aucun utilisateur"}
+          {search || filterRole !== "all" || filterStatus !== "all"
+            ? "Aucun résultat"
+            : "Aucun utilisateur"}
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="grid grid-cols-[1fr_140px_140px_140px_120px] gap-2 px-4 py-2.5 bg-muted/40 text-xs font-medium text-muted-foreground border-b border-border">
-            <div>Utilisateur</div>
-            <div>Rôle</div>
-            <div>Dernière connexion</div>
-            <div>Statut</div>
-            <div className="text-right">Actions</div>
-          </div>
-          <div className="divide-y divide-border">
+        <>
+          {/* ─── Cartes mobile (< md) ─────────────────────────────────── */}
+          <div className="md:hidden space-y-2">
             {filtered.map((u) => (
-              <UserRow key={u.id} user={u} onChanged={loadUsers} />
+              <UserItem key={u.id} user={u} variant="card" onChanged={loadUsers} />
             ))}
           </div>
-        </div>
+
+          {/* ─── Tableau desktop (≥ md) ───────────────────────────────── */}
+          <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-[1fr_150px_130px_130px_190px] gap-2 px-4 py-2.5 bg-muted/40 text-xs font-medium text-muted-foreground border-b border-border">
+              <div>Utilisateur</div>
+              <div>Rôle</div>
+              <div>Dernière connexion</div>
+              <div>Statut</div>
+              <div className="text-right">Actions</div>
+            </div>
+            <div className="divide-y divide-border">
+              {filtered.map((u) => (
+                <UserItem key={u.id} user={u} variant="row" onChanged={loadUsers} />
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       <CreateUserModal
@@ -214,14 +271,16 @@ function StatCard({
   label: string;
   value: number;
   icon: React.ElementType;
-  accent?: "emerald" | "rose";
+  accent?: "emerald" | "rose" | "amber";
 }) {
   const accentClass =
     accent === "emerald"
       ? "bg-emerald-500/10 text-emerald-600"
       : accent === "rose"
         ? "bg-rose-500/10 text-rose-600"
-        : "bg-primary/10 text-primary";
+        : accent === "amber"
+          ? "bg-amber-500/10 text-amber-600"
+          : "bg-primary/10 text-primary";
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -241,26 +300,113 @@ function StatCard({
   );
 }
 
-function UserRow({
+/** Badge de statut (partagé carte mobile / ligne desktop). */
+function StatusBadge({ user }: { user: AdminUser }) {
+  if (user.disabled) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-muted text-muted-foreground">
+        <PowerOff className="w-3 h-3" />
+        Désactivé
+      </span>
+    );
+  }
+  if (user.locked) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-rose-500/10 text-rose-600 dark:text-rose-400"
+        title={`Trop de tentatives — déverrouillage auto dans ${lockedMinutesLeft(user)} min`}
+      >
+        <Lock className="w-3 h-3" />
+        Verrouillé ({lockedMinutesLeft(user)} min)
+      </span>
+    );
+  }
+  if (user.mustChangePassword) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+        <KeyRound className="w-3 h-3" />
+        MdP à changer
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+      <Power className="w-3 h-3" />
+      Actif
+    </span>
+  );
+}
+
+/**
+ * Item utilisateur — un seul composant (état + modales partagés), deux
+ * rendus : carte (mobile) ou ligne de tableau (desktop).
+ */
+function UserItem({
   user,
+  variant,
   onChanged,
 }: {
   user: AdminUser;
+  variant: "card" | "row";
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [resetPassword, setResetPassword] = useState<string | null>(null);
+  const [tempPasswordInfo, setTempPasswordInfo] = useState<{
+    password: string;
+    context: "reset" | "invite";
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [confirmToggleOpen, setConfirmToggleOpen] = useState(false);
+  const [confirmResendOpen, setConfirmResendOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   async function handleReset() {
+    setConfirmResetOpen(false);
     if (busy) return;
-    if (!confirm(`Régénérer un mot de passe temporaire pour ${user.username} ?`)) return;
     setBusy(true);
     try {
       const r = await usersAdminApi.resetPassword(user.id);
-      setResetPassword(r.tempPassword);
+      setTempPasswordInfo({ password: r.tempPassword, context: "reset" });
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnlock() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await usersAdminApi.unlock(user.id);
+      toast.success(`Compte ${user.username} déverrouillé`);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResendInvite() {
+    setConfirmResendOpen(false);
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await usersAdminApi.resendInvite(user.id);
+      if (r.emailSent) {
+        toast.success(`Invitation renvoyée à ${r.emailSentTo}`);
+      } else {
+        toast.warning(
+          `Email non envoyé${r.emailError ? ` (${r.emailError})` : ""} — transmettez le mot de passe manuellement`
+        );
+      }
+      setTempPasswordInfo({ password: r.tempPassword, context: "invite" });
+      onChanged();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur");
     } finally {
@@ -269,9 +415,8 @@ function UserRow({
   }
 
   async function handleToggleDisabled() {
+    setConfirmToggleOpen(false);
     if (busy) return;
-    const verb = user.disabled ? "Réactiver" : "Désactiver";
-    if (!confirm(`${verb} le compte ${user.username} ?`)) return;
     setBusy(true);
     try {
       if (user.disabled) {
@@ -279,7 +424,7 @@ function UserRow({
         toast.success("Compte réactivé");
       } else {
         await usersAdminApi.disable(user.id);
-        toast.success("Compte désactivé");
+        toast.success("Compte désactivé — ses sessions en cours sont coupées");
       }
       onChanged();
     } catch (e) {
@@ -303,10 +448,10 @@ function UserRow({
     }
   }
 
-  async function copyResetPwd() {
-    if (!resetPassword) return;
+  async function copyTempPwd() {
+    if (!tempPasswordInfo) return;
     try {
-      await navigator.clipboard.writeText(resetPassword);
+      await navigator.clipboard.writeText(tempPasswordInfo.password);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -337,133 +482,229 @@ function UserRow({
   const meta = ROLE_META[user.role] ?? ROLE_META.viewer;
   const initials = (user.firstName?.[0] ?? user.username[0] ?? "?").toUpperCase();
 
+  const identity = (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-medium shrink-0">
+        {initials}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">{fullName(user)}</p>
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <span>@{user.username}</span>
+          {user.email && (
+            <>
+              <span>·</span>
+              <Mail className="w-3 h-3" />
+              <span className="truncate">{user.email}</span>
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+
+  const roleSelect = (
+    <select
+      value={user.role}
+      onChange={(e) => handleRoleChange(e.target.value as Role)}
+      className={cn("px-2 py-1 text-xs rounded border font-medium", meta.color)}
+    >
+      {(Object.keys(ROLE_META) as Role[]).map((r) => (
+        <option key={r} value={r}>
+          {ROLE_META[r].label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const actions = (
+    <div className="flex items-center justify-end gap-1 flex-wrap">
+      {user.locked && (
+        <Button
+          variant="outline"
+          size="icon"
+          title="Déverrouiller le compte"
+          onClick={handleUnlock}
+          disabled={busy}
+          className="border-rose-500/40 hover:bg-rose-500/10"
+        >
+          <LockOpen className="w-3.5 h-3.5 text-rose-500" />
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        size="icon"
+        title="Modifier (nom, email)"
+        onClick={() => setEditOpen(true)}
+        disabled={busy}
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        title="Renvoyer l'invitation (nouveau mot de passe + email)"
+        onClick={() => setConfirmResendOpen(true)}
+        disabled={busy || user.disabled}
+      >
+        <Send className="w-3.5 h-3.5" />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        title="Régénérer mot de passe"
+        onClick={() => setConfirmResetOpen(true)}
+        disabled={busy || user.disabled}
+      >
+        <KeyRound className="w-3.5 h-3.5" />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        title={user.disabled ? "Réactiver" : "Désactiver"}
+        onClick={() => setConfirmToggleOpen(true)}
+        disabled={busy}
+      >
+        {user.disabled ? (
+          <Power className="w-3.5 h-3.5 text-emerald-500" />
+        ) : (
+          <PowerOff className="w-3.5 h-3.5 text-destructive" />
+        )}
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        title="Supprimer définitivement"
+        onClick={() => {
+          setConfirmText("");
+          setConfirmDeleteOpen(true);
+        }}
+        disabled={busy}
+        className="hover:bg-destructive/10 hover:border-destructive/40"
+      >
+        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+      </Button>
+    </div>
+  );
+
   return (
     <>
-      <div
-        className={cn(
-          "grid grid-cols-[1fr_140px_140px_140px_120px] gap-2 px-4 py-3 items-center",
-          user.disabled && "opacity-50",
-          busy && "pointer-events-none"
-        )}
-      >
-        {/* Identité */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-medium shrink-0">
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{fullName(user)}</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <span>@{user.username}</span>
-              {user.email && (
-                <>
-                  <span>·</span>
-                  <Mail className="w-3 h-3" />
-                  <span className="truncate">{user.email}</span>
-                </>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Rôle (select inline) */}
-        <select
-          value={user.role}
-          onChange={(e) => handleRoleChange(e.target.value as Role)}
+      {variant === "row" ? (
+        <div
           className={cn(
-            "px-2 py-1 text-xs rounded border font-medium",
-            meta.color
+            "grid grid-cols-[1fr_150px_130px_130px_190px] gap-2 px-4 py-3 items-center",
+            user.disabled && "opacity-50",
+            busy && "pointer-events-none"
           )}
         >
-          {(Object.keys(ROLE_META) as Role[]).map((r) => (
-            <option key={r} value={r}>
-              {ROLE_META[r].label}
-            </option>
-          ))}
-        </select>
-
-        {/* Last login */}
-        <div className="text-xs text-muted-foreground">
-          {formatDate(user.lastLoginAt)}
+          {identity}
+          {roleSelect}
+          <div className="text-xs text-muted-foreground">{formatDate(user.lastLoginAt)}</div>
+          <div>
+            <StatusBadge user={user} />
+          </div>
+          {actions}
         </div>
-
-        {/* Statut */}
-        <div>
-          {user.disabled ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-muted text-muted-foreground">
-              <PowerOff className="w-3 h-3" />
-              Désactivé
+      ) : (
+        <div
+          className={cn(
+            "bg-card border border-border rounded-lg p-3 space-y-3",
+            user.disabled && "opacity-60",
+            busy && "pointer-events-none"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            {identity}
+            <StatusBadge user={user} />
+          </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            {roleSelect}
+            <span className="text-[11px] text-muted-foreground">
+              Dernière connexion : {formatDate(user.lastLoginAt)}
             </span>
-          ) : user.mustChangePassword ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              <KeyRound className="w-3 h-3" />
-              MdP à changer
+          </div>
+          {actions}
+        </div>
+      )}
+
+      {/* Confirmations (reset / renvoi invitation / activer-désactiver) */}
+      <ConfirmDialog
+        open={confirmResetOpen}
+        onCancel={() => setConfirmResetOpen(false)}
+        onConfirm={handleReset}
+        title="Régénérer le mot de passe ?"
+        description={
+          <span>
+            Un nouveau mot de passe temporaire sera généré pour <strong>{user.username}</strong>.
+            Ses sessions en cours seront coupées et il devra le changer à sa prochaine connexion.
+          </span>
+        }
+        confirmLabel="Régénérer"
+      />
+      <ConfirmDialog
+        open={confirmResendOpen}
+        onCancel={() => setConfirmResendOpen(false)}
+        onConfirm={handleResendInvite}
+        title="Renvoyer l'invitation ?"
+        description={
+          <span>
+            Un <strong>nouveau mot de passe temporaire</strong> sera généré pour{" "}
+            <strong>{user.username}</strong> et l'email d'accès sera renvoyé
+            {user.email ? <> à <strong>{user.email}</strong></> : null}. Son mot de passe actuel
+            ne fonctionnera plus.
+          </span>
+        }
+        confirmLabel="Renvoyer"
+      />
+      <ConfirmDialog
+        open={confirmToggleOpen}
+        onCancel={() => setConfirmToggleOpen(false)}
+        onConfirm={handleToggleDisabled}
+        title={user.disabled ? "Réactiver ce compte ?" : "Désactiver ce compte ?"}
+        description={
+          user.disabled ? (
+            <span>
+              <strong>{user.username}</strong> pourra de nouveau se connecter.
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Power className="w-3 h-3" />
-              Actif
+            <span>
+              <strong>{user.username}</strong> ne pourra plus se connecter et ses sessions en
+              cours seront immédiatement coupées. Ses données restent intactes.
             </span>
-          )}
-        </div>
+          )
+        }
+        confirmLabel={user.disabled ? "Réactiver" : "Désactiver"}
+        destructive={!user.disabled}
+      />
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            title="Régénérer mot de passe"
-            onClick={handleReset}
-            disabled={busy || user.disabled}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            title={user.disabled ? "Réactiver" : "Désactiver"}
-            onClick={handleToggleDisabled}
-            disabled={busy}
-          >
-            {user.disabled ? (
-              <Power className="w-3.5 h-3.5 text-emerald-500" />
-            ) : (
-              <PowerOff className="w-3.5 h-3.5 text-destructive" />
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            title="Supprimer définitivement"
-            onClick={() => {
-              setConfirmText("");
-              setConfirmDeleteOpen(true);
-            }}
-            disabled={busy}
-            className="hover:bg-destructive/10 hover:border-destructive/40"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-destructive" />
-          </Button>
-        </div>
-      </div>
+      {/* Modale d'édition (nom, email) */}
+      <EditUserModal
+        user={editOpen ? user : null}
+        onClose={() => setEditOpen(false)}
+        onSaved={onChanged}
+      />
 
       {/* Modal de display du nouveau temp password */}
-      {resetPassword && (
+      {tempPasswordInfo && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg shadow-soft-xl max-w-md w-full p-5">
             <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
               <KeyRound className="w-5 h-5 text-primary" />
-              Mot de passe régénéré
+              {tempPasswordInfo.context === "invite"
+                ? "Invitation renvoyée"
+                : "Mot de passe régénéré"}
             </h3>
             <p className="text-xs text-muted-foreground mb-4">
-              Pour <strong>{user.username}</strong>. Transmets-le par un canal sécurisé,
-              il sera obligé de le changer à sa prochaine connexion.
+              Pour <strong>{user.username}</strong>.{" "}
+              {tempPasswordInfo.context === "invite"
+                ? "L'email contient déjà ce mot de passe — gardez-en une copie au cas où."
+                : "Transmets-le par un canal sécurisé, il sera obligé de le changer à sa prochaine connexion."}
             </p>
             <div className="flex items-center gap-2 mb-4">
               <code className="flex-1 px-3 py-2 rounded-md bg-muted font-mono text-sm break-all">
-                {resetPassword}
+                {tempPasswordInfo.password}
               </code>
-              <Button variant="outline" size="icon" onClick={copyResetPwd}>
+              <Button variant="outline" size="icon" onClick={copyTempPwd}>
                 {copied ? (
                   <Check className="w-4 h-4 text-emerald-500" />
                 ) : (
@@ -472,7 +713,7 @@ function UserRow({
               </Button>
             </div>
             <div className="flex justify-end">
-              <Button onClick={() => setResetPassword(null)}>Fermer</Button>
+              <Button onClick={() => setTempPasswordInfo(null)}>Fermer</Button>
             </div>
           </div>
         </div>
@@ -523,14 +764,14 @@ function UserRow({
               </div>
 
               <div>
-                <Label htmlFor="confirm-input" className="text-xs">
+                <Label htmlFor={`confirm-input-${user.id}-${variant}`} className="text-xs">
                   Pour confirmer, tape{" "}
                   <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">
                     {user.username}
                   </code>
                 </Label>
                 <Input
-                  id="confirm-input"
+                  id={`confirm-input-${user.id}-${variant}`}
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
                   placeholder={user.username}
