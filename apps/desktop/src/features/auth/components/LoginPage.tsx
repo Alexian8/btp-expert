@@ -1,27 +1,69 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Lock, User as UserIcon, Mail, ArrowLeft, MailCheck } from "lucide-react";
+import {
+  Lock,
+  User as UserIcon,
+  Mail,
+  ArrowLeft,
+  MailCheck,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/authStore";
 import logoSquareUrl from "@/assets/logo-square.png";
-import { MicrosoftLoginCard } from "./MicrosoftLoginCard";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LoginPage — Écran d'accueil (login OU setup du premier utilisateur)
-// Démontre : architecture feature, usage des stores, composants UI, animations
+// Design : tuile logo + carte « verre dépoli », œil afficher/masquer le mot
+// de passe, mode « mot de passe oublié » (web), footer discret.
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** Coquille commune : logo + titre + carte + footer. */
+function AuthShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Marque */}
+      <div className="text-center space-y-4">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.05, duration: 0.35 }}
+          className="mx-auto w-20 h-20 rounded-2xl overflow-hidden ring-1 ring-border shadow-soft-lg bg-white"
+        >
+          <img src={logoSquareUrl} alt="BatiDesk" className="w-full h-full object-contain" />
+        </motion.div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+        </div>
+      </div>
+
+      {/* Carte */}
+      <div className="bg-card/80 backdrop-blur-sm border border-border rounded-2xl shadow-soft-xl p-6 sm:p-7">
+        {children}
+      </div>
+
+      {/* Footer */}
+      <p className="text-center text-xs text-muted-foreground/70">
+        BatiDesk · Gestion pour artisans du bâtiment
+      </p>
+    </div>
+  );
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -30,6 +72,7 @@ export function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   // Mot de passe oublié (self-service, web). Le lien de réinitialisation est
@@ -90,204 +133,184 @@ export function LoginPage() {
   // ─── Vue « Mot de passe oublié » ─────────────────────────────────────────
   if (forgotMode) {
     return (
-      <Card className="shadow-soft-xl">
-        <CardHeader className="space-y-3 text-center pt-8">
-          <div className="mx-auto w-14 h-14 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-            {forgotSent ? <MailCheck className="w-7 h-7" /> : <Mail className="w-7 h-7" />}
-          </div>
-          <CardDescription className="text-sm">
-            {forgotSent
-              ? "Vérifiez votre boîte mail"
-              : "Réinitialiser votre mot de passe"}
-          </CardDescription>
-        </CardHeader>
-
+      <AuthShell
+        title={forgotSent ? "Vérifiez votre boîte mail" : "Mot de passe oublié"}
+        subtitle={
+          forgotSent
+            ? "Le lien de réinitialisation est en route"
+            : "Recevez un lien de réinitialisation par email"
+        }
+      >
         {forgotSent ? (
-          <>
-            <CardContent>
-              <p className="text-sm text-muted-foreground text-center">
-                Si un compte existe pour cet identifiant, un email contenant un
-                lien de réinitialisation vient d'être envoyé. Le lien est valable
-                1 heure.
-              </p>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setForgotMode(false);
-                  setForgotSent(false);
-                  setForgotId("");
-                  setError("");
-                }}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Retour à la connexion
-              </Button>
-            </CardFooter>
-          </>
+          <div className="space-y-5 text-center">
+            <div className="mx-auto w-14 h-14 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+              <MailCheck className="w-7 h-7" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Si un compte existe pour cet identifiant, un email contenant un lien de
+              réinitialisation vient d'être envoyé. Le lien est valable 1 heure —
+              pensez à vérifier vos spams.
+            </p>
+            <Button
+              variant="outline"
+              className="w-full h-11"
+              onClick={() => {
+                setForgotMode(false);
+                setForgotSent(false);
+                setForgotId("");
+                setError("");
+              }}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Retour à la connexion
+            </Button>
+          </div>
         ) : (
-          <form onSubmit={handleForgot}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="forgotId">Identifiant ou email</Label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="forgotId"
-                    type="text"
-                    placeholder="Votre identifiant ou email"
-                    value={forgotId}
-                    onChange={(e) => setForgotId(e.target.value)}
-                    className="pl-9"
-                    autoFocus
-                  />
-                </div>
+          <form onSubmit={handleForgot} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgotId">Identifiant ou email</Label>
+              <div className="relative">
+                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="forgotId"
+                  type="text"
+                  placeholder="Votre identifiant ou email"
+                  value={forgotId}
+                  onChange={(e) => setForgotId(e.target.value)}
+                  className="pl-9 h-11"
+                  autoFocus
+                />
               </div>
-              {error && (
-                <div className="p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
-                  {error}
-                </div>
-              )}
-            </CardContent>
-            <CardFooter className="flex-col gap-2">
-              <Button type="submit" className="w-full" loading={forgotLoading}>
-                Envoyer le lien de réinitialisation
-              </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  setForgotMode(false);
-                  setError("");
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Retour à la connexion
-              </button>
-            </CardFooter>
+            </div>
+            {error && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                {error}
+              </div>
+            )}
+            <Button type="submit" className="w-full h-11" loading={forgotLoading}>
+              <Mail className="w-4 h-4" />
+              Envoyer le lien de réinitialisation
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setForgotMode(false);
+                setError("");
+              }}
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              ← Retour à la connexion
+            </button>
           </form>
         )}
-      </Card>
+      </AuthShell>
     );
   }
 
+  // ─── Vue connexion / création du premier compte ──────────────────────────
   return (
-    <>
-      <Card className="shadow-soft-xl">
-      <CardHeader className="space-y-4 text-center pt-8">
-        <motion.div
-          initial={{ scale: 0.85, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
-          className="mx-auto w-36 h-36 flex items-center justify-center"
-        >
-          <img
-            src={logoSquareUrl}
-            alt="BatiDesk"
-            className="w-full h-full object-contain"
-          />
-        </motion.div>
-        <CardDescription className="text-sm">
-          {needsSetup
-            ? "Créez votre compte administrateur"
-            : "Connectez-vous à votre espace de travail"}
-        </CardDescription>
-      </CardHeader>
-
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Identifiant</Label>
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                id="username"
-                type="text"
-                placeholder={needsSetup ? "Choisissez un identifiant" : "Votre identifiant"}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="pl-9"
-                autoFocus
-                autoComplete="username"
-              />
-            </div>
+    <AuthShell
+      title={needsSetup ? "Bienvenue sur BatiDesk" : "Connexion"}
+      subtitle={
+        needsSetup
+          ? "Créez votre compte administrateur pour démarrer"
+          : "Connectez-vous à votre espace de travail"
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="username">Identifiant</Label>
+          <div className="relative">
+            <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              id="username"
+              type="text"
+              placeholder={needsSetup ? "Choisissez un identifiant" : "Votre identifiant"}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="pl-9 h-11"
+              autoFocus
+              autoComplete="username"
+            />
           </div>
+        </div>
 
-          <div className="space-y-2">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
             <Label htmlFor="password">Mot de passe</Label>
+            {!needsSetup && canForgot && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotMode(true);
+                  setForgotId(username.trim());
+                  setError("");
+                }}
+                className="text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                Mot de passe oublié ?
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder={needsSetup ? "Minimum 4 caractères" : "Votre mot de passe"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="pl-9 pr-10 h-11"
+              autoComplete={needsSetup ? "new-password" : "current-password"}
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {needsSetup && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="space-y-2"
+          >
+            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                id="password"
-                type="password"
-                placeholder={needsSetup ? "Minimum 4 caractères" : "Votre mot de passe"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-9"
-                autoComplete={needsSetup ? "new-password" : "current-password"}
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Retapez le mot de passe"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="pl-9 h-11"
+                autoComplete="new-password"
               />
             </div>
-            {!needsSetup && canForgot && (
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotMode(true);
-                    setForgotId(username.trim());
-                    setError("");
-                  }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Mot de passe oublié ?
-                </button>
-              </div>
-            )}
-          </div>
+          </motion.div>
+        )}
 
-          {needsSetup && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="space-y-2"
-            >
-              <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Retapez le mot de passe"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="pl-9"
-                  autoComplete="new-password"
-                />
-              </div>
-            </motion.div>
-          )}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm"
+          >
+            {error}
+          </motion.div>
+        )}
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm"
-            >
-              {error}
-            </motion.div>
-          )}
-        </CardContent>
-
-        <CardFooter>
-          <Button type="submit" className="w-full" loading={isLoading}>
-            {needsSetup ? "Créer mon compte" : "Se connecter"}
-          </Button>
-        </CardFooter>
+        <Button type="submit" className="w-full h-11 text-[15px]" loading={isLoading}>
+          {needsSetup ? "Créer mon compte" : "Se connecter"}
+        </Button>
       </form>
-    </Card>
-
-    {/* Encart Microsoft sous le formulaire (Session iOS-1.7) */}
-    <MicrosoftLoginCard />
-    </>
+    </AuthShell>
   );
 }
