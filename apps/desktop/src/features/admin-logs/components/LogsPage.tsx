@@ -39,6 +39,10 @@ const ACTION_META: Record<string, { label: string; color: string; icon?: string 
   login_blocked: { label: "Connexion bloquée", color: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
   logout: { label: "Déconnexion", color: "bg-slate-500/10 text-slate-600 dark:text-slate-400" },
   change_password: { label: "Mot de passe changé", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+  profile_updated: { label: "Profil modifié", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+  username_changed: { label: "Identifiant changé", color: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+  password_reset_requested: { label: "Reset MdP demandé", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  password_reset_done: { label: "MdP réinitialisé", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
   bootstrap: { label: "Bootstrap admin", color: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
   user_created: { label: "Utilisateur créé", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   user_updated: { label: "Utilisateur modifié", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
@@ -46,6 +50,8 @@ const ACTION_META: Record<string, { label: string; color: string; icon?: string 
   user_enabled: { label: "Utilisateur réactivé", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   user_role_changed: { label: "Rôle modifié", color: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
   user_password_reset: { label: "MdP régénéré", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  user_unlocked: { label: "Compte déverrouillé", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  user_invite_resent: { label: "Invitation renvoyée", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
   user_deleted_permanent: { label: "Utilisateur supprimé", color: "bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold" },
   create: { label: "Création", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   update: { label: "Modification", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
@@ -103,12 +109,33 @@ function describeAction(log: AuditLog): string {
       return `s'est connecté(e)`;
     case "login_fail":
       return `tentative de connexion échouée (${meta.reason ?? "?"})`;
-    case "login_blocked":
-      return `compte désactivé bloqué`;
+    case "login_blocked": {
+      // meta.reason distingue les causes : locked (verrouillage après trop de
+      // tentatives), disabled (compte désactivé), company_disabled.
+      const reason = String(meta.reason ?? "");
+      if (reason === "locked") {
+        const attempts = meta.attempts != null ? ` (${meta.attempts} tentatives)` : "";
+        return `connexion bloquée : compte verrouillé${attempts}`;
+      }
+      if (reason === "company_disabled") return `connexion bloquée : entreprise désactivée`;
+      return `connexion bloquée : compte désactivé`;
+    }
     case "logout":
       return `s'est déconnecté(e)`;
     case "change_password":
       return `a changé son mot de passe`;
+    case "profile_updated":
+      return `a modifié son profil (${(meta.changedFields as string[] | undefined)?.join(", ") ?? "?"})`;
+    case "username_changed":
+      return `a changé son identifiant (${meta.oldUsername ?? "?"} → ${log.username})`;
+    case "password_reset_requested":
+      return `a demandé une réinitialisation de mot de passe${meta.emailSent ? " (email envoyé)" : ""}`;
+    case "password_reset_done":
+      return `a réinitialisé son mot de passe via le lien email`;
+    case "user_unlocked":
+      return `a déverrouillé le compte ${meta.username ?? log.resourceId}`;
+    case "user_invite_resent":
+      return `a renvoyé l'invitation à ${meta.username ?? log.resourceId}${meta.emailSent ? ` (email envoyé à ${meta.emailSentTo})` : " (email non envoyé)"}`;
     case "user_created":
       return `a créé l'utilisateur ${meta.username ?? log.resourceId} (${meta.role ?? ""})`;
     case "user_disabled":

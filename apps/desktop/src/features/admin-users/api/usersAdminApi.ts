@@ -22,6 +22,12 @@ export interface AdminUser {
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Nombre d'échecs de connexion consécutifs. */
+  failedLoginAttempts?: number;
+  /** Fin du verrouillage (epoch ms), 0 si non verrouillé. */
+  lockedUntil?: number;
+  /** Compte actuellement verrouillé (trop de tentatives). */
+  locked?: boolean;
 }
 
 export interface CreateUserPayload {
@@ -115,6 +121,18 @@ export const usersAdminApi = {
 
   resetPassword: (id: number) =>
     request<{ tempPassword: string }>("POST", `/api/admin/users/${id}/reset-password`),
+
+  /** Déverrouille un compte verrouillé (sans toucher au mot de passe). */
+  unlock: (id: number) =>
+    request<{ success: boolean }>("POST", `/api/admin/users/${id}/unlock`),
+
+  /** Renvoie l'email d'invitation (régénère un mot de passe temporaire). */
+  resendInvite: (id: number, notificationEmail?: string) =>
+    request<{ tempPassword: string; emailSent: boolean; emailError?: string; emailSentTo?: string }>(
+      "POST",
+      `/api/admin/users/${id}/resend-invite`,
+      notificationEmail ? { notificationEmail } : {}
+    ),
 
   disable: (id: number) => request<void>("DELETE", `/api/admin/users/${id}`),
 

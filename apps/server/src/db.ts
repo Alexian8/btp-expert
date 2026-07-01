@@ -934,6 +934,8 @@ async function runEnterpriseMigrations(db: Pool): Promise<void> {
   // Verrouillage de compte après échecs de connexion (Lot auth)
   await addColumnIfNotExists(db, "users", "failedLoginAttempts", "INT NOT NULL DEFAULT 0");
   await addColumnIfNotExists(db, "users", "lockedUntil", "BIGINT NOT NULL DEFAULT 0");
+  // Révocation de toutes les sessions d'un user (epoch s) — cf. token-revocation.ts
+  await addColumnIfNotExists(db, "users", "tokensInvalidBefore", "BIGINT NOT NULL DEFAULT 0");
   // Si la colonne existait avec NOT NULL, on la rend nullable pour super_admin
   try {
     const [colRows] = await db.query<RowDataPacket[]>(

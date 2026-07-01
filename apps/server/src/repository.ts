@@ -46,6 +46,13 @@ export interface ScopeContext {
   auditUserId?: number;
   /** ID du tenant (company) du user — scope auto les queries. */
   tenantId?: number;
+  /**
+   * Isolation par auteur (rôle `worker`) : si défini ET que la table possède
+   * les colonnes d'audit (`hasAuditColumns`), toutes les lectures/écritures
+   * sont restreintes à `createdBy = <valeur>`. Imposé CÔTÉ SERVEUR — le
+   * filtre `?createdBy=ME` du shim web n'est qu'un confort d'UI.
+   */
+  restrictToCreatedBy?: number;
 }
 
 const ident = (s: string): string => "`" + s.replace(/`/g, "``") + "`";
@@ -56,6 +63,14 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
     private readonly table: string,
     private readonly opts: RepositoryOptions
   ) {}
+
+  /** Ajoute la restriction `createdBy = ?` (rôle worker) si applicable. */
+  private applyCreatedByScope(wheres: string[], params: unknown[], ctx: ScopeContext): void {
+    if (this.opts.hasAuditColumns && ctx.restrictToCreatedBy != null) {
+      wheres.push(`${ident("createdBy")} = ?`);
+      params.push(ctx.restrictToCreatedBy);
+    }
+  }
 
   async findAll(
     filter: Record<string, unknown> = {},
@@ -70,12 +85,16 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
       wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
       params.push(ctx.tenantId);
     }
+    // Scope worker (createdBy) — imposé serveur, non contournable par filter
+    this.applyCreatedByScope(wheres, params, ctx);
 
     for (const [key, value] of Object.entries(filter)) {
       if (!this.opts.filterableColumns.includes(key)) continue;
       // SÉCURITÉ : un client ne peut pas filtrer sur tenantColumn (sinon il
       // pourrait voir d'autres tenants en passant un autre companyId)
       if (this.opts.tenantColumn && key === this.opts.tenantColumn) continue;
+      // SÉCURITÉ : le scope worker impose déjà createdBy — pas d'override
+      if (ctx.restrictToCreatedBy != null && key === "createdBy") continue;
       wheres.push(`${ident(key)} = ?`);
       params.push(value);
     }
@@ -111,6 +130,7 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
       wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
       params.push(ctx.tenantId);
     }
+    this.applyCreatedByScope(wheres, params, ctx);
     const [rows] = await this.db.query<RowDataPacket[]>(
       `SELECT * FROM ${ident(this.table)} WHERE ${wheres.join(" AND ")} LIMIT 1`,
       params
@@ -217,6 +237,7 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
       wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
       values.push(ctx.tenantId);
     }
+    this.applyCreatedByScope(wheres, values, ctx);
     const sql = `UPDATE ${ident(this.table)} SET ${sets.join(", ")} WHERE ${wheres.join(" AND ")}`;
     await this.db.execute<ResultSetHeader>(sql, values as never[]);
     return this.findById(id, ctx);
@@ -229,6 +250,7 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
       wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
       params.push(ctx.tenantId);
     }
+    this.applyCreatedByScope(wheres, params, ctx);
     const [result] = await this.db.execute<ResultSetHeader>(
       `DELETE FROM ${ident(this.table)} WHERE ${wheres.join(" AND ")}`,
       params as never[]
@@ -246,9 +268,11 @@ export class MysqlRepository<T extends Record<string, unknown> & { id?: number }
       wheres.push(`${ident(this.opts.tenantColumn)} = ?`);
       params.push(ctx.tenantId);
     }
+    this.applyCreatedByScope(wheres, params, ctx);
     for (const [key, value] of Object.entries(filter)) {
       if (!this.opts.filterableColumns.includes(key)) continue;
       if (this.opts.tenantColumn && key === this.opts.tenantColumn) continue;
+      if (ctx.restrictToCreatedBy != null && key === "createdBy") continue;
       wheres.push(`${ident(key)} = ?`);
       params.push(value);
     }
