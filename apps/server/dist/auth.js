@@ -45,6 +45,12 @@ function requireAuth(cfg, db) {
                     res.status(401).json({ message: "Token révoqué" });
                     return;
                 }
+                // Révocation PAR UTILISATEUR (désactivation admin, reset password) :
+                // tout JWT émis avant users.tokensInvalidBefore est refusé.
+                if (await (0, token_revocation_1.isUserSessionRevoked)(db, payload.sub, payload.iat)) {
+                    res.status(401).json({ message: "Session révoquée" });
+                    return;
+                }
             }
             catch (e) {
                 // En cas de panne DB on log mais on n'expose pas l'API : on rejette
