@@ -29,6 +29,11 @@ export type AuditAction =
   | "user_password_reset"
   | "user_unlocked"
   | "user_invite_resent"
+  // Super-admin (entreprises)
+  | "company_created"
+  | "company_updated"
+  | "company_disabled"
+  | "company_deleted"
   // CRUD
   | "create"
   | "update"

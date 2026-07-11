@@ -95,4 +95,11 @@ export const superAdminApi = {
     request<CreatedCompany>("POST", "/api/super-admin/companies", payload),
   updateCompany: (id: number, payload: { name?: string; isActive?: boolean }) =>
     request<Company>("PATCH", `/api/super-admin/companies/${id}`, payload),
+  /** Suppression définitive (cascade sur toutes les données du tenant).
+   *  Garde-fous serveur : entreprise ID 1 interdite, désactivation requise. */
+  deleteCompany: (id: number) =>
+    request<{ success: boolean; deletedRows: Record<string, number> }>(
+      "DELETE",
+      `/api/super-admin/companies/${id}`
+    ),
 };

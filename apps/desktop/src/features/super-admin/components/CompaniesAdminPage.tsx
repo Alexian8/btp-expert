@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@btp/ui";
 
 import { CreateCompanyModal } from "./CreateCompanyModal";
+import { CompanyDetailModal } from "./CompanyDetailModal";
 import { superAdminApi, type Company } from "../api/superAdminApi";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -46,6 +48,7 @@ export function CompaniesAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [detailCompanyId, setDetailCompanyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,7 +136,12 @@ export function CompaniesAdminPage() {
           </div>
           <div className="divide-y divide-border">
             {filtered.map((c) => (
-              <CompanyRow key={c.id} company={c} onChanged={load} />
+              <CompanyRow
+                key={c.id}
+                company={c}
+                onChanged={load}
+                onOpen={() => setDetailCompanyId(c.id)}
+              />
             ))}
           </div>
         </div>
@@ -143,6 +151,11 @@ export function CompaniesAdminPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => void load()}
+      />
+      <CompanyDetailModal
+        companyId={detailCompanyId}
+        onClose={() => setDetailCompanyId(null)}
+        onChanged={() => void load()}
       />
     </div>
   );
@@ -182,7 +195,15 @@ function StatCard({
   );
 }
 
-function CompanyRow({ company, onChanged }: { company: Company; onChanged: () => void }) {
+function CompanyRow({
+  company,
+  onChanged,
+  onOpen,
+}: {
+  company: Company;
+  onChanged: () => void;
+  onOpen: () => void;
+}) {
   const [busy, setBusy] = useState(false);
 
   async function toggleActive() {
@@ -209,8 +230,9 @@ function CompanyRow({ company, onChanged }: { company: Company; onChanged: () =>
 
   return (
     <div
+      onClick={onOpen}
       className={cn(
-        "grid grid-cols-[2fr_120px_140px_120px_140px] gap-3 px-4 py-3 items-center",
+        "grid grid-cols-[2fr_120px_140px_120px_140px] gap-3 px-4 py-3 items-center cursor-pointer hover:bg-accent/40 transition-colors",
         !company.isActive && "opacity-50",
         busy && "pointer-events-none"
       )}
@@ -244,7 +266,10 @@ function CompanyRow({ company, onChanged }: { company: Company; onChanged: () =>
         {formatDate(company.createdAt)}
       </div>
 
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <Button variant="outline" size="icon" title="Gérer l'entreprise" onClick={onOpen}>
+          <Settings2 className="w-3.5 h-3.5" />
+        </Button>
         <Button
           variant="outline"
           size="icon"
