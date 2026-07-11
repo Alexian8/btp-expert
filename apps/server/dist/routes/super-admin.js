@@ -292,5 +292,72 @@ function buildSuperAdminRouter(db, cfg) {
         }
         res.json(publicCompany(row));
     }));
+    // ─── Suppression DÉFINITIVE d'une entreprise ──────────────────────────
+    // Supprime la company + TOUTES ses données (cascade générique sur toutes
+    // les tables possédant une colonne companyId, sauf audit_logs qui est
+    // conservé comme trace). Garde-fous :
+    //   • impossible de supprimer l'entreprise principale (id 1, tenant par défaut)
+    //   • l'entreprise doit être DÉSACTIVÉE d'abord (isActive = 0)
+    router.delete("/companies/:id", wrap(async (req, res) => {
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id)) {
+            res.status(400).json({ message: "ID invalide" });
+            return;
+        }
+        if (id === 1) {
+            res.status(400).json({
+                message: "Impossible de supprimer l'entreprise principale (ID 1) : c'est le tenant par défaut.",
+            });
+            return;
+        }
+        const [rows] = await db.query("SELECT id, name, isActive FROM company WHERE id = ? LIMIT 1", [id]);
+        const company = rows[0];
+        if (!company) {
+            res.status(404).json({ message: "Entreprise introuvable" });
+            return;
+        }
+        if (company.isActive) {
+            res.status(400).json({
+                message: "Désactivez d'abord l'entreprise avant de la supprimer (garde-fou anti-erreur).",
+            });
+            return;
+        }
+        // Cascade générique : toutes les tables du schéma qui ont une colonne
+        // companyId (sauf audit_logs, conservé comme trace, et company elle-même).
+        const [tableRows] = await db.query(`SELECT DISTINCT table_name AS t FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND column_name = 'companyId'
+           AND table_name NOT IN ('company', 'audit_logs')`);
+        const tables = tableRows.map((r) => r.t);
+        const deleted = {};
+        const conn = await db.getConnection();
+        try {
+            await conn.beginTransaction();
+            for (const table of tables) {
+                // table vient d'information_schema (pas du client) → safe à interpoler
+                const [result] = await conn.execute(`DELETE FROM \`${table.replace(/`/g, "``")}\` WHERE companyId = ?`, [id]);
+                if (result.affectedRows > 0)
+                    deleted[table] = result.affectedRows;
+            }
+            await conn.execute("DELETE FROM company WHERE id = ?", [id]);
+            await conn.commit();
+        }
+        catch (e) {
+            await conn.rollback();
+            throw e;
+        }
+        finally {
+            conn.release();
+        }
+        console.warn(`[super-admin] COMPANY DELETED id=${id} name="${company.name}" by=${req.user?.username} rows=${JSON.stringify(deleted)}`);
+        void (0, audit_1.writeAudit)(db, {
+            ...(0, audit_1.audited)(req),
+            companyId: null,
+            action: "company_deleted",
+            resource: "company",
+            resourceId: String(id),
+            meta: { companyName: company.name, deletedRows: deleted },
+        });
+        res.json({ success: true, deletedRows: deleted });
+    }));
     return router;
 }
