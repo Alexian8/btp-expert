@@ -44,7 +44,7 @@ const UI_STYLE_OPTIONS: Array<{
   icon: React.ElementType;
 }> = [
   { key: "classique", label: "Classique", desc: "L'interface BatiDesk standard", icon: Square },
-  { key: "epure", label: "Épuré", desc: "Minimaliste façon fintech, noir profond", icon: Feather },
+  { key: "epure", label: "Épuré", desc: "Thème shadcn/ui — neutre, monochrome", icon: Feather },
   { key: "liquid", label: "Liquid glass", desc: "Verre dépoli intégral (sidebar, barre, menus)", icon: Droplets },
   { key: "techno", label: "Techno", desc: "Coins nets, grille de fond, néon", icon: Grid3x3 },
 ];

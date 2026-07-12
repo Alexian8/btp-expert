@@ -242,53 +242,70 @@
    override), epure, liquid, techno. Hors @layer pour primer sur utilities.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ─── Épuré : minimalisme « Trade Republic » — noir profond, typo nette, ──
-   surfaces plates presque invisibles, accents discrets, beaucoup d'air. */
+/* ─── Épuré : thème par défaut shadcn/ui (base « zinc ») ────────────────────
+   Palette neutre zinc, primaire MONOCHROME (boutons blancs en sombre / noirs
+   en clair — la signature shadcn), rayon 0.5rem, bordures subtiles, zéro
+   ombre. En épuré la couleur d'accent est volontairement neutralisée
+   (monochrome). Valeurs HSL reprises de ui.shadcn.com. */
 :root[data-ui-style="epure"] {
-  --radius: 1rem;
+  --radius: 0.5rem;
 }
 :root[data-ui-style="epure"].dark {
-  /* Noir profond quasi pur ; cartes à peine détachées du fond */
-  --background: 0 0% 4%;
-  --card: 0 0% 7%;
-  --popover: 0 0% 7%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 0 0% 74%;
-  --border: 0 0% 15%;
-  --input: 0 0% 15%;
-  --secondary: 0 0% 12%;
-  --accent: 0 0% 13%;
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;              /* boutons blancs (signature shadcn) */
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 74%;   /* remonté (65→74%) pour l'UX terrain */
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
 }
 :root[data-ui-style="epure"]:not(.dark) {
   --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
-  --muted: 0 0% 96%;
-  --muted-foreground: 0 0% 40%;
-  --border: 0 0% 90%;
-  --input: 0 0% 90%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;          /* boutons noirs (signature shadcn) */
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
 }
-/* Zéro ombre : les surfaces se distinguent par une bordure d'1px, pas d'ombre */
+/* Zéro ombre : les surfaces se distinguent par une bordure d'1px (shadcn) */
 :root[data-ui-style="epure"] :is(.shadow-soft-sm, .shadow-soft-md, .shadow-soft-lg, .shadow-soft-xl) {
   box-shadow: none;
 }
+/* Carte == fond (comme shadcn) : seule la bordure la détache */
 :root[data-ui-style="epure"] .bg-card,
 :root[data-ui-style="epure"] .bg-popover {
   border-color: hsl(var(--border));
 }
-/* Typo un cran plus serrée et nette (esprit fintech) */
 :root[data-ui-style="epure"] h1,
 :root[data-ui-style="epure"] h2,
 :root[data-ui-style="epure"] h3 {
   letter-spacing: -0.02em;
 }
 /* Coque : sidebar et topbar fondues dans le fond (pas de séparation lourde) */
-:root[data-ui-style="epure"] aside.bg-card {
-  background-color: hsl(var(--background));
-  border-right-color: hsl(var(--border) / 0.6);
-}
 :root[data-ui-style="epure"] header {
-  border-bottom-color: hsl(var(--border) / 0.6) !important;
-  background-color: hsl(var(--background) / 0.8) !important;
+  border-bottom-color: hsl(var(--border)) !important;
+  background-color: hsl(var(--background) / 0.85) !important;
 }
 
 /* ─── Liquid glass : verre dépoli haut de gamme, INTÉGRÉ PARTOUT ─────────── */
