@@ -9,12 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
-import { autoFormatPhone } from "@/lib/phoneFormat";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { SiretLookup } from "@/components/shared/SiretLookup";
 import { AddressAutocomplete } from "@/components/shared/AddressAutocomplete";
+import { PhoneInput } from "@/components/shared/PhoneInput";
+import { EmailInput } from "@/components/shared/EmailInput";
 import { useClientsStore } from "@/stores/clientsStore";
+import { useClientTagsStore } from "@/stores/clientTagsStore";
+import { toUpperName, capitalizeName, tagChipClass } from "@/lib/clientHelpers";
 import { EMPTY_CLIENT, type Client, type Civility } from "@btp/types";
 import type { SireneCompany } from "@/lib/sireneService";
 
@@ -30,6 +33,8 @@ interface Props {
 
 export function ClientFormModal({ open, client, onClose }: Props) {
   const { create, update } = useClientsStore();
+  const availableTags = useClientTagsStore((s) => s.tags);
+  const loadTags = useClientTagsStore((s) => s.load);
   const isEdit = !!client;
 
   const [formData, setFormData] = useState<Omit<Client, "id" | "createdAt" | "updatedAt">>({ ...EMPTY_CLIENT });
@@ -38,6 +43,7 @@ export function ClientFormModal({ open, client, onClose }: Props) {
 
   useEffect(() => {
     if (open) {
+      void loadTags();
       if (client) {
         const { id, createdAt, updatedAt, ...rest } = client;
         setFormData({ ...EMPTY_CLIENT, ...rest });
@@ -46,7 +52,14 @@ export function ClientFormModal({ open, client, onClose }: Props) {
       }
       setActiveSection("identity");
     }
-  }, [open, client]);
+  }, [open, client, loadTags]);
+
+  const toggleTag = (id: string) => {
+    setFormData((d) => {
+      const cur = d.tags ?? [];
+      return { ...d, tags: cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id] };
+    });
+  };
 
   const update_ = <K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) => {
     setFormData((d) => ({ ...d, [key]: value }));
@@ -227,7 +240,7 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                             <Label>Prénom</Label>
                             <Input
                               value={formData.firstName}
-                              onChange={(e) => update_("firstName", e.target.value)}
+                              onChange={(e) => update_("firstName", capitalizeName(e.target.value))}
                               placeholder="Jean"
                             />
                           </div>
@@ -236,7 +249,7 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                           <Label>Nom *</Label>
                           <Input
                             value={formData.lastName}
-                            onChange={(e) => update_("lastName", e.target.value)}
+                            onChange={(e) => update_("lastName", toUpperName(e.target.value))}
                             placeholder="Dupont"
                           />
                         </div>
@@ -271,14 +284,14 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                             <Label>Prénom</Label>
                             <Input
                               value={formData.firstName}
-                              onChange={(e) => update_("firstName", e.target.value)}
+                              onChange={(e) => update_("firstName", capitalizeName(e.target.value))}
                             />
                           </div>
                           <div>
                             <Label>Nom</Label>
                             <Input
                               value={formData.lastName}
-                              onChange={(e) => update_("lastName", e.target.value)}
+                              onChange={(e) => update_("lastName", toUpperName(e.target.value))}
                             />
                           </div>
                         </div>
@@ -291,31 +304,16 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                   <div className="space-y-4">
                     <div>
                       <Label>Email</Label>
-                      <Input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => update_("email", e.target.value)}
-                        placeholder="email@example.com"
-                      />
+                      <EmailInput value={formData.email} onChange={(v) => update_("email", v)} />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <Label>Téléphone mobile</Label>
-                        <Input
-                          value={formData.phoneMobile}
-                          onChange={(e) => update_("phoneMobile", e.target.value)}
-                          onBlur={(e) => update_("phoneMobile", autoFormatPhone(e.target.value))}
-                          placeholder="06 12 34 56 78"
-                        />
+                        <PhoneInput value={formData.phoneMobile} onChange={(v) => update_("phoneMobile", v)} />
                       </div>
                       <div>
                         <Label>Téléphone fixe</Label>
-                        <Input
-                          value={formData.phoneFixed}
-                          onChange={(e) => update_("phoneFixed", e.target.value)}
-                          onBlur={(e) => update_("phoneFixed", autoFormatPhone(e.target.value))}
-                          placeholder="01 23 45 67 89"
-                        />
+                        <PhoneInput value={formData.phoneFixed} onChange={(v) => update_("phoneFixed", v)} placeholder="1 23 45 67 89" />
                       </div>
                     </div>
                   </div>
@@ -332,7 +330,7 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                           setFormData((d) => ({
                             ...d,
                             postalCode: addr.postcode || d.postalCode,
-                            city: addr.city || d.city,
+                            city: (addr.city || d.city).toUpperCase(),
                           }));
                         }}
                         placeholder="Tapez 3 lettres pour suggestions..."
@@ -351,7 +349,9 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                         <Label>Code postal</Label>
                         <Input
                           value={formData.postalCode}
-                          onChange={(e) => update_("postalCode", e.target.value)}
+                          onChange={(e) => update_("postalCode", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                          onBlur={() => formData.city && update_("city", formData.city.toUpperCase())}
+                          inputMode="numeric"
                           placeholder="55230"
                         />
                       </div>
@@ -359,8 +359,8 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                         <Label>Ville</Label>
                         <Input
                           value={formData.city}
-                          onChange={(e) => update_("city", e.target.value)}
-                          placeholder="Muzeray"
+                          onChange={(e) => update_("city", e.target.value.toUpperCase())}
+                          placeholder="MUZERAY"
                         />
                       </div>
                       <div>
@@ -488,6 +488,34 @@ export function ClientFormModal({ open, client, onClose }: Props) {
 
                 {activeSection === "notes" && (
                   <div className="space-y-4">
+                    <div>
+                      <Label>Étiquettes</Label>
+                      {availableTags.length === 0 ? (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Aucune étiquette définie. Créez-en depuis le bouton « Étiquettes » de la page Clients.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {availableTags.map((t) => {
+                            const active = (formData.tags ?? []).includes(t.id);
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => toggleTag(t.id)}
+                                className={cn(
+                                  "text-sm px-3 py-1.5 rounded-full border transition-all",
+                                  active ? tagChipClass(t.color) + " ring-1 ring-current" : "border-border text-muted-foreground hover:bg-accent/50"
+                                )}
+                              >
+                                {t.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <Separator />
                     <div>
                       <Label>Source (comment il nous a connu)</Label>
                       <Input

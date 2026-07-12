@@ -1,25 +1,32 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, User, Building2, MapPin, Phone, Mail, Pencil,
-  Hammer, Receipt, Tag, ExternalLink, ArrowRight, FolderOpen,
+  X, Building2, User as UserIcon, MapPin, Pencil, Receipt, FileText,
+  ChevronDown, FolderOpen, Navigation, Tag as TagIcon, HardHat,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { formatSiret } from "@/lib/sireneService";
 import { useChantiersStore } from "@/stores/chantiersStore";
 import { useQuotesStore } from "@/stores/quotesStore";
-import { LinkedEventsList } from "@/features/agenda/components/LinkedEventsList";
-import { InlineDocumentsSection } from "@/features/vault/components/InlineDocumentsSection";
-import { CHANTIER_STATUS_META, QUOTE_STATUS_META, type Client } from "@btp/types";
-import { CHANTIER_STATUS_ICON } from "@/features/chantiers/statusIcons";
+import { useInvoicesStore } from "@/stores/invoicesStore";
+import { useClientTagsStore } from "@/stores/clientTagsStore";
+import {
+  CHANTIER_STATUS_META, QUOTE_STATUS_META, INVOICE_STATUS_META,
+  type Client, type Chantier, type Quote, type Invoice,
+} from "@btp/types";
 import { formatEuros } from "@/features/quotes/quoteEngine";
+import {
+  clientDisplayName, clientInitials, avatarColorClass, tagChipClass,
+  googleMapsUrl, hasAddress,
+} from "@/lib/clientHelpers";
+import { telHref, smsHref } from "@/lib/phoneFormat";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ClientDetailModal — Vue détaillée d'un client (lecture + actions)
+// ClientDetailModal — fiche client : contact (appel/mail/SMS/Maps), étiquettes,
+// et données COMPARTIMENTÉES par dossier de chantier (accordéons), chaque bloc
+// regroupant les devis + factures qui lui sont propres.
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface Props {
@@ -28,314 +35,195 @@ interface Props {
   onEdit: () => void;
 }
 
+function statusColorClass(color: string): string {
+  switch (color) {
+    case "emerald": return "bg-emerald-500/15 text-emerald-400";
+    case "blue": return "bg-blue-500/15 text-blue-400";
+    case "amber": return "bg-amber-500/15 text-amber-400";
+    case "rose": return "bg-rose-500/15 text-rose-400";
+    default: return "bg-slate-500/20 text-slate-200";
+  }
+}
+
 export function ClientDetailModal({ client, onClose, onEdit }: Props) {
   const navigate = useNavigate();
   const { chantiers, fetch: fetchChantiers } = useChantiersStore();
   const { quotes, fetch: fetchQuotes } = useQuotesStore();
+  const { invoices, fetch: fetchInvoices } = useInvoicesStore();
+  const tags = useClientTagsStore((s) => s.tags);
+  const [openBlocks, setOpenBlocks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchChantiers();
     fetchQuotes();
+    fetchInvoices();
   }, []);
+
+  const clientChantiers = useMemo(
+    () => (client ? chantiers.filter((c) => c.clientId === client.id) : []),
+    [chantiers, client]
+  );
+
+  // Ouvre le premier chantier par défaut à l'ouverture de la fiche
+  useEffect(() => {
+    if (client && clientChantiers.length > 0) {
+      setOpenBlocks(new Set([clientChantiers[0]!.id]));
+    } else {
+      setOpenBlocks(new Set(["_none"]));
+    }
+  }, [client?.id, clientChantiers.length]);
 
   if (!client) return null;
 
-  // Ouvrir le coffre-fort filtré sur ce client
-  const handleOpenVaultDocuments = async () => {
+  const clientQuotes = quotes.filter((q) => q.clientId === client.id);
+  const clientInvoices = invoices.filter((i) => i.clientId === client.id);
+  const chantierIds = new Set(clientChantiers.map((c) => c.id));
+  const orphanQuotes = clientQuotes.filter((q) => !q.chantierId || !chantierIds.has(q.chantierId));
+  const orphanInvoices = clientInvoices.filter((i) => !i.chantierId || !chantierIds.has(i.chantierId));
+
+  const phone = client.phoneMobile || client.phoneFixed;
+  const displayName = clientDisplayName(client);
+  const clientTagDefs = (client.tags ?? []).map((id) => tags.find((t) => t.id === id)).filter(Boolean) as { id: string; label: string; color: string }[];
+
+  const toggle = (id: string) => setOpenBlocks((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  const handleOpenVault = async () => {
     if (window.btpAPI?.vaultEnsureClientFolder) {
-      const displayName = client.type === "pro" && client.companyName
-        ? client.companyName
-        : `${client.firstName} ${client.lastName}`.trim();
-      // Crée le dossier s'il n'existe pas (idempotent)
       await window.btpAPI.vaultEnsureClientFolder(client.id, displayName);
     }
     onClose();
     navigate(`/vault?clientId=${client.id}`);
   };
 
-  const isPro = client.type === "pro";
-  const displayName = isPro && client.companyName
-    ? client.companyName
-    : `${client.firstName} ${client.lastName}`.trim();
-  const contactName = `${client.civility || ""} ${client.firstName} ${client.lastName}`.trim();
-
-  const fullAddress = [client.addressLine1, client.addressLine2, client.postalCode, client.city, client.country]
-    .filter(Boolean)
-    .join(", ");
-
-  // Chantiers liés à ce client
-  const clientChantiers = chantiers.filter((c) => c.clientId === client.id);
-  // Devis liés à ce client
-  const clientQuotes = quotes.filter((q) => q.clientId === client.id);
-
   return (
     <AnimatePresence>
       {client && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
+          onClick={(e) => e.target === e.currentTarget && onClose()}
         >
           <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            initial={{ scale: 0.96, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
+            className="bg-card border border-border rounded-xl shadow-soft-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col"
           >
             {/* Header */}
-            <div className="flex items-start justify-between p-5 border-b border-border">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className={cn(
-                  "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
-                  isPro ? "bg-blue-500/15 text-blue-500" : "bg-violet-500/15 text-violet-500"
-                )}>
-                  {isPro ? <Building2 className="w-6 h-6" /> : <User className="w-6 h-6" />}
+            <div className="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn("w-14 h-14 rounded-full flex items-center justify-center font-semibold text-lg shrink-0 uppercase", avatarColorClass(client.id))}>
+                  {clientInitials(client)}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-xl font-semibold truncate">{displayName || "—"}</h2>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={cn(
-                      "text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider",
-                      isPro ? "bg-blue-500/15 text-blue-600" : "bg-violet-500/15 text-violet-600"
-                    )}>
-                      {isPro ? "Pro" : "Particulier"}
-                    </span>
-                    {isPro && contactName && (
-                      <span className="text-xs text-muted-foreground">
-                        · Contact : {contactName}
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold truncate">{displayName}</h2>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    {client.type === "pro" ? <Building2 className="w-3.5 h-3.5" /> : <UserIcon className="w-3.5 h-3.5" />}
+                    {client.type === "pro" ? "Professionnel" : "Particulier"}
+                    {clientChantiers.length > 0 && (
+                      <span className="inline-flex items-center gap-1 ml-1 text-xs font-semibold px-2 py-0.5 rounded-full text-blue-200" style={{ backgroundColor: "#1e293b" }}>
+                        <HardHat className="w-3 h-3" /> {clientChantiers.length} chantier{clientChantiers.length > 1 ? "s" : ""}
                       </span>
                     )}
-                  </div>
+                  </p>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <Button variant="outline" size="sm" onClick={() => handleOpenVaultDocuments()}>
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  Documents
-                </Button>
-                <Button variant="outline" size="sm" onClick={onEdit}>
-                  <Pencil className="w-3.5 h-3.5" />
-                  Modifier
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onClose}>
-                  <X className="w-4 h-4" />
-                </Button>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button variant="outline" onClick={onEdit} className="h-10"><Pencil className="w-4 h-4" /> Modifier</Button>
+                <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10"><X className="w-4 h-4" /></Button>
               </div>
             </div>
 
-            {/* Quick actions */}
-            <div className="flex gap-2 p-3 border-b border-border bg-muted/20 overflow-x-auto">
-              {client.phoneMobile && (
-                <a
-                  href={`tel:${client.phoneMobile}`}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-background border border-border hover:bg-accent text-xs font-medium transition-colors whitespace-nowrap"
-                >
-                  <Phone className="w-3.5 h-3.5" /> Appeler
-                </a>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+              {/* Étiquettes */}
+              {clientTagDefs.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <TagIcon className="w-4 h-4 text-muted-foreground" />
+                  {clientTagDefs.map((t) => (
+                    <span key={t.id} className={cn("text-sm px-2.5 py-0.5 rounded-full border", tagChipClass(t.color))}>{t.label}</span>
+                  ))}
+                </div>
               )}
-              {client.email && (
-                <a
-                  href={`mailto:${client.email}`}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-background border border-border hover:bg-accent text-xs font-medium transition-colors whitespace-nowrap"
-                >
-                  <Mail className="w-3.5 h-3.5" /> Email
-                </a>
+
+              {/* Contact — raccourcis colorés massifs */}
+              <div className="flex flex-wrap gap-2">
+                {phone && (
+                  <a href={telHref(phone)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-base" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+                    <span className="i">📞</span> {phone}
+                  </a>
+                )}
+                {phone && (
+                  <a href={smsHref(phone)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-base" style={{ backgroundColor: "rgba(249,115,22,0.12)", color: "#f97316" }}>
+                    💬 SMS
+                  </a>
+                )}
+                {client.email && (
+                  <a href={`mailto:${client.email}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-base min-w-0" style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>
+                    ✉️ <span className="truncate">{client.email}</span>
+                  </a>
+                )}
+              </div>
+
+              {/* Adresse + Google Maps */}
+              {hasAddress(client) && (
+                <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-muted/40 border border-border">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-base">
+                      {[client.addressLine1, client.addressLine2].filter(Boolean).join(", ")}
+                      {(client.addressLine1 || client.addressLine2) && <br />}
+                      {[client.postalCode, client.city].filter(Boolean).join(" ")}
+                    </p>
+                  </div>
+                  <a href={googleMapsUrl(client)} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <Button variant="outline" className="h-11"><Navigation className="w-4 h-4" /> Voir sur la carte</Button>
+                  </a>
+                </div>
               )}
-              {fullAddress && (
-                <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-background border border-border hover:bg-accent text-xs font-medium transition-colors whitespace-nowrap"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Voir sur la carte
-                </a>
-              )}
+
+              {/* Dossiers de chantier (accordéons) */}
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dossiers de chantier</p>
+                {clientChantiers.length === 0 && orphanQuotes.length === 0 && orphanInvoices.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Aucun chantier, devis ou facture pour ce client.</p>
+                )}
+
+                {clientChantiers.map((ch) => (
+                  <ChantierBlock
+                    key={ch.id}
+                    chantier={ch}
+                    quotes={clientQuotes.filter((q) => q.chantierId === ch.id)}
+                    invoices={clientInvoices.filter((i) => i.chantierId === ch.id)}
+                    open={openBlocks.has(ch.id)}
+                    onToggle={() => toggle(ch.id)}
+                    onOpenChantier={() => { onClose(); navigate(`/chantiers/${ch.id}`); }}
+                    onOpenQuote={(id) => { onClose(); navigate(`/quotes/${id}`); }}
+                    onOpenInvoice={(id) => { onClose(); navigate(`/invoices/${id}`); }}
+                  />
+                ))}
+
+                {/* Bloc "hors chantier" */}
+                {(orphanQuotes.length > 0 || orphanInvoices.length > 0) && (
+                  <DocsBlock
+                    title="Sans chantier rattaché"
+                    quotes={orphanQuotes}
+                    invoices={orphanInvoices}
+                    open={openBlocks.has("_none")}
+                    onToggle={() => toggle("_none")}
+                    onOpenQuote={(id) => { onClose(); navigate(`/quotes/${id}`); }}
+                    onOpenInvoice={(id) => { onClose(); navigate(`/invoices/${id}`); }}
+                  />
+                )}
+              </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              {/* Contact */}
-              <Section title="Contact" icon={Phone}>
-                <Row label="Email" value={client.email || "—"} />
-                <Row label="Mobile" value={client.phoneMobile || "—"} mono />
-                <Row label="Fixe" value={client.phoneFixed || "—"} mono />
-              </Section>
-
-              {/* Adresse */}
-              <Section title="Adresse" icon={MapPin}>
-                {client.addressLine1 || client.city ? (
-                  <div className="space-y-0.5 text-sm">
-                    {client.addressLine1 && <p>{client.addressLine1}</p>}
-                    {client.addressLine2 && <p>{client.addressLine2}</p>}
-                    {(client.postalCode || client.city) && (
-                      <p>{client.postalCode} {client.city}</p>
-                    )}
-                    {client.country && client.country !== "France" && <p>{client.country}</p>}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aucune adresse renseignée</p>
-                )}
-
-                {!client.billingAddressSame && client.billingAddressLine1 && (
-                  <>
-                    <Separator className="my-3" />
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Adresse de facturation</p>
-                    <div className="space-y-0.5 text-sm">
-                      {client.billingAddressLine1 && <p>{client.billingAddressLine1}</p>}
-                      {client.billingAddressLine2 && <p>{client.billingAddressLine2}</p>}
-                      {(client.billingPostalCode || client.billingCity) && (
-                        <p>{client.billingPostalCode} {client.billingCity}</p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </Section>
-
-              {/* Pro infos */}
-              {isPro && (client.siret || client.tvaIntracom || client.legalForm) && (
-                <Section title="Informations légales" icon={Building2}>
-                  <Row label="Raison sociale" value={client.companyName || "—"} />
-                  <Row label="SIRET" value={client.siret ? formatSiret(client.siret) : "—"} mono />
-                  <Row label="TVA intra" value={client.tvaIntracom || "—"} mono />
-                  <Row label="Forme" value={client.legalForm || "—"} />
-                  {client.apeCode && <Row label="APE" value={`${client.apeCode} — ${client.apeLabel || ""}`} />}
-                </Section>
-              )}
-
-              {/* Métadonnées */}
-              {(client.source || client.firstContactAt || client.notes) && (
-                <Section title="Informations complémentaires" icon={Tag}>
-                  {client.source && <Row label="Source" value={client.source} />}
-                  {client.firstContactAt && (
-                    <Row label="Premier contact" value={formatDate(client.firstContactAt)} />
-                  )}
-                  {client.notes && (
-                    <div className="mt-2 p-3 rounded-md bg-muted text-sm whitespace-pre-wrap">
-                      {client.notes}
-                    </div>
-                  )}
-                </Section>
-              )}
-
-              {/* Chantiers liés (Session 7) */}
-              <Section title={`Chantiers (${clientChantiers.length})`} icon={Hammer}>
-                {clientChantiers.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-md">
-                    Aucun chantier pour ce client. Créez-en un depuis la page Chantiers.
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {clientChantiers.map((ch) => {
-                      const meta = CHANTIER_STATUS_META[ch.status];
-                      const StatusIcon = CHANTIER_STATUS_ICON[ch.status];
-                      return (
-                        <button
-                          key={ch.id}
-                          onClick={() => {
-                            onClose();
-                            navigate(`/chantiers/${ch.id}`);
-                          }}
-                          className="w-full flex items-center gap-3 p-2.5 rounded-md border border-border hover:bg-accent/40 transition-colors text-left"
-                        >
-                          <div className={cn(
-                            "w-8 h-8 rounded-md flex items-center justify-center shrink-0",
-                            meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
-                            meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
-                            meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
-                            meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
-                            meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
-                          )}>
-                            <StatusIcon className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{ch.title || "Sans titre"}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{ch.reference}</p>
-                          </div>
-                          <span className={cn(
-                            "text-[10px] px-1.5 py-0.5 rounded font-medium",
-                            meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
-                            meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
-                            meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
-                            meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
-                            meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
-                          )}>{meta.label}</span>
-                          <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </Section>
-
-              {/* Devis liés (Session 8) */}
-              <Section title={`Devis (${clientQuotes.length})`} icon={Receipt}>
-                {clientQuotes.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-md">
-                    Aucun devis pour ce client. Créez-en un depuis la page Devis.
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {clientQuotes.map((q) => {
-                      const meta = QUOTE_STATUS_META[q.status];
-                      return (
-                        <button
-                          key={q.id}
-                          onClick={() => {
-                            onClose();
-                            navigate(`/quotes/${q.id}`);
-                          }}
-                          className="w-full flex items-center gap-3 p-2.5 rounded-md border border-border hover:bg-accent/40 transition-colors text-left"
-                        >
-                          <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                            <Receipt className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{q.title || "Sans titre"}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{q.reference}</p>
-                          </div>
-                          <div className="text-right shrink-0 mr-2">
-                            <p className="text-sm font-semibold tabular-nums">{formatEuros(q.totalTTC, 0)}</p>
-                            <span className={cn(
-                              "inline-block text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5",
-                              meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
-                              meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
-                              meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
-                              meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
-                              meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
-                            )}>{meta.label}</span>
-                          </div>
-                          <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </Section>
-
-              {/* Documents du client */}
-              <div className="pt-2">
-                <InlineDocumentsSection
-                  clientId={client.id}
-                  defaultCategory="client"
-                  title="Documents du client"
-                  description="Devis signés, courriers, échanges, factures…"
-                />
-              </div>
-
-              {/* Agenda lié (Session 12) */}
-              <div className="pt-2">
-                <LinkedEventsList clientId={client.id} title="Agenda lié" />
-              </div>
-
-              {/* Meta footer */}
-              <div className="pt-3 border-t border-border text-[10px] text-muted-foreground flex items-center justify-between">
-                <span>Créé le {formatDate(client.createdAt)}</span>
-                <span>Modifié le {formatDate(client.updatedAt)}</span>
-              </div>
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-2 p-4 border-t border-border bg-muted/20 flex-wrap">
+              <Button variant="outline" onClick={handleOpenVault} className="h-11"><FolderOpen className="w-4 h-4" /> Documents (coffre-fort)</Button>
+              <Button onClick={onClose} className="h-11">Fermer</Button>
             </div>
           </motion.div>
         </motion.div>
@@ -344,31 +232,103 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
   );
 }
 
-// ─── Utilitaires ─────────────────────────────────────────────────────────
-function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
+// ─── Bloc chantier (accordéon) ─────────────────────────────────────────────
+function ChantierBlock({ chantier, quotes, invoices, open, onToggle, onOpenChantier, onOpenQuote, onOpenInvoice }: {
+  chantier: Chantier; quotes: Quote[]; invoices: Invoice[]; open: boolean; onToggle: () => void;
+  onOpenChantier: () => void; onOpenQuote: (id: string) => void; onOpenInvoice: (id: string) => void;
+}) {
+  const meta = CHANTIER_STATUS_META[chantier.status];
   return (
-    <div>
-      <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
-        <Icon className="w-3 h-3" />
-        {title}
-      </h3>
-      <div className="space-y-1.5">{children}</div>
+    <div className="rounded-lg border border-border overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center gap-3 p-3 hover:bg-accent/40 text-left">
+        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0",
+          meta.color === "emerald" ? "bg-emerald-500" : meta.color === "amber" ? "bg-amber-500" : meta.color === "rose" ? "bg-rose-500" : "bg-slate-400")} />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold truncate">{chantier.title || chantier.reference}</p>
+          <p className="text-xs text-muted-foreground">
+            {meta.label} · {quotes.length} devis · {invoices.length} facture{invoices.length > 1 ? "s" : ""}
+          </p>
+        </div>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="p-3 pt-0 space-y-3 border-t border-border">
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" size="sm" onClick={onOpenChantier} className="h-9"><HardHat className="w-3.5 h-3.5" /> Ouvrir le chantier</Button>
+          </div>
+          <DocLists quotes={quotes} invoices={invoices} onOpenQuote={onOpenQuote} onOpenInvoice={onOpenInvoice} />
+        </div>
+      )}
     </div>
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function DocsBlock({ title, quotes, invoices, open, onToggle, onOpenQuote, onOpenInvoice }: {
+  title: string; quotes: Quote[]; invoices: Invoice[]; open: boolean; onToggle: () => void;
+  onOpenQuote: (id: string) => void; onOpenInvoice: (id: string) => void;
+}) {
   return (
-    <div className="flex items-baseline gap-3 text-sm">
-      <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
-      <span className={cn("truncate", mono && "font-mono")}>{value}</span>
+    <div className="rounded-lg border border-dashed border-border overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center gap-3 p-3 hover:bg-accent/40 text-left">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold truncate">{title}</p>
+          <p className="text-xs text-muted-foreground">{quotes.length} devis · {invoices.length} facture{invoices.length > 1 ? "s" : ""}</p>
+        </div>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="p-3 pt-2 border-t border-border">
+          <DocLists quotes={quotes} invoices={invoices} onOpenQuote={onOpenQuote} onOpenInvoice={onOpenInvoice} />
+        </div>
+      )}
     </div>
   );
 }
 
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  } catch { return iso; }
+function DocLists({ quotes, invoices, onOpenQuote, onOpenInvoice }: {
+  quotes: Quote[]; invoices: Invoice[]; onOpenQuote: (id: string) => void; onOpenInvoice: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {quotes.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Devis</p>
+          <div className="space-y-1">
+            {quotes.map((q) => {
+              const m = QUOTE_STATUS_META[q.status];
+              return (
+                <button key={q.id} onClick={() => onOpenQuote(q.id)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-accent text-left">
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{q.reference}</span>
+                  <span className="text-sm truncate flex-1">{q.title || "Sans titre"}</span>
+                  <span className={cn("text-[11px] px-2 py-0.5 rounded-full shrink-0", statusColorClass(m.color))}>{m.label}</span>
+                  <span className="text-sm font-semibold tabular-nums shrink-0">{formatEuros(q.totalTTC, 0)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {invoices.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5" /> Factures</p>
+          <div className="space-y-1">
+            {invoices.map((inv) => {
+              const m = INVOICE_STATUS_META[inv.status];
+              return (
+                <button key={inv.id} onClick={() => onOpenInvoice(inv.id)} className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-accent text-left">
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{inv.reference}</span>
+                  <span className="text-sm truncate flex-1">{inv.title || "Sans titre"}</span>
+                  <span className={cn("text-[11px] px-2 py-0.5 rounded-full shrink-0", statusColorClass(m.color))}>{m.label}</span>
+                  <span className="text-sm font-semibold tabular-nums shrink-0">{formatEuros(inv.totalTTC, 0)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {quotes.length === 0 && invoices.length === 0 && (
+        <p className="text-sm text-muted-foreground">Aucun devis ni facture.</p>
+      )}
+    </div>
+  );
 }
