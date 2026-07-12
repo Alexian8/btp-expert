@@ -17,6 +17,8 @@ import { ClientFormModal } from "./ClientFormModal";
 import { ClientDetailModal } from "./ClientDetailModal";
 import { ClientTagsManager } from "./ClientTagsManager";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { TableScroller } from "@/components/shared/TableScroller";
 import { downloadCsv } from "@/lib/exportCsv";
 import { telHref, smsHref } from "@/lib/phoneFormat";
 import {
@@ -229,7 +231,7 @@ export function ClientsPage() {
 
       {/* Liste / grille */}
       {isLoading ? (
-        <div className="p-12 text-center text-muted-foreground">Chargement…</div>
+        <SkeletonRows rows={8} cols={3} />
       ) : filtered.length === 0 ? (
         <EmptyState hasClients={clients.length > 0} onNew={handleNew} />
       ) : viewMode === "list" ? (
@@ -336,20 +338,21 @@ function ContactActions({ client, size = "sm" }: { client: Client; size?: "sm" |
   const phone = client.phoneMobile || client.phoneFixed;
   const pad = size === "lg" ? "px-3 py-2 text-sm" : "px-2.5 py-1.5 text-[13px]";
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const badge = "inline-flex items-center gap-1.5 rounded-md font-medium transition-transform duration-150 hover:scale-105 active:scale-95";
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {phone && (
-        <a href={telHref(phone)} onClick={stop} className={cn("inline-flex items-center gap-1.5 rounded-md font-medium", pad)} style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }} title={`Appeler ${phone}`}>
+        <a href={telHref(phone)} onClick={stop} className={cn(badge, pad)} style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }} title={`Appeler ${phone}`}>
           <Phone className="w-4 h-4" /> {size === "lg" ? phone : "Appeler"}
         </a>
       )}
       {phone && (
-        <a href={smsHref(phone)} onClick={stop} className={cn("inline-flex items-center gap-1.5 rounded-md font-medium", pad)} style={{ backgroundColor: "rgba(249,115,22,0.12)", color: "#f97316" }} title="Envoyer un SMS">
+        <a href={smsHref(phone)} onClick={stop} className={cn(badge, pad)} style={{ backgroundColor: "rgba(249,115,22,0.12)", color: "#f97316" }} title="Envoyer un SMS">
           <MessageSquare className="w-4 h-4" /> SMS
         </a>
       )}
       {client.email && (
-        <a href={`mailto:${client.email}`} onClick={stop} className={cn("inline-flex items-center gap-1.5 rounded-md font-medium min-w-0", pad)} style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "#3b82f6" }} title={`Écrire à ${client.email}`}>
+        <a href={`mailto:${client.email}`} onClick={stop} className={cn(badge, "min-w-0", pad)} style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "#3b82f6" }} title={`Écrire à ${client.email}`}>
           <Mail className="w-4 h-4 shrink-0" /> <span className="truncate">{size === "lg" ? client.email : "Email"}</span>
         </a>
       )}
@@ -401,7 +404,7 @@ function ClientsTable({ clients, tags, chantiersByClient, onView, onEdit, onDele
 
       {/* Tableau desktop */}
       <div className="hidden md:block bg-card border border-border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        <TableScroller>
           <table className="w-full text-base">
             <thead className="bg-muted/40 border-b border-border">
               <tr>
@@ -444,7 +447,7 @@ function ClientsTable({ clients, tags, chantiersByClient, onView, onEdit, onDele
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroller>
       </div>
     </>
   );

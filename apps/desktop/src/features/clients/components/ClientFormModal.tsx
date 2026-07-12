@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, User, Building2, MapPin, FileText, Tag, Save, Search } from "lucide-react";
+import { User, Building2, MapPin, FileText, Tag, Save, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,37 +125,26 @@ export function ClientFormModal({ open, client, onClose }: Props) {
     { key: "notes", label: "Notes", icon: Tag },
   ];
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  {isEdit ? "Modifier le client" : "Nouveau client"}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {isEdit ? client?.companyName || `${client?.firstName} ${client?.lastName}` : "Créer une nouvelle fiche client"}
-                </p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <Button variant="outline" onClick={onClose}>Annuler</Button>
+      <Button onClick={handleSave} loading={saving}>
+        <Save className="w-4 h-4" />
+        {isEdit ? "Enregistrer" : "Créer le client"}
+      </Button>
+    </div>
+  );
 
-            <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-3xl"
+      title={isEdit ? "Modifier le client" : "Nouveau client"}
+      subtitle={isEdit ? (client?.companyName || `${client?.firstName} ${client?.lastName}`) : "Créer une nouvelle fiche client"}
+      footer={footer}
+    >
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row min-h-full">
               {/* Side nav — vertical sur desktop, horizontale scrollable sur mobile */}
               <div className="md:w-48 md:border-r border-b md:border-b-0 border-border p-2 shrink-0 md:overflow-y-auto">
                 {/* Type toggle (toujours visible) */}
@@ -545,18 +534,6 @@ export function ClientFormModal({ open, client, onClose }: Props) {
                 )}
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-              <Button variant="outline" onClick={onClose}>Annuler</Button>
-              <Button onClick={handleSave} loading={saving}>
-                <Save className="w-4 h-4" />
-                {isEdit ? "Enregistrer" : "Créer le client"}
-              </Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </SideDrawer>
   );
 }

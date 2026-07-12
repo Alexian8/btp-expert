@@ -42,10 +42,12 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
   loading?: boolean;
+  /** Affiche brièvement une coche verte animée (confirmation serveur). */
+  success?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, success = false, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
 
     // Quand asChild est utilisé, on ne peut passer qu'UN seul enfant à Slot.
@@ -64,23 +66,36 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     return (
       <button
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(buttonVariants({ variant: success ? "success" : variant, size, className }))}
         ref={ref}
-        disabled={disabled || loading}
+        disabled={disabled || loading || success}
         {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
       >
-        {loading && (
-          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-            <path
-              d="M12 2a10 10 0 0 1 10 10"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-          </svg>
+        {success ? (
+          <>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M4 12.5l5 5L20 6.5"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ strokeDasharray: 28, strokeDashoffset: 28, animation: "check-draw 300ms ease-out forwards" }}
+              />
+            </svg>
+            {children}
+          </>
+        ) : (
+          <>
+            {loading && (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            )}
+            {children}
+          </>
         )}
-        {children}
       </button>
     );
   }

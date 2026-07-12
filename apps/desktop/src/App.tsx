@@ -132,7 +132,7 @@ export function App() {
       {/* Déconnexion automatique après inactivité (durée réglable dans Paramètres) */}
       <InactivityLogout />
       <Toaster
-        position="bottom-right"
+        position="top-right"
         toastOptions={{
           classNames: {
             toast: "bg-card border-border",
