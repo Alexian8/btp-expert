@@ -76,10 +76,16 @@ plus utilisées + un onglet **Plus** qui regroupe le reste — convention iOS.
 | **Clients**        | `/clients`                             | ✅ Liste + recherche + détail |
 | **Plus › Fournisseurs** | `/suppliers`                      | ✅ Liste + recherche + détail |
 | **Plus › Réglages**| `/settings`                            | ✅ Compte, apparence, serveur, déconnexion |
-| Plus › Agenda, Dépenses, Notes de frais, Sous-traitants, Finances, Statistiques, Documents admin, Coffre-fort | routes web correspondantes | 🚧 Écrans *placeholder* — à porter |
+| **Plus › Agenda**  | `/calendar`                            | ✅ Liste par jour + CRUD événements |
+| **Plus › Dépenses**| `/expenses`                            | ✅ Liste + filtres + CRUD + « Marquer payée » |
+| **Plus › Notes de frais** | `/expenses` (onglet NDF)        | ✅ Liste + filtres + CRUD + flux de statut |
+| **Plus › Sous-traitants** | `/subcontractors`               | ✅ Liste + fiche + CRUD |
+| **Plus › Finances**| `/finances`                            | ✅ KPIs + marges par chantier (lecture) |
+| Plus › Statistiques, Documents admin, Coffre-fort | routes web correspondantes | 🚧 Écrans *placeholder* — à porter |
 
-Comme la web app, **l'app mobile est en lecture seule pour ce MVP** (création /
-édition à venir). Le design suit les mêmes tokens : thème sombre par défaut,
+L'app est en **CRUD complet** sur clients, chantiers, devis, factures,
+fournisseurs, dépenses, notes de frais, sous-traitants et agenda — parité web.
+Le design suit les mêmes tokens : thème sombre par défaut,
 accent bleu, pastilles de statut slate / blue / emerald / amber / rose.
 
 ---
