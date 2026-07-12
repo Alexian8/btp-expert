@@ -739,6 +739,7 @@ async function createApp(cfg, db) {
         "theme",
         "appearance",
         "session",
+        "client",
     ];
     const SETTING_KEY_RE = /^[a-z][a-zA-Z0-9_]{0,127}$/;
     const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

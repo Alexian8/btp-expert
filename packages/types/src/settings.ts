@@ -91,6 +91,30 @@ export interface SecuritySettings {
   sessionInactivityMinutes?: number;
 }
 
+/** Étiquette client personnalisable (créée par l'admin, partagée). */
+export interface ClientTag {
+  id: string;
+  label: string;
+  /** Clé de couleur (voir CLIENT_TAG_COLORS) : red, amber, yellow, emerald,
+   *  blue, violet, slate, rose. */
+  color: string;
+}
+
+/** Étiquettes proposées par défaut si l'admin n'en a pas encore défini. */
+export const DEFAULT_CLIENT_TAGS: ClientTag[] = [
+  { id: "vip", label: "VIP", color: "amber" },
+  { id: "architecte", label: "Architecte / Apporteur", color: "yellow" },
+  { id: "mauvais-payeur", label: "Mauvais payeur", color: "red" },
+  { id: "prospect", label: "Prospect", color: "blue" },
+  { id: "fidele", label: "Fidèle", color: "emerald" },
+  { id: "litige", label: "Litige", color: "rose" },
+];
+
+export interface ClientSettings {
+  /** Étiquettes personnalisables des clients (partagées, admin). */
+  clientTags?: ClientTag[];
+}
+
 export type AppSettings = EntrepriseSettings &
   AssuranceSettings &
   PdfSettings &
@@ -98,6 +122,7 @@ export type AppSettings = EntrepriseSettings &
   AppearanceSettings &
   EmailTemplateSettings &
   SecuritySettings &
+  ClientSettings &
   InvoiceSettings & {
     // Autres settings divers
     conditions?: string;

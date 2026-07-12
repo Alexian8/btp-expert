@@ -122,3 +122,20 @@ export function autoFormatPhone(input: string): string {
   const result = formatPhone(input);
   return result.formatted || input;
 }
+
+/** Numéro nettoyé (chiffres + `+`) pour les liens `tel:` / `sms:`. */
+export function phoneDigits(input: string): string {
+  if (!input) return "";
+  const intl = formatPhone(input).international;
+  return intl || input.replace(/[^\d+]/g, "");
+}
+
+/** Lien `tel:` prêt à l'emploi (numéro sanitisé). */
+export function telHref(input: string): string {
+  return `tel:${phoneDigits(input)}`;
+}
+
+/** Lien `sms:` prêt à l'emploi (numéro sanitisé). */
+export function smsHref(input: string): string {
+  return `sms:${phoneDigits(input)}`;
+}
