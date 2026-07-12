@@ -24,22 +24,22 @@ struct MoreView: View {
                     SuppliersView()
                 }
                 moreLink("Agenda", systemImage: "calendar", tint: Theme.primary) {
-                    PlaceholderView(title: "Agenda", icon: "calendar")
+                    AgendaView()
                 }
                 moreLink("Sous-traitants", systemImage: "person.3.fill", tint: Theme.primary) {
-                    PlaceholderView(title: "Sous-traitants", icon: "person.3.fill")
+                    SubcontractorsView()
                 }
             }
 
             Section("Comptabilité") {
                 moreLink("Dépenses", systemImage: "creditcard.fill", tint: Theme.destructive) {
-                    PlaceholderView(title: "Dépenses", icon: "creditcard.fill")
+                    ExpensesView()
                 }
                 moreLink("Notes de frais", systemImage: "wallet.pass.fill", tint: Theme.success) {
-                    PlaceholderView(title: "Notes de frais", icon: "wallet.pass.fill")
+                    ExpenseNotesView()
                 }
                 moreLink("Finances", systemImage: "chart.bar.fill", tint: Theme.primary) {
-                    PlaceholderView(title: "Finances", icon: "chart.bar.fill")
+                    FinancesView()
                 }
                 moreLink("Statistiques", systemImage: "chart.line.uptrend.xyaxis", tint: Theme.success) {
                     PlaceholderView(title: "Statistiques", icon: "chart.line.uptrend.xyaxis")
