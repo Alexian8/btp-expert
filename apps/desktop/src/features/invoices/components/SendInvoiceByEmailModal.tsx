@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Mail, Send, FileText, Bell } from "lucide-react";
+import { Send, FileText } from "lucide-react";
 import { toast } from "sonner";
 
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,43 +93,28 @@ export function SendInvoiceByEmailModal({
     }
   };
 
-  const accentIcon = isReminder ? Bell : Mail;
-  const AccentIcon = accentIcon;
   const title = isReminder ? "Envoyer une relance" : "Envoyer la facture par email";
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-xl w-full max-h-[90vh] flex flex-col"
-          >
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-lg ${isReminder ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-primary/15 text-primary"} flex items-center justify-center`}>
-                  <AccentIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">{title}</h2>
-                  <p className="text-xs text-muted-foreground">{invoiceReference} · PDF joint automatiquement</p>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <Button variant="outline" onClick={onClose}>Annuler</Button>
+      <Button onClick={handleSend} loading={sending}>
+        <Send className="w-4 h-4" />
+        {isReminder ? "Envoyer la relance" : "Envoyer"}
+      </Button>
+    </div>
+  );
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-xl"
+      title={title}
+      subtitle={`${invoiceReference} · PDF joint automatiquement`}
+      footer={footer}
+    >
+            <div className="p-5 space-y-3">
               <div>
                 <Label htmlFor="to">Destinataire *</Label>
                 <Input
@@ -181,17 +166,6 @@ export function SendInvoiceByEmailModal({
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-              <Button variant="outline" onClick={onClose}>Annuler</Button>
-              <Button onClick={handleSend} loading={sending}>
-                <Send className="w-4 h-4" />
-                {isReminder ? "Envoyer la relance" : "Envoyer"}
-              </Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </SideDrawer>
   );
 }

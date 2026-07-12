@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Receipt, Percent, RotateCcw, FileText, AlertTriangle } from "lucide-react";
+import { motion } from "framer-motion";
+import { Receipt, Percent, RotateCcw, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,43 +56,27 @@ export function ConvertToInvoiceModal({ open, quote, onClose, onSuccess }: Props
     { value: "avoir",    icon: RotateCcw, color: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
   ];
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-xl w-full max-h-[90vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Convertir en facture</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Depuis {quote.reference} · {quote.title || "Sans titre"}
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <Button variant="outline" onClick={onClose}>Annuler</Button>
+      <Button onClick={handleConvert} loading={loading}>
+        <Receipt className="w-4 h-4" />
+        Créer la facture
+      </Button>
+    </div>
+  );
 
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-xl"
+      title="Convertir en facture"
+      subtitle={`Depuis ${quote.reference} · ${quote.title || "Sans titre"}`}
+      footer={footer}
+    >
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            <div className="p-5 space-y-5">
               {/* Type selector */}
               <div>
                 <Label className="text-sm font-medium mb-3 block">Type de facture</Label>
@@ -185,18 +170,6 @@ export function ConvertToInvoiceModal({ open, quote, onClose, onSuccess }: Props
                 </div>
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-              <Button variant="outline" onClick={onClose}>Annuler</Button>
-              <Button onClick={handleConvert} loading={loading}>
-                <Receipt className="w-4 h-4" />
-                Créer la facture
-              </Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </SideDrawer>
   );
 }

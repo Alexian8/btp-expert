@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Save, Trash2, HardHat, Building2, Phone, Mail, MapPin,
+  Save, Trash2, Building2, Phone, Mail, MapPin,
   CreditCard, Star, Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -208,38 +208,45 @@ export function SubcontractorFormModal({ open, subcontractor, onClose, onSaved }
     }
   };
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-3xl w-full max-h-[92vh] flex flex-col"
-          >
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-orange-500/15 text-orange-500 flex items-center justify-center shrink-0">
-                  <HardHat className="w-5 h-5" />
-                </div>
-                <h2 className="text-lg font-semibold truncate">
-                  {isEditing ? "Modifier le sous-traitant" : "Nouveau sous-traitant"}
-                </h2>
+  const footer = (
+    <div className="flex items-center justify-between gap-2">
+      <div>
+        {isEditing && (
+          <>
+            {confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-destructive">Confirmer ?</span>
+                <Button variant="destructive" size="sm" onClick={handleDelete} loading={saving}>Oui</Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Non</Button>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                Supprimer
               </Button>
-            </div>
+            )}
+          </>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSubmit} loading={saving}>
+          <Save className="w-4 h-4" />
+          {isEditing ? "Enregistrer" : "Créer"}
+        </Button>
+      </div>
+    </div>
+  );
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-3xl"
+      title={isEditing ? "Modifier le sous-traitant" : "Nouveau sous-traitant"}
+      footer={footer}
+    >
+            <div className="p-5 space-y-5">
               {/* Identité */}
               <Section title="Identité" icon={Building2}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -502,38 +509,7 @@ export function SubcontractorFormModal({ open, subcontractor, onClose, onSaved }
                 </div>
               </Section>
             </div>
-
-            <div className="flex items-center justify-between gap-2 p-4 border-t border-border bg-muted/20">
-              <div>
-                {isEditing && (
-                  <>
-                    {confirmDelete ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-destructive">Confirmer ?</span>
-                        <Button variant="destructive" size="sm" onClick={handleDelete} loading={saving}>Oui</Button>
-                        <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Non</Button>
-                      </div>
-                    ) : (
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                        Supprimer
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={onClose}>Annuler</Button>
-                <Button onClick={handleSubmit} loading={saving}>
-                  <Save className="w-4 h-4" />
-                  {isEditing ? "Enregistrer" : "Créer"}
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </SideDrawer>
   );
 }
 

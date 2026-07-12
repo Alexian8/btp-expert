@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Save, Trash2, Calendar, Clock, MapPin, FileText, Cloud, CloudOff } from "lucide-react";
+import { Save, Trash2, Calendar, Clock, MapPin, FileText, Cloud, CloudOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,51 +182,78 @@ export function EventEditorModal({ open, event, defaultDate, onClose, onSaved }:
     ? chantiers.filter((c) => c.clientId === clientId)
     : chantiers;
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-2xl w-full max-h-[92vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: AGENDA_TYPE_META[type].colorHex + "26", color: AGENDA_TYPE_META[type].colorHex }}
-                >
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {isEditing ? "Modifier l'événement" : "Nouvel événement"}
-                  </h2>
-                  {isEditing && event?.outlookEventId && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <Cloud className="w-3 h-3" />
-                      Synchronisé avec Outlook
-                    </p>
-                  )}
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const drawerTitle = (
+    <span className="flex items-center gap-3">
+      <span
+        className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+        style={{ backgroundColor: AGENDA_TYPE_META[type].colorHex + "26", color: AGENDA_TYPE_META[type].colorHex }}
+      >
+        <Calendar className="w-5 h-5" />
+      </span>
+      {isEditing ? "Modifier l'événement" : "Nouvel événement"}
+    </span>
+  );
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+  const drawerSubtitle = isEditing && event?.outlookEventId ? (
+    <span className="flex items-center gap-1">
+      <Cloud className="w-3 h-3" />
+      Synchronisé avec Outlook
+    </span>
+  ) : undefined;
+
+  const footer = (
+    <div className="flex items-center justify-between gap-2">
+      {isEditing ? (
+        <div className="flex items-center gap-2">
+          {confirmDelete ? (
+            <>
+              <span className="text-xs text-destructive">Confirmer ?</span>
+              <Button variant="destructive" size="sm" onClick={handleDelete} loading={saving}>
+                Oui, supprimer
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+                Annuler
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                Supprimer
+              </Button>
+              {event?.outlookEventId && (
+                <Button variant="ghost" size="sm" onClick={handleSyncNow}>
+                  <Cloud className="w-3.5 h-3.5" />
+                  Re-synchroniser
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div />
+      )}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSubmit} loading={saving}>
+          <Save className="w-4 h-4" />
+          {isEditing ? "Enregistrer" : "Créer"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-xl"
+      title={drawerTitle}
+      subtitle={drawerSubtitle}
+      footer={footer}
+    >
+      {/* Body */}
+      <div className="p-5 space-y-4">
               {/* Titre */}
               <div>
                 <Label htmlFor="title">Titre *</Label>
@@ -431,51 +458,7 @@ export function EventEditorModal({ open, event, defaultDate, onClose, onSaved }:
                   />
                 </button>
               </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-2 p-4 border-t border-border bg-muted/20">
-              {isEditing ? (
-                <div className="flex items-center gap-2">
-                  {confirmDelete ? (
-                    <>
-                      <span className="text-xs text-destructive">Confirmer ?</span>
-                      <Button variant="destructive" size="sm" onClick={handleDelete} loading={saving}>
-                        Oui, supprimer
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
-                        Annuler
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                        Supprimer
-                      </Button>
-                      {event?.outlookEventId && (
-                        <Button variant="ghost" size="sm" onClick={handleSyncNow}>
-                          <Cloud className="w-3.5 h-3.5" />
-                          Re-synchroniser
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div />
-              )}
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={onClose}>Annuler</Button>
-                <Button onClick={handleSubmit} loading={saving}>
-                  <Save className="w-4 h-4" />
-                  {isEditing ? "Enregistrer" : "Créer"}
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      </div>
+    </SideDrawer>
   );
 }
