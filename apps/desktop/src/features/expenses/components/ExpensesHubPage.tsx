@@ -33,7 +33,7 @@ type Row =
   | ({ _kind: "note_frais" } & ExpenseNote);
 
 const NOTE_STATUS_LABEL: Record<string, { label: string; tw: string }> = {
-  brouillon:  { label: "Brouillon",  tw: "bg-slate-500/15 text-slate-500" },
+  brouillon:  { label: "Brouillon",  tw: "bg-slate-400/20 text-slate-600 dark:text-slate-200" },
   validee:    { label: "Validée",     tw: "bg-blue-500/15 text-blue-500" },
   remboursee: { label: "Remboursée",  tw: "bg-emerald-500/15 text-emerald-500" },
   refacturee: { label: "Refacturée",  tw: "bg-violet-500/15 text-violet-500" },

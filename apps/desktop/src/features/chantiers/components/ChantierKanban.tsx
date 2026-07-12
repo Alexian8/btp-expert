@@ -23,6 +23,31 @@ interface Props {
   onView: (c: Chantier) => void;
 }
 
+// Distinction visuelle des colonnes (UX terrain) : chaque statut a sa teinte
+// — prospect bleu-gris · en cours orange · terminé vert · annulé rouge.
+const COLUMN_TINT: Record<ChantierStatus, { bg: string; topBar: string; count: string }> = {
+  prospect: {
+    bg: "bg-slate-500/[0.07] border border-slate-400/20",
+    topBar: "bg-slate-400/70",
+    count: "bg-slate-500/15 text-slate-600 dark:text-slate-300",
+  },
+  "en-cours": {
+    bg: "bg-amber-500/[0.07] border border-amber-500/25",
+    topBar: "bg-amber-500/80",
+    count: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  },
+  termine: {
+    bg: "bg-emerald-500/[0.07] border border-emerald-500/25",
+    topBar: "bg-emerald-500/80",
+    count: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  },
+  annule: {
+    bg: "bg-rose-500/[0.07] border border-rose-500/25",
+    topBar: "bg-rose-500/80",
+    count: "bg-rose-500/15 text-rose-600 dark:text-rose-300",
+  },
+};
+
 export function ChantierKanban({ chantiers, onView }: Props) {
   const { updateStatus } = useChantiersStore();
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -81,6 +106,8 @@ export function ChantierKanban({ chantiers, onView }: Props) {
         const items = grouped[status];
         const isHovered = hoveredStatus === status;
 
+        const tint = COLUMN_TINT[status];
+
         return (
           <div
             key={status}
@@ -88,17 +115,22 @@ export function ChantierKanban({ chantiers, onView }: Props) {
             onDragLeave={() => setHoveredStatus(null)}
             onDrop={(e) => handleDrop(e, status)}
             className={cn(
-              "bg-muted/40 rounded-lg p-2 min-h-[400px] flex flex-col transition-colors",
-              isHovered && "bg-primary/5 ring-2 ring-primary/30"
+              "rounded-lg min-h-[400px] flex flex-col transition-colors overflow-hidden",
+              tint.bg,
+              isHovered && "ring-2 ring-primary/40"
             )}
           >
+            {/* Liseré coloré en haut de colonne */}
+            <div className={cn("h-1 w-full shrink-0", tint.topBar)} />
+
             {/* Header colonne */}
-            <div className="flex items-center justify-between px-2 py-2 sticky top-0 z-10">
+            <div className="flex items-center justify-between px-3 py-2 sticky top-0 z-10">
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "w-6 h-6 rounded flex items-center justify-center",
-                  meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                  meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                   meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                  meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                   meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                   meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
                 )}>
@@ -106,13 +138,13 @@ export function ChantierKanban({ chantiers, onView }: Props) {
                 </div>
                 <p className="text-sm font-semibold">{meta.label}</p>
               </div>
-              <span className="text-xs font-semibold text-muted-foreground bg-background/60 px-1.5 py-0.5 rounded tabular-nums">
+              <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums", tint.count)}>
                 {items.length}
               </span>
             </div>
 
             {/* Cards */}
-            <div className="flex-1 space-y-2 overflow-y-auto px-1 pt-1">
+            <div className="flex-1 space-y-2 overflow-y-auto px-2 pt-1 pb-2">
               {items.length === 0 ? (
                 <div className="text-center py-8 text-xs text-muted-foreground italic">
                   Glissez un chantier ici

@@ -189,7 +189,7 @@ export function DocumentsList({ documents, isLoading, onPreview, onEdit }: Props
 
 function FileIconView({ mimeType }: { mimeType: string }) {
   let Icon = FileIcon;
-  let bg = "bg-slate-500/15 text-slate-500";
+  let bg = "bg-slate-400/20 text-slate-600 dark:text-slate-200";
   if (isImageMimeType(mimeType)) { Icon = ImageIcon; bg = "bg-emerald-500/15 text-emerald-500"; }
   else if (isPdfMimeType(mimeType)) { Icon = FileText; bg = "bg-rose-500/15 text-rose-500"; }
   else if (mimeType.includes("word") || mimeType.includes("text")) { Icon = FileType; bg = "bg-blue-500/15 text-blue-500"; }

@@ -124,6 +124,7 @@ export function ChantiersPage() {
                 "w-9 h-9 rounded-md flex items-center justify-center shrink-0",
                 meta.color === "slate"   && "bg-slate-500/10 text-slate-500",
                 meta.color === "blue"    && "bg-blue-500/10 text-blue-500",
+                meta.color === "amber"   && "bg-amber-500/10 text-amber-500",
                 meta.color === "emerald" && "bg-emerald-500/10 text-emerald-500",
                 meta.color === "rose"    && "bg-rose-500/10 text-rose-500",
               )}>

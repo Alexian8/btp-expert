@@ -37,7 +37,7 @@ export function PipelineSection() {
           label="Total devis"
           value={String(totalCount)}
           icon={FileText}
-          color="bg-slate-500/15 text-slate-500"
+          color="bg-slate-400/20 text-slate-600 dark:text-slate-200"
         />
         <KpiCard
           label="Taux de signature"

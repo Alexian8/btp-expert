@@ -73,7 +73,7 @@ export function DaactSection() {
           color={
             stats.daactPending > 0
               ? "bg-amber-500/15 text-amber-500"
-              : "bg-slate-500/15 text-slate-500"
+              : "bg-slate-400/20 text-slate-600 dark:text-slate-200"
           }
         />
         <div className="bg-muted/30 border border-border rounded-lg p-3 text-xs text-muted-foreground">

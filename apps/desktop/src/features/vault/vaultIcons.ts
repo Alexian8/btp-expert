@@ -36,7 +36,7 @@ export const FOLDER_COLOR_TW: Record<string, string> = {
 };
 
 export const FOLDER_BG_TW: Record<string, string> = {
-  default: "bg-slate-500/15 text-slate-500",
+  default: "bg-slate-400/20 text-slate-600 dark:text-slate-200",
   blue:    "bg-blue-500/15 text-blue-500",
   violet:  "bg-violet-500/15 text-violet-500",
   emerald: "bg-emerald-500/15 text-emerald-500",

@@ -118,14 +118,14 @@ export function SubcontractorsPage() {
           <StatCard
             label="Attestations expirées"
             value={String(stats.attestationsExpired)}
-            color={stats.attestationsExpired > 0 ? "bg-red-500/15 text-red-500" : "bg-slate-500/15 text-slate-500"}
+            color={stats.attestationsExpired > 0 ? "bg-red-500/15 text-red-500" : "bg-slate-400/20 text-slate-600 dark:text-slate-200"}
             icon={FileWarning}
             warning={stats.attestationsExpired > 0}
           />
           <StatCard
             label="Expirent sous 30j"
             value={String(stats.attestationsExpiringSoon)}
-            color={stats.attestationsExpiringSoon > 0 ? "bg-amber-500/15 text-amber-500" : "bg-slate-500/15 text-slate-500"}
+            color={stats.attestationsExpiringSoon > 0 ? "bg-amber-500/15 text-amber-500" : "bg-slate-400/20 text-slate-600 dark:text-slate-200"}
             icon={AlertTriangle}
           />
           <StatCard
@@ -280,7 +280,7 @@ function SubcontractorCard({ st, expiringInfo, delay, onClick }: {
           {activityMeta.label}
         </span>
         {!st.isActive && (
-          <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-500">
+          <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-slate-400/20 text-slate-600 dark:text-slate-200">
             Archivé
           </span>
         )}

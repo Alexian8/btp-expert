@@ -61,7 +61,7 @@ export function Dc4Section() {
           label="En attente de réponse"
           value={String(stats.dc4Pending)}
           icon={AlertCircle}
-          color={stats.dc4Pending > 0 ? "bg-amber-500/15 text-amber-500" : "bg-slate-500/15 text-slate-500"}
+          color={stats.dc4Pending > 0 ? "bg-amber-500/15 text-amber-500" : "bg-slate-400/20 text-slate-600 dark:text-slate-200"}
         />
         <div className="bg-muted/30 border border-border rounded-lg p-3 text-xs text-muted-foreground">
           <p className="font-semibold mb-1">Loi MOP 1985</p>

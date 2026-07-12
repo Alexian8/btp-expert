@@ -118,8 +118,10 @@ export interface Chantier {
 
 // ─── Constantes ──────────────────────────────────────────────────────────
 export const CHANTIER_STATUS_META: Record<ChantierStatus, { label: string; color: string }> = safeMeta({
+  // Sémantique terrain (Kanban coloré) : prospect bleu-gris · en cours
+  // orange · terminé vert · annulé rouge
   "prospect":  { label: "Prospect",  color: "slate"    },
-  "en-cours":  { label: "En cours",  color: "blue"     },
+  "en-cours":  { label: "En cours",  color: "amber"    },
   "termine":   { label: "Terminé",   color: "emerald"  },
   "annule":    { label: "Annulé",    color: "rose"     },
 });

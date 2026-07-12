@@ -176,7 +176,7 @@ export function QuotesListView() {
                       <span
                         className={cn(
                           "inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0",
-                          meta.color === "slate" && "bg-slate-500/15 text-slate-500",
+                          meta.color === "slate" && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                           meta.color === "blue" && "bg-blue-500/15 text-blue-500",
                           meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                           meta.color === "rose" && "bg-rose-500/15 text-rose-500"
@@ -251,7 +251,7 @@ export function QuotesListView() {
                         <td className="px-4 py-3">
                           <span className={cn(
                             "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded",
-                            meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                            meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                             meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
                             meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                             meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
