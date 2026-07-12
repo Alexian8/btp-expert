@@ -242,50 +242,131 @@
    override), epure, liquid, techno. Hors @layer pour primer sur utilities.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ─── Épuré : aéré, sans ombres, bordures fines qui détachent les cartes ── */
+/* ─── Épuré : minimalisme « Trade Republic » — noir profond, typo nette, ──
+   surfaces plates presque invisibles, accents discrets, beaucoup d'air. */
 :root[data-ui-style="epure"] {
-  --radius: 0.875rem;
+  --radius: 1rem;
 }
+:root[data-ui-style="epure"].dark {
+  /* Noir profond quasi pur ; cartes à peine détachées du fond */
+  --background: 0 0% 4%;
+  --card: 0 0% 7%;
+  --popover: 0 0% 7%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 74%;
+  --border: 0 0% 15%;
+  --input: 0 0% 15%;
+  --secondary: 0 0% 12%;
+  --accent: 0 0% 13%;
+}
+:root[data-ui-style="epure"]:not(.dark) {
+  --background: 0 0% 100%;
+  --card: 0 0% 100%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+}
+/* Zéro ombre : les surfaces se distinguent par une bordure d'1px, pas d'ombre */
 :root[data-ui-style="epure"] :is(.shadow-soft-sm, .shadow-soft-md, .shadow-soft-lg, .shadow-soft-xl) {
   box-shadow: none;
 }
-/* Bordure fine #222e43 (spec terrain) : détache les cartes du fond noir */
-:root[data-ui-style="epure"].dark .bg-card {
-  border-color: #222e43;
+:root[data-ui-style="epure"] .bg-card,
+:root[data-ui-style="epure"] .bg-popover {
+  border-color: hsl(var(--border));
 }
-:root[data-ui-style="epure"]:not(.dark) .bg-card {
-  border-color: hsl(var(--border) / 0.6);
+/* Typo un cran plus serrée et nette (esprit fintech) */
+:root[data-ui-style="epure"] h1,
+:root[data-ui-style="epure"] h2,
+:root[data-ui-style="epure"] h3 {
+  letter-spacing: -0.02em;
+}
+/* Coque : sidebar et topbar fondues dans le fond (pas de séparation lourde) */
+:root[data-ui-style="epure"] aside.bg-card {
+  background-color: hsl(var(--background));
+  border-right-color: hsl(var(--border) / 0.6);
+}
+:root[data-ui-style="epure"] header {
+  border-bottom-color: hsl(var(--border) / 0.6) !important;
+  background-color: hsl(var(--background) / 0.8) !important;
 }
 
-/* ─── Liquid glass : verre dépoli haut de gamme ─────────────────────────── */
-/* Fond translucide + blur, bordure haute brillante (reflet du verre),
-   ombres diffuses. Fond de page : blobs colorés sombres et discrets pour
-   que la transparence ressorte sans nuire à la lisibilité. */
-:root[data-ui-style="liquid"] {
-  --radius: 1.1rem;
-}
+/* ─── Liquid glass : verre dépoli haut de gamme, INTÉGRÉ PARTOUT ─────────── */
 /* Réglages fins (admin, Paramètres → Apparence quand Liquid est actif) :
    --liquid-blur (px), --liquid-card-alpha (0.35–0.9), --liquid-glow (×0–2).
    Défauts ici en fallback ; valeurs injectées sur <html> par themeStore. */
-:root[data-ui-style="liquid"] .bg-card {
+:root[data-ui-style="liquid"] {
+  --radius: 1.1rem;
+}
+:root[data-ui-style="liquid"].dark {
+  /* Fond un peu plus profond pour que les halos et le verre ressortent */
+  --background: 224 45% 5%;
+}
+
+/* Fond de page riche : halos colorés fixes posés sur <html>, puis on rend la
+   COQUE transparente (sinon `bg-background` opaque les masquerait) pour que le
+   verre des cartes/sidebar ait de la matière colorée à flouter. */
+:root[data-ui-style="liquid"] {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(ellipse 45% 40% at 8% -8%, hsl(var(--primary) / calc(0.22 * var(--liquid-glow, 1))), transparent 60%),
+    radial-gradient(ellipse 40% 38% at 95% 8%, hsl(265 70% 50% / calc(0.18 * var(--liquid-glow, 1))), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 25% 108%, hsl(190 80% 45% / calc(0.15 * var(--liquid-glow, 1))), transparent 60%),
+    radial-gradient(ellipse 40% 40% at 100% 100%, hsl(var(--primary) / calc(0.14 * var(--liquid-glow, 1))), transparent 60%);
+  background-attachment: fixed;
+}
+:root[data-ui-style="liquid"] body {
+  background: transparent;
+}
+/* La coque et les zones de fond deviennent transparentes → les halos de
+   <html> transparaissent et sont floutés par le verre au-dessus. */
+:root[data-ui-style="liquid"] .bg-background {
+  background-color: transparent !important;
+}
+
+/* Toutes les surfaces vitrées : cartes, popovers, menus déroulants,
+   panneaux muted. Translucides + flou + reflet + ombre diffuse. */
+:root[data-ui-style="liquid"] :is(.bg-card, .bg-popover) {
   background-color: hsl(var(--card) / var(--liquid-card-alpha, 0.6));
-  -webkit-backdrop-filter: blur(var(--liquid-blur, 18px)) saturate(1.5);
-  backdrop-filter: blur(var(--liquid-blur, 18px)) saturate(1.5);
-  border-color: hsl(var(--border) / 0.5);
-  /* Reflet du verre (liseré brillant en haut) + ombre diffuse */
+  -webkit-backdrop-filter: blur(var(--liquid-blur, 18px)) saturate(1.6);
+  backdrop-filter: blur(var(--liquid-blur, 18px)) saturate(1.6);
+  border-color: hsl(0 0% 100% / 0.1);
   box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.07),
+    inset 0 1px 0 hsl(0 0% 100% / 0.08),
     0 12px 40px -16px hsl(var(--shadow-color) / 0.5);
 }
 :root[data-ui-style="liquid"] .bg-muted {
-  background-color: hsl(var(--muted) / 0.55);
+  background-color: hsl(var(--muted) / 0.4);
 }
-:root[data-ui-style="liquid"] body {
-  background-image:
-    radial-gradient(ellipse 45% 38% at 12% -5%, hsl(var(--primary) / calc(0.14 * var(--liquid-glow, 1))), transparent 65%),
-    radial-gradient(ellipse 40% 35% at 92% 20%, hsl(265 60% 45% / calc(0.10 * var(--liquid-glow, 1))), transparent 65%),
-    radial-gradient(ellipse 50% 40% at 30% 105%, hsl(var(--primary) / calc(0.10 * var(--liquid-glow, 1))), transparent 65%);
-  background-attachment: fixed;
+
+/* Coque : SIDEBAR en verre (le plus visible sur desktop) */
+:root[data-ui-style="liquid"] aside.bg-card {
+  background-color: hsl(var(--card) / calc(var(--liquid-card-alpha, 0.6) * 0.82));
+  -webkit-backdrop-filter: blur(calc(var(--liquid-blur, 18px) * 1.4)) saturate(1.6);
+  backdrop-filter: blur(calc(var(--liquid-blur, 18px) * 1.4)) saturate(1.6);
+  border-right-color: hsl(0 0% 100% / 0.1);
+  box-shadow: inset -1px 0 0 hsl(0 0% 100% / 0.05);
+}
+/* Coque : BARRE DU HAUT en verre */
+:root[data-ui-style="liquid"] header {
+  background-color: hsl(var(--card) / calc(var(--liquid-card-alpha, 0.6) * 0.7)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--liquid-blur, 18px) * 1.2)) saturate(1.6);
+  backdrop-filter: blur(calc(var(--liquid-blur, 18px) * 1.2)) saturate(1.6);
+  border-bottom-color: hsl(0 0% 100% / 0.08) !important;
+}
+/* Champs : léger voile de verre, sans nuire à la lisibilité */
+:root[data-ui-style="liquid"] input,
+:root[data-ui-style="liquid"] textarea,
+:root[data-ui-style="liquid"] select {
+  background-color: hsl(var(--muted) / 0.35);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+/* Item de sidebar actif : pastille de verre teintée à l'accent */
+:root[data-ui-style="liquid"] .bg-primary\/10 {
+  background-color: hsl(var(--primary) / 0.16);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 /* ─── Techno : industriel/futuriste — noir pur, angles nets, halos néon ─── */
