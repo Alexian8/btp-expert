@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   X, Save, Trash2, Calendar, Euro, FileText, Upload,
   CreditCard, Tag, Hammer, CheckCircle2, Receipt,
@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -249,50 +250,75 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
     }
   };
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-2xl w-full max-h-[92vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold truncate">
-                    {isEditing
-                      ? `Dépense ${expense?.reference || ""}`
-                      : "Nouvelle dépense"}
-                  </h2>
-                  {isEditing && (
-                    <span className={cn(
-                      "inline-block text-[11px] font-medium px-1.5 py-0.5 rounded mt-0.5",
-                      EXPENSE_STATUS_META[status].colorTw
-                    )}>
-                      {EXPENSE_STATUS_META[status].label}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const footer = (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        {isEditing && (
+          <>
+            {confirmDelete ? (
+              <>
+                <span className="text-xs text-destructive">Confirmer ?</span>
+                <Button variant="destructive" size="sm" onClick={handleDelete} loading={saving}>
+                  Oui
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+                  Non
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  Supprimer
+                </Button>
+                {expense?.status === "a_payer" && (
+                  <Button variant="outline" size="sm" onClick={handleMarkPaid}>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Marquer payée
+                  </Button>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSubmit} loading={saving}>
+          <Save className="w-4 h-4" />
+          {isEditing ? "Enregistrer" : "Créer"}
+        </Button>
+      </div>
+    </div>
+  );
 
+  return (
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-2xl"
+      title={
+        <span className="flex items-center gap-3 min-w-0">
+          <span className="w-10 h-10 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0">
+            <Receipt className="w-5 h-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate">
+              {isEditing ? `Dépense ${expense?.reference || ""}` : "Nouvelle dépense"}
+            </span>
+            {isEditing && (
+              <span className={cn(
+                "inline-block text-[11px] font-medium px-1.5 py-0.5 rounded mt-0.5",
+                EXPENSE_STATUS_META[status].colorTw
+              )}>
+                {EXPENSE_STATUS_META[status].label}
+              </span>
+            )}
+          </span>
+        </span>
+      }
+      footer={footer}
+    >
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {/* Fournisseur */}
@@ -569,50 +595,6 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
                 />
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-2 p-4 border-t border-border bg-muted/20">
-              <div className="flex items-center gap-2">
-                {isEditing && (
-                  <>
-                    {confirmDelete ? (
-                      <>
-                        <span className="text-xs text-destructive">Confirmer ?</span>
-                        <Button variant="destructive" size="sm" onClick={handleDelete} loading={saving}>
-                          Oui
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
-                          Non
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          Supprimer
-                        </Button>
-                        {expense?.status === "a_payer" && (
-                          <Button variant="outline" size="sm" onClick={handleMarkPaid}>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Marquer payée
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={onClose}>Annuler</Button>
-                <Button onClick={handleSubmit} loading={saving}>
-                  <Save className="w-4 h-4" />
-                  {isEditing ? "Enregistrer" : "Créer"}
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </SideDrawer>
   );
 }

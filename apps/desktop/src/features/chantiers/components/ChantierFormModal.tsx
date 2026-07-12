@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Hammer, MapPin, Calendar, Euro, Tag, Camera, Plus, Trash2, Save } from "lucide-react";
+import { Hammer, MapPin, Calendar, Euro, Tag, Camera, Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,37 +114,27 @@ export function ChantierFormModal({ open, chantier, onClose }: Props) {
     { key: "notes",        label: "Notes & Tags", icon: Tag },
   ];
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-5xl w-full max-h-[90vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  {isEdit ? "Modifier le chantier" : "Nouveau chantier"}
-                </h2>
-                {isEdit && chantier?.reference && (
-                  <p className="text-xs font-mono text-muted-foreground">{chantier.reference}</p>
-                )}
-              </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <Button variant="outline" onClick={onClose}>Annuler</Button>
+      <Button onClick={handleSave} loading={saving}>
+        <Save className="w-4 h-4" />
+        {isEdit ? "Enregistrer" : "Créer le chantier"}
+      </Button>
+    </div>
+  );
 
-            <div className="flex flex-1 overflow-hidden">
+  return (
+    <>
+      <SideDrawer
+        open={open}
+        onClose={onClose}
+        widthClass="max-w-3xl"
+        title={isEdit ? "Modifier le chantier" : "Nouveau chantier"}
+        subtitle={isEdit && chantier?.reference ? chantier.reference : undefined}
+        footer={footer}
+      >
+            <div className="flex flex-1 overflow-hidden min-h-full">
               {/* Side nav */}
               <div className="w-48 border-r border-border p-2 shrink-0 overflow-y-auto">
                 {sections.map((s) => (
@@ -446,24 +436,13 @@ export function ChantierFormModal({ open, chantier, onClose }: Props) {
                 )}
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-              <Button variant="outline" onClick={onClose}>Annuler</Button>
-              <Button onClick={handleSave} loading={saving}>
-                <Save className="w-4 h-4" />
-                {isEdit ? "Enregistrer" : "Créer le chantier"}
-              </Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
+      </SideDrawer>
 
       <ChantierCategoriesManager
         open={categoriesManagerOpen}
         onClose={() => setCategoriesManagerOpen(false)}
       />
-    </AnimatePresence>
+    </>
   );
 }
 

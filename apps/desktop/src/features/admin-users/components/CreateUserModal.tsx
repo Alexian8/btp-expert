@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, UserPlus, Copy, Check, AlertCircle, Mail, MailX, Inbox, Send } from "lucide-react";
+import { UserPlus, Copy, Check, AlertCircle, Mail, MailX, Inbox, Send } from "lucide-react";
 import { toast } from "sonner";
 
+import { SideDrawer } from "@/components/shared/SideDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,48 +130,43 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
     onClose();
   }
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={handleClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-card border border-border rounded-lg shadow-soft-xl max-w-lg w-full max-h-[90vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-                  <UserPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {createdUser ? "Utilisateur créé" : "Nouvel utilisateur"}
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {createdUser
-                      ? "Transmettez le mot de passe temporaire"
-                      : "Provisioning interne — l'utilisateur ne peut pas s'inscrire seul"}
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={handleClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const footer = createdUser?.tempPassword ? (
+    <div className="flex items-center justify-end gap-2">
+      <Button onClick={handleClose}>J'ai noté le mot de passe</Button>
+    </div>
+  ) : (
+    <div className="flex items-center justify-end gap-2">
+      <Button variant="outline" onClick={handleClose} disabled={loading}>
+        Annuler
+      </Button>
+      <Button
+        type="submit"
+        form="create-user-form"
+        loading={loading}
+        disabled={!username.trim()}
+      >
+        <UserPlus className="w-4 h-4" />
+        Créer l'utilisateur
+      </Button>
+    </div>
+  );
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5">
-              {createdUser?.tempPassword ? (
+  return (
+    <SideDrawer
+      open={open}
+      onClose={handleClose}
+      widthClass="max-w-xl"
+      title={createdUser ? "Utilisateur créé" : "Nouvel utilisateur"}
+      subtitle={
+        createdUser
+          ? "Transmettez le mot de passe temporaire"
+          : "Provisioning interne — l'utilisateur ne peut pas s'inscrire seul"
+      }
+      footer={footer}
+    >
+      {/* Body */}
+      <div className="p-5">
+        {createdUser?.tempPassword ? (
                 <div className="space-y-4">
                   {/* Statut de l'envoi email */}
                   {createdUser.email ? (
@@ -508,32 +503,7 @@ export function CreateUserModal({ open, onClose, onCreated }: Props) {
                   </p>
                 </form>
               )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-              {createdUser?.tempPassword ? (
-                <Button onClick={handleClose}>J'ai noté le mot de passe</Button>
-              ) : (
-                <>
-                  <Button variant="outline" onClick={handleClose} disabled={loading}>
-                    Annuler
-                  </Button>
-                  <Button
-                    type="submit"
-                    form="create-user-form"
-                    loading={loading}
-                    disabled={!username.trim()}
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Créer l'utilisateur
-                  </Button>
-                </>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      </div>
+    </SideDrawer>
   );
 }
