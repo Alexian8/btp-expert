@@ -120,8 +120,9 @@ export function ChantierDetailPage() {
             <div className="flex items-start gap-3 min-w-0">
               <div className={cn(
                 "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
-                meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                 meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                 meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                 meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
               )}>
@@ -133,8 +134,9 @@ export function ChantierDetailPage() {
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className={cn(
                     "inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium",
-                    meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                    meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                     meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                    meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                     meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                     meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
                   )}>
@@ -1080,8 +1082,9 @@ function ChantierQuotesSection({ chantierId }: { chantierId: string }) {
                   <p className="text-sm font-semibold tabular-nums">{formatEurosQuote(q.totalTTC, 0)}</p>
                   <span className={cn(
                     "inline-block text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5",
-                    meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                    meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                     meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                    meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                     meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                     meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
                   )}>{meta.label}</span>

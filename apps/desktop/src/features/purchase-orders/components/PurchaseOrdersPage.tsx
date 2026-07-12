@@ -128,7 +128,7 @@ export function PurchaseOrdersPage() {
           <StatCard
             label="Retenues libérables"
             value={formatEuro(poStats.expiredRetentions)}
-            color={poStats.expiredRetentions > 0 ? "bg-emerald-500/15 text-emerald-500" : "bg-slate-500/15 text-slate-500"}
+            color={poStats.expiredRetentions > 0 ? "bg-emerald-500/15 text-emerald-500" : "bg-slate-400/20 text-slate-600 dark:text-slate-200"}
             icon={AlertTriangle}
             warning={poStats.expiredRetentions > 0}
           />

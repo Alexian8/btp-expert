@@ -320,7 +320,7 @@ ${companyName}`,
                   <>
                     <span className={cn(
                       "text-[10px] uppercase font-semibold px-2 py-0.5 rounded",
-                      existing.type === "standard" && "bg-slate-500/15 text-slate-500",
+                      existing.type === "standard" && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                       existing.type === "acompte"  && "bg-amber-500/15 text-amber-500",
                       existing.type === "avoir"    && "bg-rose-500/15 text-rose-500",
                     )}>
@@ -328,7 +328,7 @@ ${companyName}`,
                     </span>
                     <span className={cn(
                       "text-xs font-medium px-2 py-0.5 rounded",
-                      meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                      meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                       meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
                       meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                       meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",

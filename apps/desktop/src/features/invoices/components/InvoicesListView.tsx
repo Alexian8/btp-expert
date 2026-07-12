@@ -260,7 +260,7 @@ export function InvoicesListView() {
                       <span
                         className={cn(
                           "text-[9px] uppercase font-semibold px-1 py-0.5 rounded",
-                          inv.type === "standard" && "bg-slate-500/15 text-slate-500",
+                          inv.type === "standard" && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                           inv.type === "acompte" && "bg-amber-500/15 text-amber-500",
                           inv.type === "avoir" && "bg-rose-500/15 text-rose-500"
                         )}
@@ -270,7 +270,7 @@ export function InvoicesListView() {
                       <span
                         className={cn(
                           "inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded",
-                          meta.color === "slate" && "bg-slate-500/15 text-slate-500",
+                          meta.color === "slate" && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                           meta.color === "blue" && "bg-blue-500/15 text-blue-500",
                           meta.color === "amber" && "bg-amber-500/15 text-amber-500",
                           meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
@@ -365,7 +365,7 @@ export function InvoicesListView() {
                       <td className="px-4 py-3">
                         <span className={cn(
                           "text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded",
-                          inv.type === "standard" && "bg-slate-500/15 text-slate-500",
+                          inv.type === "standard" && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                           inv.type === "acompte"  && "bg-amber-500/15 text-amber-500",
                           inv.type === "avoir"    && "bg-rose-500/15 text-rose-500",
                         )}>
@@ -379,7 +379,7 @@ export function InvoicesListView() {
                       <td className="px-4 py-3">
                         <span className={cn(
                           "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded",
-                          meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                          meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                           meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
                           meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                           meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",

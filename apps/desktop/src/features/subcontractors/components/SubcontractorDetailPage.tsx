@@ -102,7 +102,7 @@ export function SubcontractorDetailPage() {
                   {activityMeta.label}
                 </span>
                 {!subcontractor.isActive && (
-                  <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-500">
+                  <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-slate-400/20 text-slate-600 dark:text-slate-200">
                     Archivé
                   </span>
                 )}

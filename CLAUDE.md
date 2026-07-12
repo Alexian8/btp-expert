@@ -113,7 +113,7 @@ Instance de référence (dev) : `intranet.jacobhabitat-dev.fr` (déploiement Jac
 **Statuts** (libellés & couleurs dans `packages/types`) :
 - **Devis** : brouillon · envoyé · accepté · refusé.
 - **Facture** : brouillon · envoyée · partiellement-payée · payée · annulée. Types : standard · acompte · avoir.
-- **Chantier** : prospect · en-cours · terminé · annulé — vues **Kanban (drag-drop)** + Liste.
+- **Chantier** : prospect · en-cours · terminé · annulé — vues **Kanban (drag-drop)** + Liste. Kanban à **colonnes teintées** (UX terrain) : prospect bleu-gris (`slate`) · en cours orange (`amber`) · terminé vert (`emerald`) · annulé rouge (`rose`) — couleurs portées par `CHANTIER_STATUS_META`.
 
 ### Documents PDF (devis / factures)
 Rendus par **React-PDF** dans `apps/desktop/src/features/pdf/` — deux styles par type : `QuotePdfClassique`/`QuotePdfMinimal`, `InvoicePdfClassique`/`InvoicePdfMinimal`. **Toute l'identité d'entreprise et les mentions légales sont paramétrables dans Paramètres** (`packages/types/src/settings.ts`) et ne doivent **jamais être codées en dur** : identité (SIRET, TVA intracom., APE), coordonnées bancaires (IBAN/BIC, affichées si `pdfIbanShown`), assurances (`assuranceDecennale*` — **obligatoire en BTP** —, `assuranceRC*`), acompte par défaut (`acompteDefaut`), clause de réserve de propriété, validité du devis.
@@ -121,6 +121,9 @@ Rendus par **React-PDF** dans `apps/desktop/src/features/pdf/` — deux styles p
 Mentions attendues sur un devis (conformité BTP, pour référence) : **assurance décennale** + RC pro, coordonnées bancaires, **réserve de propriété**, **validité (30 j)**, **acompte** (ex. 30 % à la commande), bloc signature « **Bon pour accord** ». La **TVA est gérée par ligne** (totaux regroupés par taux ; 20 % dans les exemples courants).
 
 ## Conventions
+
+### UX terrain (tactile) — règles globales dans `globals.css`
+Sous `@media (pointer: coarse)` (téléphone/tablette de chantier, gants, soleil) : **cibles tactiles ≥ 44 px** (boutons, selects, inputs) et **texte de lecture ≥ 16 px** (`.text-sm` → 16 px, `.text-xs` → 14 px). Le desktop souris garde sa densité. En mode sombre, `--muted-foreground` est volontairement clair (78 %) pour la lisibilité en extérieur — ne pas le réassombrir.
 
 ### UI responsive — « visible sur tous les supports »
 La version **web doit être utilisable sur mobile, tablette et desktop** (le desktop Electron reste large écran). Les vues de liste suivent le pattern : **cartes empilées en mobile (`md:hidden`) + tableau en desktop (`hidden md:block`)** — reproduire ce double rendu pour toute nouvelle liste. Penser tactile (cibles ≥ 40 px), `flex-wrap` sur les barres d'outils, pas de largeur fixe.

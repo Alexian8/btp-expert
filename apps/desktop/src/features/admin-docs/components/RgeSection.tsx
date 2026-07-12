@@ -87,7 +87,7 @@ export function RgeSection() {
           color={
             expiringSoon.length > 0
               ? "bg-amber-500/15 text-amber-500"
-              : "bg-slate-500/15 text-slate-500"
+              : "bg-slate-400/20 text-slate-600 dark:text-slate-200"
           }
         />
         <StatCard

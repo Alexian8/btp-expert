@@ -83,7 +83,9 @@
     --secondary-foreground: 210 40% 98%;
 
     --muted: 217 33% 14%;
-    --muted-foreground: 215 20% 65%;
+    /* UX terrain : texte secondaire nettement éclairci pour rester lisible
+       dehors / en plein soleil (était 65% → illisible sur mobile au soleil) */
+    --muted-foreground: 215 25% 78%;
 
     --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
@@ -210,45 +212,91 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   UX TERRAIN (BTP) — appliqué sur écrans tactiles uniquement (téléphone /
+   tablette de chantier). Objectifs : zones de clic massives (gants, gros
+   doigts) et texte de lecture ≥ 16px (soleil, poussière). Le desktop
+   souris garde sa densité normale.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea {
+    min-height: 44px;
+  }
+  /* Texte de lecture : text-sm (14px) → 16px, text-xs (12px) → 14px */
+  .text-sm {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  .text-xs {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    STYLES VISUELS GLOBAUX — data-ui-style (réglé par l'admin, Paramètres →
    Apparence → Style de l'application). 4 styles : classique (défaut, aucun
    override), epure, liquid, techno. Hors @layer pour primer sur utilities.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ─── Épuré : aéré, sans ombres, bordures discrètes ─────────────────────── */
+/* ─── Épuré : aéré, sans ombres, bordures fines qui détachent les cartes ── */
 :root[data-ui-style="epure"] {
   --radius: 0.875rem;
 }
 :root[data-ui-style="epure"] :is(.shadow-soft-sm, .shadow-soft-md, .shadow-soft-lg, .shadow-soft-xl) {
   box-shadow: none;
 }
-:root[data-ui-style="epure"] .bg-card {
-  border-color: hsl(var(--border) / 0.55);
+/* Bordure fine #222e43 (spec terrain) : détache les cartes du fond noir */
+:root[data-ui-style="epure"].dark .bg-card {
+  border-color: #222e43;
+}
+:root[data-ui-style="epure"]:not(.dark) .bg-card {
+  border-color: hsl(var(--border) / 0.6);
 }
 
-/* ─── Liquid glass : surfaces translucides + flou, coins très arrondis ──── */
+/* ─── Liquid glass : verre dépoli haut de gamme ─────────────────────────── */
+/* Fond translucide + blur, bordure haute brillante (reflet du verre),
+   ombres diffuses. Fond de page : blobs colorés sombres et discrets pour
+   que la transparence ressorte sans nuire à la lisibilité. */
 :root[data-ui-style="liquid"] {
   --radius: 1.1rem;
 }
 :root[data-ui-style="liquid"] .bg-card {
-  background-color: hsl(var(--card) / 0.62);
-  -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  backdrop-filter: blur(16px) saturate(1.5);
-  border-color: hsl(var(--border) / 0.55);
+  background-color: hsl(var(--card) / 0.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border-color: hsl(var(--border) / 0.5);
+  /* Reflet du verre (liseré brillant en haut) + ombre diffuse */
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.07),
+    0 12px 40px -16px hsl(var(--shadow-color) / 0.5);
 }
 :root[data-ui-style="liquid"] .bg-muted {
   background-color: hsl(var(--muted) / 0.55);
 }
 :root[data-ui-style="liquid"] body {
   background-image:
-    radial-gradient(ellipse 50% 40% at 15% 0%, hsl(var(--primary) / 0.10), transparent 65%),
-    radial-gradient(ellipse 45% 40% at 90% 100%, hsl(var(--primary) / 0.08), transparent 65%);
+    radial-gradient(ellipse 45% 38% at 12% -5%, hsl(var(--primary) / 0.14), transparent 65%),
+    radial-gradient(ellipse 40% 35% at 92% 20%, hsl(265 60% 45% / 0.10), transparent 65%),
+    radial-gradient(ellipse 50% 40% at 30% 105%, hsl(var(--primary) / 0.10), transparent 65%);
   background-attachment: fixed;
 }
 
-/* ─── Techno : coins nets, grille de fond, bordures accentuées ──────────── */
+/* ─── Techno : industriel/futuriste — noir pur, angles nets, halos néon ─── */
 :root[data-ui-style="techno"] {
   --radius: 0.3rem;
+}
+:root[data-ui-style="techno"].dark {
+  --background: 0 0% 0%; /* noir pur (spec) */
+  --card: 220 20% 4%;
+  --popover: 220 20% 4%;
+  /* Néon cyan industriel : prime sur la couleur d'accent choisie */
+  --primary: 189 95% 55%;
+  --primary-foreground: 220 30% 6%;
+  --ring: 189 95% 55%;
 }
 :root[data-ui-style="techno"] body {
   background-image:
@@ -259,6 +307,16 @@
 }
 :root[data-ui-style="techno"] .bg-card {
   border-color: hsl(var(--primary) / 0.22);
+}
+/* Halo néon sur les éléments actifs : boutons principaux, badges primaires */
+:root[data-ui-style="techno"] .bg-primary {
+  box-shadow: 0 0 14px hsl(var(--primary) / 0.45), 0 0 3px hsl(var(--primary) / 0.6);
+}
+:root[data-ui-style="techno"] .bg-accent {
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.25);
+}
+:root[data-ui-style="techno"] :focus-visible {
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.55);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

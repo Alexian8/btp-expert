@@ -212,7 +212,7 @@ export function RestoreConfirmModal({ open, backupPath, onClose }: Props) {
                           </span>
                         )}
                         {report.manifest.logs?.included && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-500">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-400/20 text-slate-600 dark:text-slate-200">
                             Logs ({report.manifest.logs.fileCount})
                           </span>
                         )}

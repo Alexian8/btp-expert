@@ -329,7 +329,7 @@ function DeltaPctBadge({ value, isExpense }: { value: number; isExpense: boolean
   const isFlat = Math.abs(value) < 0.5;
   const goodDirection = isExpense ? value < 0 : value > 0;
   const colorClass = isFlat
-    ? "bg-slate-500/15 text-slate-500"
+    ? "bg-slate-400/20 text-slate-600 dark:text-slate-200"
     : goodDirection
       ? "bg-emerald-500/15 text-emerald-500"
       : "bg-red-500/15 text-red-500";

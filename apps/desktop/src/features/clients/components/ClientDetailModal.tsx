@@ -243,8 +243,9 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
                         >
                           <div className={cn(
                             "w-8 h-8 rounded-md flex items-center justify-center shrink-0",
-                            meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                            meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                             meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                            meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                             meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                             meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
                           )}>
@@ -256,8 +257,9 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
                           </div>
                           <span className={cn(
                             "text-[10px] px-1.5 py-0.5 rounded font-medium",
-                            meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                            meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                             meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                            meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                             meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                             meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
                           )}>{meta.label}</span>
@@ -299,8 +301,9 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
                             <p className="text-sm font-semibold tabular-nums">{formatEuros(q.totalTTC, 0)}</p>
                             <span className={cn(
                               "inline-block text-[10px] px-1.5 py-0.5 rounded font-medium mt-0.5",
-                              meta.color === "slate"   && "bg-slate-500/15 text-slate-500",
+                              meta.color === "slate"   && "bg-slate-400/20 text-slate-600 dark:text-slate-200",
                               meta.color === "blue"    && "bg-blue-500/15 text-blue-500",
+                              meta.color === "amber"   && "bg-amber-500/15 text-amber-500",
                               meta.color === "emerald" && "bg-emerald-500/15 text-emerald-500",
                               meta.color === "rose"    && "bg-rose-500/15 text-rose-500",
                             )}>{meta.label}</span>
