@@ -19,6 +19,7 @@ import { useFinanceStore } from "@/stores/financeStore";
 import { useAdministrativeDocsStore } from "@/stores/administrativeDocsStore";
 import { formatEuro } from "@btp/types";
 import { UpcomingEventsWidget } from "@/features/agenda/components/UpcomingEventsWidget";
+import { useCountUp } from "@/lib/useCountUp";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DashboardPage — Page d'accueil orientée ACTIONS (Session 19)
@@ -171,6 +172,8 @@ export function DashboardPage() {
     {
       label: "CA encaissé ce mois",
       value: formatEuro(caCeMois),
+      raw: caCeMois,
+      fmt: (n: number) => formatEuro(Math.round(n)),
       icon: CreditCard,
       color: "bg-emerald-500/15 text-emerald-500",
       to: "/finances",
@@ -179,6 +182,8 @@ export function DashboardPage() {
     {
       label: "CA encaissé cette année",
       value: formatEuro(caCetteAnnee),
+      raw: caCetteAnnee,
+      fmt: (n: number) => formatEuro(Math.round(n)),
       icon: TrendingUp,
       color: "bg-teal-500/15 text-teal-500",
       to: "/finances",
@@ -186,6 +191,8 @@ export function DashboardPage() {
     {
       label: "Chantiers actifs",
       value: String(chantiersActifs),
+      raw: chantiersActifs,
+      fmt: (n: number) => String(Math.round(n)),
       icon: Hammer,
       color: "bg-blue-500/15 text-blue-500",
       to: "/chantiers",
@@ -193,6 +200,8 @@ export function DashboardPage() {
     {
       label: "Brouillons devis",
       value: String(devisBrouillons),
+      raw: devisBrouillons,
+      fmt: (n: number) => String(Math.round(n)),
       icon: Receipt,
       color: "bg-amber-500/15 text-amber-500",
       to: "/quotes",
@@ -274,7 +283,7 @@ export function DashboardPage() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground">{kpi.label}</p>
-              <p className="text-xl font-bold tabular-nums mt-0.5 truncate">{kpi.value}</p>
+              <p className="text-xl font-bold tabular-nums mt-0.5 truncate">{kpi.raw != null && kpi.fmt ? <AnimatedNumber value={kpi.raw} format={kpi.fmt} /> : kpi.value}</p>
             </motion.div>
           );
         })}
@@ -385,6 +394,8 @@ interface Alert {
 }
 
 interface Kpi {
+  raw?: number;
+  fmt?: (n: number) => string;
   label: string;
   value: string;
   icon: any;
@@ -466,4 +477,11 @@ function formatToday(): string {
     month: "long",
     year: "numeric",
   });
+}
+
+
+// ─── Compteur animé (0 → valeur) pour les gros chiffres ────────────────────
+function AnimatedNumber({ value, format }: { value: number; format: (n: number) => string }) {
+  const v = useCountUp(value, 500);
+  return <>{format(v)}</>;
 }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Building2, User as UserIcon, MapPin, Pencil, Receipt, FileText,
+  Building2, User as UserIcon, MapPin, Pencil, Receipt, FileText,
   ChevronDown, FolderOpen, Navigation, Tag as TagIcon, HardHat,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { SideDrawer } from "@/components/shared/SideDrawer";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
@@ -100,44 +100,43 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
     navigate(`/vault?clientId=${client.id}`);
   };
 
-  return (
-    <AnimatePresence>
-      {client && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
-          onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-          <motion.div
-            initial={{ scale: 0.96, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
-            className="bg-card border border-border rounded-xl shadow-soft-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-border">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={cn("w-14 h-14 rounded-full flex items-center justify-center font-semibold text-lg shrink-0 uppercase", avatarColorClass(client.id))}>
-                  {clientInitials(client)}
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-xl font-bold truncate">{displayName}</h2>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                    {client.type === "pro" ? <Building2 className="w-3.5 h-3.5" /> : <UserIcon className="w-3.5 h-3.5" />}
-                    {client.type === "pro" ? "Professionnel" : "Particulier"}
-                    {clientChantiers.length > 0 && (
-                      <span className="inline-flex items-center gap-1 ml-1 text-xs font-semibold px-2 py-0.5 rounded-full text-blue-200" style={{ backgroundColor: "#1e293b" }}>
-                        <HardHat className="w-3 h-3" /> {clientChantiers.length} chantier{clientChantiers.length > 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button variant="outline" onClick={onEdit} className="h-10"><Pencil className="w-4 h-4" /> Modifier</Button>
-                <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10"><X className="w-4 h-4" /></Button>
-              </div>
-            </div>
+  const titleNode = (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className={cn("w-11 h-11 rounded-full flex items-center justify-center font-semibold shrink-0 uppercase", avatarColorClass(client.id))}>
+        {clientInitials(client)}
+      </div>
+      <div className="min-w-0">
+        <p className="text-lg font-bold truncate">{displayName}</p>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          {client.type === "pro" ? <Building2 className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
+          {client.type === "pro" ? "Professionnel" : "Particulier"}
+          {clientChantiers.length > 0 && (
+            <span className="inline-flex items-center gap-1 ml-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-blue-200" style={{ backgroundColor: "#1e293b" }}>
+              <HardHat className="w-3 h-3" /> {clientChantiers.length}
+            </span>
+          )}
+        </p>
+      </div>
+    </div>
+  );
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+  return (
+    <SideDrawer
+      open={!!client}
+      onClose={onClose}
+      widthClass="max-w-xl"
+      title={titleNode}
+      footer={
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleOpenVault} className="h-11"><FolderOpen className="w-4 h-4" /> Documents</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onEdit} className="h-11"><Pencil className="w-4 h-4" /> Modifier</Button>
+            <Button onClick={onClose} className="h-11">Fermer</Button>
+          </div>
+        </div>
+      }
+    >
+            <div className="p-4 sm:p-5 space-y-5">
               {/* Étiquettes */}
               {clientTagDefs.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -220,15 +219,7 @@ export function ClientDetailModal({ client, onClose, onEdit }: Props) {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-2 p-4 border-t border-border bg-muted/20 flex-wrap">
-              <Button variant="outline" onClick={handleOpenVault} className="h-11"><FolderOpen className="w-4 h-4" /> Documents (coffre-fort)</Button>
-              <Button onClick={onClose} className="h-11">Fermer</Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </SideDrawer>
   );
 }
 

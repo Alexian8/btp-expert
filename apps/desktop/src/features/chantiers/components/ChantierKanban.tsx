@@ -52,6 +52,7 @@ export function ChantierKanban({ chantiers, onView }: Props) {
   const { updateStatus } = useChantiersStore();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoveredStatus, setHoveredStatus] = useState<ChantierStatus | null>(null);
+  const [impactId, setImpactId] = useState<string | null>(null);
 
   const grouped: Record<ChantierStatus, Chantier[]> = {
     prospect: [],
@@ -90,6 +91,10 @@ export function ChantierKanban({ chantiers, onView }: Props) {
     const chantier = chantiers.find((c) => c.id === id);
     if (!chantier || chantier.status === status) return;
 
+    // Effet d'impact au relâchement
+    setImpactId(id);
+    setTimeout(() => setImpactId((cur) => (cur === id ? null : cur)), 260);
+
     const result = await updateStatus(id, status);
     if (result.success) {
       toast.success(`Statut mis à jour : ${CHANTIER_STATUS_META[status].label}`);
@@ -99,7 +104,7 @@ export function ChantierKanban({ chantiers, onView }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 overflow-x-auto pb-4">
+    <div className="flex md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 overflow-x-auto md:overflow-visible pb-4 snap-x snap-mandatory">
       {CHANTIER_STATUS_ORDER.map((status) => {
         const meta = CHANTIER_STATUS_META[status];
         const Icon = CHANTIER_STATUS_ICON[status];
@@ -116,8 +121,9 @@ export function ChantierKanban({ chantiers, onView }: Props) {
             onDrop={(e) => handleDrop(e, status)}
             className={cn(
               "rounded-lg min-h-[400px] flex flex-col transition-colors overflow-hidden",
+              "snap-center shrink-0 w-[82%] sm:w-[58%] md:w-auto",
               tint.bg,
-              isHovered && "ring-2 ring-primary/40"
+              isHovered && "kanban-drop-target"
             )}
           >
             {/* Liseré coloré en haut de colonne */}
@@ -156,6 +162,7 @@ export function ChantierKanban({ chantiers, onView }: Props) {
                     chantier={c}
                     onView={onView}
                     isDragging={draggingId === c.id}
+                    impact={impactId === c.id}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                   />
@@ -174,11 +181,12 @@ interface CardProps {
   chantier: Chantier;
   onView: (c: Chantier) => void;
   isDragging: boolean;
+  impact?: boolean;
   onDragStart: (e: React.DragEvent, id: string) => void;
   onDragEnd: () => void;
 }
 
-function ChantierCard({ chantier, onView, isDragging, onDragStart, onDragEnd }: CardProps) {
+function ChantierCard({ chantier, onView, isDragging, impact, onDragStart, onDragEnd }: CardProps) {
   const { getById } = useClientsStore();
   const client = getById(chantier.clientId);
   const displayClient = client
@@ -195,8 +203,9 @@ function ChantierCard({ chantier, onView, isDragging, onDragStart, onDragEnd }: 
       onDragEnd={onDragEnd}
       onClick={() => onView(chantier)}
       className={cn(
-        "bg-card border border-border rounded-md p-3 cursor-grab active:cursor-grabbing hover:shadow-soft-md transition-all",
-        isDragging && "opacity-40 scale-95"
+        "bg-card border border-border rounded-md p-3 cursor-grab active:cursor-grabbing hover:shadow-soft-md transition-all duration-200",
+        isDragging && "rotate-2 scale-105 shadow-2xl opacity-90 ring-1 ring-primary/40",
+        impact && "drop-impact"
       )}
     >
       {/* Ref + priorité */}

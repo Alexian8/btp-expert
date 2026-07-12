@@ -424,6 +424,44 @@
    UTILITIES
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════
+   CHARTE DE MICRO-INTERACTIONS — transitions légères (transform/opacity),
+   150–300 ms. Keyframes hors @layer pour être toujours disponibles.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Tracé de la coche des boutons de confirmation */
+@keyframes check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Colonne Kanban cible d'un drop : bordure pointillée qui pulse */
+@keyframes dash-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.kanban-drop-target {
+  border: 2px dashed hsl(var(--primary) / 0.8);
+  animation: dash-pulse 900ms ease-in-out infinite;
+}
+
+/* Impact au relâchement d'une carte (léger scale-down puis retour) */
+@keyframes drop-impact {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.drop-impact { animation: drop-impact 220ms ease-out; }
+
+/* Conteneur scrollable horizontal avec ombres de bord (indique le défilement) */
+.scroll-shadow-x {
+  background:
+    linear-gradient(to right, hsl(var(--card)) 30%, transparent) left / 40px 100% no-repeat,
+    linear-gradient(to left, hsl(var(--card)) 30%, transparent) right / 40px 100% no-repeat,
+    radial-gradient(farthest-side at 0 50%, hsl(0 0% 0% / 0.25), transparent) left / 16px 100% no-repeat,
+    radial-gradient(farthest-side at 100% 50%, hsl(0 0% 0% / 0.25), transparent) right / 16px 100% no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+
 @layer utilities {
   /* Texte avec dégradé */
   .text-gradient {
