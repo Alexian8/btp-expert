@@ -79,6 +79,10 @@ export interface AppearanceSettings {
   /** Style visuel global de l'app (réglé par l'admin, appliqué à tous) :
    *  classique · epure · liquid (verre dépoli) · techno. */
   themeStyle?: "classique" | "epure" | "liquid" | "techno";
+  /** Réglages fins du thème Liquid glass (admin, appliqués à tous). */
+  themeLiquidBlur?: number;        // flou du verre en px (0–30, défaut 18)
+  themeLiquidCardOpacity?: number; // opacité des cartes en % (35–90, défaut 60)
+  themeLiquidGlow?: number;        // intensité du fond coloré en % (0–200, défaut 100)
 }
 
 export interface SecuritySettings {
