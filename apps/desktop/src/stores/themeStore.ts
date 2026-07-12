@@ -15,12 +15,25 @@ export type UiStyle = "classique" | "epure" | "liquid" | "techno";
 
 export const UI_STYLES: UiStyle[] = ["classique", "epure", "liquid", "techno"];
 
+/** Réglages fins du thème Liquid glass (admin, partagés via settings). */
+export interface LiquidSettings {
+  /** Intensité du flou de verre, en px (0–30). */
+  blur: number;
+  /** Opacité des cartes, 0.35–0.9 (plus bas = plus transparent). */
+  cardOpacity: number;
+  /** Intensité des halos colorés du fond, multiplicateur 0–2. */
+  glow: number;
+}
+
+export const LIQUID_DEFAULTS: LiquidSettings = { blur: 18, cardOpacity: 0.6, glow: 1 };
+
 interface ThemeState {
   mode: Mode;
   accent: AccentColor;
   radius: Radius;
   density: Density;
   uiStyle: UiStyle;
+  liquid: LiquidSettings;
 
   // Préférences sidebar (Session 20)
   hideSidebarBadges: boolean;
@@ -30,6 +43,7 @@ interface ThemeState {
   setRadius: (radius: Radius) => void;
   setDensity: (density: Density) => void;
   setUiStyle: (style: UiStyle) => void;
+  setLiquid: (patch: Partial<LiquidSettings>) => void;
   setHideSidebarBadges: (v: boolean) => void;
   reset: () => void;
 
@@ -43,10 +57,11 @@ const DEFAULT_STATE = {
   radius: "lg" as Radius,
   density: "normal" as Density,
   uiStyle: "classique" as UiStyle,
+  liquid: { ...LIQUID_DEFAULTS },
   hideSidebarBadges: false,
 };
 
-function applyToDOM(state: Pick<ThemeState, "mode" | "accent" | "radius" | "density" | "uiStyle">) {
+function applyToDOM(state: Pick<ThemeState, "mode" | "accent" | "radius" | "density" | "uiStyle" | "liquid">) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
 
@@ -65,6 +80,12 @@ function applyToDOM(state: Pick<ThemeState, "mode" | "accent" | "radius" | "dens
   root.setAttribute("data-radius", state.radius);
   root.setAttribute("data-density", state.density);
   root.setAttribute("data-ui-style", state.uiStyle);
+
+  // Réglages fins Liquid glass (consommés uniquement par le bloc CSS liquid)
+  const lq = state.liquid ?? LIQUID_DEFAULTS;
+  root.style.setProperty("--liquid-blur", `${lq.blur}px`);
+  root.style.setProperty("--liquid-card-alpha", String(lq.cardOpacity));
+  root.style.setProperty("--liquid-glow", String(lq.glow));
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -91,6 +112,11 @@ export const useThemeStore = create<ThemeState>()(
       setUiStyle: (uiStyle) => {
         set({ uiStyle });
         applyToDOM({ ...get(), uiStyle });
+      },
+      setLiquid: (patch) => {
+        const liquid = { ...(get().liquid ?? LIQUID_DEFAULTS), ...patch };
+        set({ liquid });
+        applyToDOM({ ...get(), liquid });
       },
       setHideSidebarBadges: (hideSidebarBadges) => set({ hideSidebarBadges }),
       reset: () => {

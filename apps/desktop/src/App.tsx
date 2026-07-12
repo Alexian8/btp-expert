@@ -92,9 +92,14 @@ export function App() {
     const sync = async (): Promise<void> => {
       try {
         const { getDataService } = await import("@/lib/dataService");
-        const s = await getDataService().getSettings();
-        const style = (s as { themeStyle?: string })?.themeStyle;
+        const s = (await getDataService().getSettings()) as {
+          themeStyle?: string;
+          themeLiquidBlur?: number;
+          themeLiquidCardOpacity?: number;
+          themeLiquidGlow?: number;
+        };
         const store = useThemeStore.getState();
+        const style = s?.themeStyle;
         if (
           style &&
           (style === "classique" || style === "epure" || style === "liquid" || style === "techno") &&
@@ -102,6 +107,12 @@ export function App() {
         ) {
           store.setUiStyle(style);
         }
+        // Réglages fins Liquid glass (stockés en unités entières côté settings)
+        const liquid: Partial<{ blur: number; cardOpacity: number; glow: number }> = {};
+        if (typeof s?.themeLiquidBlur === "number") liquid.blur = s.themeLiquidBlur;
+        if (typeof s?.themeLiquidCardOpacity === "number") liquid.cardOpacity = s.themeLiquidCardOpacity / 100;
+        if (typeof s?.themeLiquidGlow === "number") liquid.glow = s.themeLiquidGlow / 100;
+        if (Object.keys(liquid).length > 0) store.setLiquid(liquid);
       } catch {
         /* best-effort : garde le style local */
       }

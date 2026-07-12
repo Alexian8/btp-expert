@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Sun,
@@ -20,11 +21,13 @@ import { Label } from "@/components/ui/label";
 import { SettingsSectionWrapper } from "./SettingsPage";
 import {
   useThemeStore,
+  LIQUID_DEFAULTS,
   type Mode,
   type AccentColor,
   type Radius,
   type Density,
   type UiStyle,
+  type LiquidSettings,
 } from "@/stores/themeStore";
 import { useDeviceModeStore, type DeviceMode } from "@/stores/deviceModeStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -96,6 +99,32 @@ export function AppearanceSection() {
   const isAutoStandalone = useDeviceModeStore((s) => s.isAutoStandalone);
   const isIOS = useDeviceModeStore((s) => s.isIOS);
   const isAdmin = useAuthStore((s) => s.user)?.role === "admin";
+
+  const liquid = useThemeStore((st) => st.liquid) ?? LIQUID_DEFAULTS;
+  const setLiquid = useThemeStore((st) => st.setLiquid);
+  const liquidSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Réglage fin Liquid : application instantanée (variables CSS) puis
+  // persistance débouncée dans les settings partagés (unités entières).
+  const handleLiquidChange = (patch: Partial<LiquidSettings>): void => {
+    setLiquid(patch);
+    if (liquidSaveTimer.current) clearTimeout(liquidSaveTimer.current);
+    liquidSaveTimer.current = setTimeout(() => {
+      const lq = { ...useThemeStore.getState().liquid };
+      getDataService()
+        .updateSettings({
+          themeLiquidBlur: Math.round(lq.blur),
+          themeLiquidCardOpacity: Math.round(lq.cardOpacity * 100),
+          themeLiquidGlow: Math.round(lq.glow * 100),
+        })
+        .then(() => window.dispatchEvent(new Event("btp:settings-updated")))
+        .catch(() => toast.error("Échec de l'enregistrement des réglages Liquid"));
+    }, 600);
+  };
+
+  const handleLiquidReset = (): void => {
+    handleLiquidChange({ ...LIQUID_DEFAULTS });
+  };
 
   // Style global : appliqué localement tout de suite, puis persisté dans les
   // settings serveur pour que TOUS les utilisateurs le récupèrent au login.
@@ -180,6 +209,86 @@ export function AppearanceSection() {
               );
             })}
           </div>
+
+          {/* Réglages fins Liquid glass — visibles quand le style est actif */}
+          {uiStyle === "liquid" && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mt-4 p-4 rounded-lg border border-border bg-card space-y-5"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <Droplets className="w-4 h-4 text-primary" />
+                  Réglages Liquid glass
+                </p>
+                <Button variant="outline" size="sm" onClick={handleLiquidReset}>
+                  Réinitialiser
+                </Button>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="liquid-blur" className="text-xs">Intensité du flou (verre)</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{Math.round(liquid.blur)} px</span>
+                </div>
+                <input
+                  id="liquid-blur"
+                  type="range"
+                  min={0}
+                  max={30}
+                  step={1}
+                  value={liquid.blur}
+                  onChange={(e) => handleLiquidChange({ blur: Number(e.target.value) })}
+                  className="w-full accent-primary"
+                />
+                <p className="text-[11px] text-muted-foreground">0 = verre net · 30 = très flouté</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="liquid-opacity" className="text-xs">Opacité des cartes</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{Math.round(liquid.cardOpacity * 100)} %</span>
+                </div>
+                <input
+                  id="liquid-opacity"
+                  type="range"
+                  min={35}
+                  max={90}
+                  step={1}
+                  value={Math.round(liquid.cardOpacity * 100)}
+                  onChange={(e) => handleLiquidChange({ cardOpacity: Number(e.target.value) / 100 })}
+                  className="w-full accent-primary"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Plus bas = plus transparent (attention à la lisibilité en plein soleil)
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="liquid-glow" className="text-xs">Intensité du fond coloré (halos)</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{Math.round(liquid.glow * 100)} %</span>
+                </div>
+                <input
+                  id="liquid-glow"
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={10}
+                  value={Math.round(liquid.glow * 100)}
+                  onChange={(e) => handleLiquidChange({ glow: Number(e.target.value) / 100 })}
+                  className="w-full accent-primary"
+                />
+                <p className="text-[11px] text-muted-foreground">0 % = fond uni · 200 % = halos très présents</p>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground border-t border-border pt-3">
+                Appliqué en direct chez vous, enregistré automatiquement pour tous les
+                utilisateurs (comme le style).
+              </p>
+            </motion.div>
+          )}
         </SettingsSectionWrapper>
       )}
 
