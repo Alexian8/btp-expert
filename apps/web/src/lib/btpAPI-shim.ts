@@ -1829,6 +1829,32 @@ export function installBtpApiShim(): void {
     "dbGetStats",
   ]);
 
+  // ─── IA locale (inférence node-llama-cpp côté serveur) ─────────────────
+  // Les erreurs HTTP (503 indisponible, 429 occupé/rate-limit) sont converties
+  // en { success:false, error } pour que l'UI affiche un toast propre.
+  const aiAPI = {
+    aiStatus: () =>
+      httpGet("/api/ai/status").catch(() => ({
+        available: false,
+        enabled: false,
+        modelLoaded: false,
+        modelFile: "",
+        reason: "Serveur injoignable",
+      })),
+    aiSuggestQuoteLine: (args: { title: string; description?: string }) =>
+      http("POST", "/api/ai/suggest-quote-line", args)
+        .then((r) => r as { success: boolean; description?: string; durationMs?: number; error?: string })
+        .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur IA" })),
+    aiCategorizeExpense: (args: { description: string; supplierName?: string }) =>
+      http("POST", "/api/ai/categorize-expense", args)
+        .then((r) => r as { success: boolean; category?: string; durationMs?: number; error?: string })
+        .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur IA" })),
+    aiTest: () =>
+      http("POST", "/api/ai/test", {})
+        .then((r) => r as { success: boolean; output?: string; durationMs?: number; modelFile?: string; error?: string })
+        .catch((e) => ({ success: false, error: e instanceof Error ? e.message : "Erreur IA" })),
+  };
+
   // Assemblage final
   // ─── Qonto (intégration bancaire) ──────────────────────────────────────
   const qonto = {
@@ -1866,6 +1892,7 @@ export function installBtpApiShim(): void {
     ...backup,
     ...microsoft,
     ...adminDocs,
+    ...aiAPI,
     ...allOtherStubs,
     platform: "web" as const,
     isElectron: false as const,

@@ -22,6 +22,7 @@ import { buildSuperAdminRouter } from "./routes/super-admin";
 import { buildVaultRouter } from "./routes/vault";
 import { buildAdminDocsRouter } from "./routes/admin-docs";
 import { buildAccountingRouter, accountingHooks } from "./routes/accounting";
+import { buildAiRouter } from "./routes/ai";
 import { makeReferenceHook } from "./accounting/references";
 import { buildQontoRouter } from "./routes/qonto";
 import { requireAuth } from "./auth";
@@ -1028,6 +1029,9 @@ export async function createApp(cfg: Config, db?: DB): Promise<{ app: Express; c
   // ─── Microsoft + email ─────────────────────────────────────────────────
   app.use("/api/auth/microsoft", buildMicrosoftRouter(pool, cfg));
   app.use("/api/email", auth, buildEmailRouter(pool, cfg));
+
+  // ─── IA locale (inférence node-llama-cpp sur le serveur) ───────────────
+  app.use("/api/ai", auth, buildAiRouter(cfg));
 
   // ─── Backup serveur ────────────────────────────────────────────────────
   app.use("/api/backup", auth, buildBackupRouter(pool, cfg));

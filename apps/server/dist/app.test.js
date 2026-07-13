@@ -38,6 +38,14 @@ const cfg = {
     RATE_LIMIT_LOGIN_WINDOW_MIN: 15,
     RATE_LIMIT_API_MAX: 10000,
     RATE_LIMIT_API_WINDOW_MIN: 1,
+    RATE_LIMIT_AI_MAX: 1000, // désactivé en test
+    RATE_LIMIT_AI_WINDOW_MIN: 1,
+    AI_MODEL_PATH: "", // IA désactivée en test (les routes répondent 503)
+    AI_THREADS: 2,
+    AI_CONTEXT_SIZE: 2048,
+    AI_MAX_TOKENS: 220,
+    AI_TIMEOUT_MS: 60_000,
+    AI_QUEUE_MAX: 4,
     LOGIN_LOCKOUT_MAX_ATTEMPTS: 10,
     LOGIN_LOCKOUT_MINUTES: 15,
     SMTP_HOST: "",

@@ -27,6 +27,19 @@ const Schema = zod_1.z.object({
     RATE_LIMIT_LOGIN_WINDOW_MIN: zod_1.z.coerce.number().int().positive().default(15),
     RATE_LIMIT_API_MAX: zod_1.z.coerce.number().int().positive().default(300),
     RATE_LIMIT_API_WINDOW_MIN: zod_1.z.coerce.number().int().positive().default(1),
+    RATE_LIMIT_AI_MAX: zod_1.z.coerce.number().int().positive().default(20),
+    RATE_LIMIT_AI_WINDOW_MIN: zod_1.z.coerce.number().int().positive().default(1),
+    // ─── IA locale (node-llama-cpp, modèle GGUF sur le disque du serveur) ──
+    // Non configuré (défauts) = service IA désactivé, l'UI masque les boutons.
+    // AI_MODEL_PATH : chemin absolu du .gguf (cf. scripts/download-ai-model.js).
+    // AI_THREADS volontairement bas (2) : CPU mutualisé o2switch — ne pas
+    // saturer les threads du compte (fair-use).
+    AI_MODEL_PATH: zod_1.z.string().default(""),
+    AI_THREADS: zod_1.z.coerce.number().int().positive().max(8).default(2),
+    AI_CONTEXT_SIZE: zod_1.z.coerce.number().int().positive().default(2048),
+    AI_MAX_TOKENS: zod_1.z.coerce.number().int().positive().default(220),
+    AI_TIMEOUT_MS: zod_1.z.coerce.number().int().positive().default(60_000),
+    AI_QUEUE_MAX: zod_1.z.coerce.number().int().positive().default(4),
     // ─── Verrouillage de compte (après X échecs de connexion) ────────────────
     LOGIN_LOCKOUT_MAX_ATTEMPTS: zod_1.z.coerce.number().int().positive().default(10),
     LOGIN_LOCKOUT_MINUTES: zod_1.z.coerce.number().int().positive().default(15),

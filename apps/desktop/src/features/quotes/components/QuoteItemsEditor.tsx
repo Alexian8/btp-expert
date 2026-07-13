@@ -2,8 +2,9 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, GripVertical, BookOpen, ChevronDown, ChevronUp,
-  Percent, Euro, FolderOpen, Info,
+  Percent, Euro, FolderOpen, Info, Sparkles, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@btp/ui";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { LibraryPicker } from "./LibraryPicker";
 import { DesignationInput } from "./DesignationInput";
 import { CategorySelect } from "@/features/chantiers/components/CategorySelect";
+import { useAiAvailable } from "@/stores/aiStore";
 import type { QuoteItem, VatRate, LibraryItem, LineWorkType } from "@btp/types";
 import {
   EMPTY_QUOTE_LINE, EMPTY_QUOTE_SECTION, VAT_RATES, QUOTE_UNITS,
@@ -253,6 +255,29 @@ function LineRow({
   const lineHT = calculateLineHT(item);
   const lineTTC = calculateLineTTC(item);
 
+  // IA locale : rédaction de la description à partir de la désignation.
+  // Bouton masqué si le service IA n'est pas disponible (desktop, ou serveur
+  // sans modèle configuré).
+  const aiAvailable = useAiAvailable();
+  const [aiLoading, setAiLoading] = useState(false);
+  const handleAiSuggest = async () => {
+    if (!window.btpAPI?.aiSuggestQuoteLine || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const r = await window.btpAPI.aiSuggestQuoteLine({
+        title: item.title,
+        description: item.description,
+      });
+      if (r.success && r.description) {
+        onUpdate({ description: r.description });
+      } else {
+        toast.error(r.error || "Suggestion IA indisponible");
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <div className="bg-card border border-border rounded-lg p-3 space-y-2">
       {/* Ligne 1 : grab + titre + total */}
@@ -284,6 +309,22 @@ function LineRow({
               rows={1}
               className="text-xs resize-none min-h-[32px]"
             />
+            {aiAvailable && (
+              <button
+                type="button"
+                onClick={handleAiSuggest}
+                disabled={aiLoading || !item.title.trim()}
+                title={!item.title.trim() ? "Renseignez d'abord la désignation" : undefined}
+                className="mt-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-dashed border-primary/40 hover:border-primary/60 hover:bg-primary/5 transition-colors"
+              >
+                {aiLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                {aiLoading ? "Rédaction en cours…" : "Rédiger avec l'IA"}
+              </button>
+            )}
           </div>
 
           {/* Catégorie / poste (Session 22) */}

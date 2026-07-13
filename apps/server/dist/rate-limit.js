@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildLoginRateLimiter = buildLoginRateLimiter;
 exports.buildApiRateLimiter = buildApiRateLimiter;
+exports.buildAiRateLimiter = buildAiRateLimiter;
 exports.buildPasswordResetRateLimiter = buildPasswordResetRateLimiter;
 function makeLimiter(opts) {
     const buckets = new Map();
@@ -85,6 +86,19 @@ function buildApiRateLimiter(cfg) {
         // Le health check est exempt (utile pour monitoring externe)
         skip: (req) => req.path === "/api/health",
         message: "Trop de requêtes. Réessayez plus tard.",
+    });
+}
+/**
+ * Rate-limit des routes IA (/api/ai/*) : l'inférence CPU est coûteuse sur
+ * un hébergement mutualisé — on borne par IP, en comptant toutes les
+ * requêtes (même réussies).
+ */
+function buildAiRateLimiter(cfg) {
+    return makeLimiter({
+        name: "ai",
+        windowMs: cfg.RATE_LIMIT_AI_WINDOW_MIN * 60 * 1000,
+        limit: cfg.RATE_LIMIT_AI_MAX,
+        message: "Trop de requêtes IA. Réessayez dans quelques instants.",
     });
 }
 /**

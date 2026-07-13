@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   X, Save, Trash2, Calendar, Euro, FileText, Upload,
-  CreditCard, Tag, Hammer, CheckCircle2, Receipt,
+  CreditCard, Tag, Hammer, CheckCircle2, Receipt, Sparkles, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import {
 } from "@btp/types";
 import { useExpensesStore } from "@/stores/expensesStore";
 import { useChantiersStore } from "@/stores/chantiersStore";
+import { useAiAvailable } from "@/stores/aiStore";
 import { SupplierSelector } from "./SupplierSelector";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,6 +66,29 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // IA locale : suggestion de catégorie à partir du libellé + fournisseur.
+  // Bouton masqué si le service IA n'est pas disponible.
+  const aiAvailable = useAiAvailable();
+  const [aiLoading, setAiLoading] = useState(false);
+  const handleAiCategorize = async () => {
+    if (!window.btpAPI?.aiCategorizeExpense || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const r = await window.btpAPI.aiCategorizeExpense({
+        description: description.trim() || supplierName.trim(),
+        supplierName: supplierName.trim() || undefined,
+      });
+      if (r.success && r.category && EXPENSE_CATEGORY_META[r.category]) {
+        setCategory(r.category);
+        toast.success(`Catégorie suggérée : ${EXPENSE_CATEGORY_META[r.category].label}`);
+      } else {
+        toast.error(r.error || "Suggestion IA indisponible");
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const isEditing = !!expense;
 
@@ -378,10 +402,32 @@ export function ExpenseEditorModal({ open, expense, onClose, onSaved }: Props) {
 
               {/* Catégorie */}
               <div>
-                <Label className="flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5" />
-                  Catégorie
-                </Label>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" />
+                    Catégorie
+                  </Label>
+                  {aiAvailable && (
+                    <button
+                      type="button"
+                      onClick={handleAiCategorize}
+                      disabled={aiLoading || (!description.trim() && !supplierName.trim())}
+                      title={
+                        !description.trim() && !supplierName.trim()
+                          ? "Renseignez d'abord le libellé ou le fournisseur"
+                          : undefined
+                      }
+                      className="text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-dashed border-primary/40 hover:border-primary/60 hover:bg-primary/5 transition-colors"
+                    >
+                      {aiLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      {aiLoading ? "Analyse en cours…" : "Suggérer avec l'IA"}
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-1.5 mt-1.5">
                   {Object.entries(EXPENSE_CATEGORY_META).map(([key, meta]) => {
                     const selected = category === key;

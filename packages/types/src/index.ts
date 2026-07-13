@@ -14,3 +14,4 @@ export * from "./subcontractors";
 export * from "./purchase-orders";
 export * from "./stats";
 export * from "./administrative-docs";
+export * from "./ai";

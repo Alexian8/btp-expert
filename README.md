@@ -244,7 +244,11 @@ Fichier `apps/server/.env` (ou variables dans Setup Node.js App côté cPanel).
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | — | — | Envoi d'emails (alternative à Outlook) |
 | `CPANEL_HOST` / `CPANEL_USERNAME` / `CPANEL_API_TOKEN` | — | — | Provisioning de boîtes mail (optionnel, cPanel) |
 | `SENTRY_DSN` | — | `https://…@sentry.io/…` | Monitoring d'erreurs (optionnel) |
-| `RATE_LIMIT_*` | — | *(défauts)* | Limitation de débit login/API |
+| `RATE_LIMIT_*` | — | *(défauts)* | Limitation de débit login/API/IA |
+| `AI_MODEL_PATH` | — | `/home/user/ai-models/qwen2.5-1.5b-instruct-q4_k_m.gguf` | Active l'assistant IA locale (chemin absolu du modèle GGUF) |
+| `AI_THREADS` | — | `2` | Threads CPU pour l'inférence (rester bas sur mutualisé) |
+| `AI_CONTEXT_SIZE` / `AI_MAX_TOKENS` | — | `2048` / `220` | Taille de contexte / longueur max des réponses |
+| `AI_TIMEOUT_MS` / `AI_QUEUE_MAX` | — | `60000` / `4` | Timeout d'une inférence / requêtes en attente max |
 
 Seules les **5 variables ✅** sont strictement nécessaires pour démarrer.
 
@@ -266,6 +270,16 @@ Paramètres → **Banque (Qonto)** dans l'app. Générer une clé API dans Qonto
 
 ### Sentry (monitoring) — *optionnel*
 Créer un projet sur [sentry.io](https://sentry.io), récupérer la DSN, la mettre dans `SENTRY_DSN` (serveur) / `VITE_SENTRY_DSN` (web). Offre gratuite suffisante (5 000 erreurs/mois).
+
+### Assistant IA locale — *optionnel*
+Petit modèle de langage (GGUF) exécuté **directement sur le serveur** via `node-llama-cpp` (CPU, aucune donnée envoyée à un service externe). Utilisé pour rédiger les descriptions de lignes de devis et suggérer la catégorie des dépenses.
+
+1. Sur le serveur (SSH) : `node apps/server/scripts/download-ai-model.js` — télécharge Qwen2.5-1.5B-Instruct Q4_K_M (~1 Go) dans `~/ai-models/` (variante 0.5B plus rapide : voir `--url` dans le script).
+2. Ajouter `AI_MODEL_PATH=/home/<user>/ai-models/qwen2.5-1.5b-instruct-q4_k_m.gguf` dans le `.env`.
+3. Vérifier que la dépendance optionnelle est installée : `npm install --omit=dev` à la racine du site.
+4. Redémarrer l'app Node, puis tester dans **Paramètres → IA locale**.
+
+Sans `AI_MODEL_PATH`, le service se déclare indisponible et l'UI masque simplement les boutons IA. Le modèle est chargé en RAM à la première requête (~1,2 Go pour le 1.5B) et une seule inférence tourne à la fois (`AI_THREADS=2` par défaut) pour respecter le fair-use CPU de l'hébergement mutualisé. Comptez plusieurs secondes par réponse — c'est un assistant d'appoint, pas un chat temps réel.
 
 ---
 

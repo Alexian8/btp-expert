@@ -12,6 +12,7 @@ import {
   Menu,
   Clock,
   MailCheck,
+  Sparkles,
   ChevronRight,
   ArrowLeft,
 } from "lucide-react";
@@ -38,6 +39,7 @@ import { DocumentsSection } from "./DocumentsSection";
 import { QontoSection } from "./QontoSection";
 import { SessionSection } from "./SessionSection";
 import { EmailSection } from "./EmailSection";
+import { AiSection } from "./AiSection";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SettingsPage — Layout 2 colonnes (desktop) / drill-down iOS (mobile)
@@ -61,6 +63,7 @@ type SectionKey =
   | "account"
   | "session"
   | "emails"
+  | "ai"
   | "security"
   | "about";
 
@@ -80,6 +83,7 @@ const sections: Array<{
   { key: "account", label: "Mon compte", description: "Identifiants, mot de passe", icon: User },
   { key: "session", label: "Session & sécurité", description: "Déconnexion automatique", icon: Clock },
   { key: "emails", label: "Emails (SMTP)", description: "Diagnostic d'envoi, test", icon: MailCheck },
+  { key: "ai", label: "IA locale", description: "Assistant embarqué sur le serveur", icon: Sparkles },
   { key: "security", label: "Sauvegarde", description: "Backup local & cloud", icon: ShieldCheck },
   { key: "about", label: "À propos", description: "Version, mentions légales", icon: Info },
 ];
@@ -90,7 +94,7 @@ export function SettingsPage() {
   const isAdmin = user?.role === "admin";
   const isMobile = useIsMobile();
 
-  const adminOnlySections: SectionKey[] = ["company", "library", "documents", "banking", "session", "emails", "security"];
+  const adminOnlySections: SectionKey[] = ["company", "library", "documents", "banking", "session", "emails", "ai", "security"];
   const visibleSections = sections.filter(
     (s) => isAdmin || !adminOnlySections.includes(s.key)
   );
@@ -267,6 +271,8 @@ function SectionContent({ active }: { active: SectionKey }) {
       return <SessionSection />;
     case "emails":
       return <EmailSection />;
+    case "ai":
+      return <AiSection />;
     case "security":
       return <BackupSection />;
     case "about":

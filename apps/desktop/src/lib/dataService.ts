@@ -53,6 +53,12 @@ import type {
   BalanceSheet,
   RegenerateResult,
   VatReport,
+  AiStatus,
+  AiSuggestQuoteLineArgs,
+  AiSuggestQuoteLineResult,
+  AiCategorizeExpenseArgs,
+  AiCategorizeExpenseResult,
+  AiTestResult,
 } from "@btp/types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -440,6 +446,14 @@ declare global {
       adminDc4ExportPdfPreview: (id: string) => Promise<{ success: boolean; path?: string; vault?: any; error?: string }>;
       adminDc4ExportPdfSaveAs: (id: string) => Promise<{ success: boolean; path?: string; cancelled?: boolean; error?: string }>;
       adminOpenPdfExternal: (path: string) => Promise<{ success: boolean; error?: string }>;
+
+      // IA locale (inférence node-llama-cpp côté serveur, routes /api/ai/*).
+      // Optionnels : le desktop (sans serveur) expose des stubs « indisponible »
+      // et l'UI masque les boutons IA quand aiStatus().available est false.
+      aiStatus?: () => Promise<AiStatus>;
+      aiSuggestQuoteLine?: (args: AiSuggestQuoteLineArgs) => Promise<AiSuggestQuoteLineResult>;
+      aiCategorizeExpense?: (args: AiCategorizeExpenseArgs) => Promise<AiCategorizeExpenseResult>;
+      aiTest?: () => Promise<AiTestResult>;
       platform: string;
       isElectron: boolean;
     };

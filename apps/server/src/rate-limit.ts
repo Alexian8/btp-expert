@@ -114,6 +114,20 @@ export function buildApiRateLimiter(cfg: Config): RequestHandler {
 }
 
 /**
+ * Rate-limit des routes IA (/api/ai/*) : l'inférence CPU est coûteuse sur
+ * un hébergement mutualisé — on borne par IP, en comptant toutes les
+ * requêtes (même réussies).
+ */
+export function buildAiRateLimiter(cfg: Config): RequestHandler {
+  return makeLimiter({
+    name: "ai",
+    windowMs: cfg.RATE_LIMIT_AI_WINDOW_MIN * 60 * 1000,
+    limit: cfg.RATE_LIMIT_AI_MAX,
+    message: "Trop de requêtes IA. Réessayez dans quelques instants.",
+  });
+}
+
+/**
  * Rate-limit pour la demande de réinitialisation de mot de passe.
  * Compte TOUTES les requêtes (skipSuccess=false) car la réponse est toujours
  * 200 (anti-énumération) : protège contre l'email-bombing. Réutilise la

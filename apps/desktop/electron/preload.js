@@ -382,6 +382,29 @@ contextBridge.exposeInMainWorld("btpAPI", {
   adminDc4ExportPdfSaveAs: (id) => ipcRenderer.invoke("admin:dc4:exportPdfSaveAs", id),
   adminOpenPdfExternal: (path) => ipcRenderer.invoke("admin:openPdfExternal", path),
 
+  // IA locale — l'inférence tourne sur le SERVEUR (routes /api/ai/*, web+iOS).
+  // L'app desktop (SQLite local, sans serveur) n'embarque pas de modèle :
+  // stubs « indisponible », l'UI masque les boutons IA (cf. aiStore).
+  aiStatus: async () => ({
+    available: false,
+    enabled: false,
+    modelLoaded: false,
+    modelFile: "",
+    reason: "Assistant IA disponible uniquement sur la version web (calcul côté serveur)",
+  }),
+  aiSuggestQuoteLine: async () => ({
+    success: false,
+    error: "Assistant IA non disponible sur l'application desktop",
+  }),
+  aiCategorizeExpense: async () => ({
+    success: false,
+    error: "Assistant IA non disponible sur l'application desktop",
+  }),
+  aiTest: async () => ({
+    success: false,
+    error: "Assistant IA non disponible sur l'application desktop",
+  }),
+
   // Platform info
   platform: process.platform,
   isElectron: true,

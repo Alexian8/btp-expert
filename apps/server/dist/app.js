@@ -26,6 +26,7 @@ const super_admin_1 = require("./routes/super-admin");
 const vault_1 = require("./routes/vault");
 const admin_docs_1 = require("./routes/admin-docs");
 const accounting_1 = require("./routes/accounting");
+const ai_1 = require("./routes/ai");
 const references_1 = require("./accounting/references");
 const qonto_1 = require("./routes/qonto");
 const auth_2 = require("./auth");
@@ -856,6 +857,8 @@ async function createApp(cfg, db) {
     // ─── Microsoft + email ─────────────────────────────────────────────────
     app.use("/api/auth/microsoft", (0, microsoft_1.buildMicrosoftRouter)(pool, cfg));
     app.use("/api/email", auth, (0, microsoft_1.buildEmailRouter)(pool, cfg));
+    // ─── IA locale (inférence node-llama-cpp sur le serveur) ───────────────
+    app.use("/api/ai", auth, (0, ai_1.buildAiRouter)(cfg));
     // ─── Backup serveur ────────────────────────────────────────────────────
     app.use("/api/backup", auth, (0, backup_1.buildBackupRouter)(pool, cfg));
     // ─── Vault (coffre-fort documents) ─────────────────────────────────────
