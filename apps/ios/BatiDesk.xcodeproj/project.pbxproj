@@ -10,9 +10,22 @@
 		BD00000000000000000000A4 /* BatiDesk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BatiDesk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BD00000000000000000000AA /* Exceptions for "BatiDesk" folder in "BatiDesk" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BD00000000000000000000A5 /* BatiDesk */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BD00000000000000000000A9 /* BatiDesk */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BD00000000000000000000AA /* Exceptions for "BatiDesk" folder in "BatiDesk" target */,
+			);
 			path = BatiDesk;
 			sourceTree = "<group>";
 		};
